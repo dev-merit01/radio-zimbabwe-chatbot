@@ -33,7 +33,7 @@ if ENV_FILE.exists():
 
 SECRET_KEY = env('DJANGO_SECRET_KEY')
 DEBUG = env('DJANGO_DEBUG')
-ALLOWED_HOSTS = env('DJANGO_ALLOWED_HOSTS').split(',') + ['testserver']
+ALLOWED_HOSTS = env('DJANGO_ALLOWED_HOSTS').split(',') + ['testserver','onrender.com','radio-zimbabwe-chatbot.onrender.com','testserver','127.0.0.1','localhost']
 
 INSTALLED_APPS = [
     'django.contrib.admin',
