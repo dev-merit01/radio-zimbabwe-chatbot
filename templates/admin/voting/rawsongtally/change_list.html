@@ -1,0 +1,11 @@
+{% extends "admin/change_list.html" %}
+{% load i18n admin_urls %}
+
+{% block object-tools-items %}
+<li>
+    <a href="{% url 'admin:voting_rawsongtally_process_votes' %}" class="button" style="background: #417690; color: white;">
+        🔄 Process Today's Votes
+    </a>
+</li>
+{{ block.super }}
+{% endblock %}

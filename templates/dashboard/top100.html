@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ page_title }}</title>
+    <style>
+        :root {
+            --primary: #1DB954;
+            --primary-dark: #1aa34a;
+            --bg-dark: #121212;
+            --bg-card: #181818;
+            --bg-hover: #282828;
+            --text-primary: #ffffff;
+            --text-secondary: #b3b3b3;
+            --gold: #FFD700;
+            --silver: #C0C0C0;
+            --bronze: #CD7F32;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: var(--bg-dark);
+            color: var(--text-primary);
+            min-height: 100vh;
+        }
+
+        .header {
+            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+            padding: 2rem;
+            text-align: center;
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin-bottom: 0.5rem;
+        }
+
+        .header .subtitle {
+            font-size: 1rem;
+            opacity: 0.9;
+        }
+
+        .stats-bar {
+            display: flex;
+            justify-content: center;
+            gap: 2rem;
+            margin-top: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .stat {
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+
+        .stat-label {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            opacity: 0.8;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 1rem;
+        }
+
+        .update-info {
+            text-align: center;
+            padding: 1rem;
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+        }
+
+        .update-info .live-dot {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background: var(--primary);
+            border-radius: 50%;
+            margin-right: 0.5rem;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .chart-list {
+            list-style: none;
+        }
+
+        .chart-item {
+            display: flex;
+            align-items: center;
+            padding: 0.75rem 1rem;
+            background: var(--bg-card);
+            margin-bottom: 2px;
+            border-radius: 8px;
+            transition: background 0.2s, transform 0.2s;
+            gap: 1rem;
+        }
+
+        .chart-item:hover {
+            background: var(--bg-hover);
+            transform: translateX(4px);
+        }
+
+        .chart-item.top-3 {
+            padding: 1rem;
+            margin-bottom: 4px;
+        }
+
+        .rank {
+            font-size: 1.25rem;
+            font-weight: 700;
+            width: 3rem;
+            text-align: center;
+            flex-shrink: 0;
+        }
+
+        .rank-1 { color: var(--gold); font-size: 1.5rem; }
+        .rank-2 { color: var(--silver); font-size: 1.4rem; }
+        .rank-3 { color: var(--bronze); font-size: 1.3rem; }
+
+        .album-art {
+            width: 56px;
+            height: 56px;
+            border-radius: 4px;
+            background: var(--bg-hover);
+            flex-shrink: 0;
+            object-fit: cover;
+        }
+
+        .top-3 .album-art {
+            width: 72px;
+            height: 72px;
+        }
+
+        .song-info {
+            flex-grow: 1;
+            min-width: 0;
+        }
+
+        .song-title {
+            font-weight: 600;
+            font-size: 1rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .top-3 .song-title {
+            font-size: 1.125rem;
+        }
+
+        .song-artist {
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .song-album {
+            color: var(--text-secondary);
+            font-size: 0.75rem;
+            opacity: 0.7;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .vote-count {
+            text-align: right;
+            flex-shrink: 0;
+        }
+
+        .vote-number {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: var(--primary);
+        }
+
+        .vote-label {
+            font-size: 0.625rem;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 4rem 2rem;
+            color: var(--text-secondary);
+        }
+
+        .empty-state h2 {
+            margin-bottom: 1rem;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 4rem 2rem;
+            color: var(--text-secondary);
+        }
+
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid var(--bg-hover);
+            border-top-color: var(--primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .error {
+            text-align: center;
+            padding: 2rem;
+            background: #ff4444;
+            color: white;
+            border-radius: 8px;
+            margin: 1rem;
+        }
+
+        .spotify-link {
+            color: var(--primary);
+            text-decoration: none;
+            opacity: 0;
+            transition: opacity 0.2s;
+            font-size: 0.75rem;
+        }
+
+        .chart-item:hover .spotify-link {
+            opacity: 1;
+        }
+
+        .no-spotify {
+            font-size: 0.65rem;
+            color: var(--text-secondary);
+            opacity: 0.6;
+            text-transform: uppercase;
+        }
+
+        .album-art-placeholder {
+            width: 56px;
+            height: 56px;
+            border-radius: 4px;
+            background: linear-gradient(135deg, #282828 0%, #383838 100%);
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+        }
+
+        .top-3 .album-art-placeholder {
+            width: 72px;
+            height: 72px;
+            font-size: 2rem;
+        }
+
+        @media (max-width: 600px) {
+            .header h1 {
+                font-size: 1.75rem;
+            }
+
+            .stats-bar {
+                gap: 1rem;
+            }
+
+            .album-art {
+                width: 48px;
+                height: 48px;
+            }
+
+            .album-art-placeholder {
+                width: 48px;
+                height: 48px;
+                font-size: 1.25rem;
+            }
+
+            .rank {
+                width: 2.5rem;
+                font-size: 1rem;
+            }
+
+            .song-title {
+                font-size: 0.9rem;
+            }
+
+            .vote-number {
+                font-size: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <header class="header">
+        <h1>Radio Zimbabwe</h1>
+        <p class="subtitle">Top 100 Chart</p>
+        <div class="stats-bar">
+            <div class="stat">
+                <div class="stat-value" id="total-songs">-</div>
+                <div class="stat-label">Songs</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value" id="total-votes">-</div>
+                <div class="stat-label">Votes Today</div>
+            </div>
+            <div class="stat">
+                <div class="stat-value" id="chart-date">-</div>
+                <div class="stat-label">Date</div>
+            </div>
+        </div>
+    </header>
+
+    <div class="container">
+        <div class="update-info">
+            <span class="live-dot"></span>
+            Live updates every 15 seconds · Last updated: <span id="last-update">-</span>
+        </div>
+
+        <div id="loading" class="loading">
+            <div class="spinner"></div>
+            <p>Loading chart...</p>
+        </div>
+
+        <div id="error" class="error" style="display: none;"></div>
+
+        <ul id="chart-list" class="chart-list" style="display: none;"></ul>
+
+        <div id="empty" class="empty-state" style="display: none;">
+            <h2>📊 No votes yet today</h2>
+            <p>Be the first to vote! Send a message to our Telegram bot.</p>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = '/api/chart/today';
+        const REFRESH_INTERVAL = 15000; // 15 seconds
+
+        const loadingEl = document.getElementById('loading');
+        const errorEl = document.getElementById('error');
+        const chartListEl = document.getElementById('chart-list');
+        const emptyEl = document.getElementById('empty');
+        const lastUpdateEl = document.getElementById('last-update');
+        const totalSongsEl = document.getElementById('total-songs');
+        const totalVotesEl = document.getElementById('total-votes');
+        const chartDateEl = document.getElementById('chart-date');
+
+        function formatTime(isoString) {
+            const date = new Date(isoString);
+            return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        }
+
+        function formatDate(dateString) {
+            const date = new Date(dateString + 'T00:00:00');
+            return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        }
+
+        function createChartItem(song) {
+            const isTop3 = song.rank <= 3;
+            const rankClass = song.rank <= 3 ? `rank-${song.rank}` : '';
+            const hasSpotify = song.spotify_track_id && song.spotify_track_id.length > 0;
+            
+            // Image or placeholder
+            let imageHtml;
+            if (song.image_url && song.image_url.length > 0) {
+                imageHtml = `<img class="album-art" src="${song.image_url}" alt="${escapeHtml(song.title)}" loading="lazy" onerror="this.outerHTML='<div class=\\'album-art-placeholder\\'>🎵</div>'">`;
+            } else {
+                imageHtml = `<div class="album-art-placeholder">🎵</div>`;
+            }
+            
+            // Spotify link or "No Spotify" label
+            let spotifyHtml;
+            if (hasSpotify) {
+                const spotifyUrl = `https://open.spotify.com/track/${song.spotify_track_id}`;
+                spotifyHtml = `<a href="${spotifyUrl}" target="_blank" rel="noopener" class="spotify-link">Open ↗</a>`;
+            } else {
+                spotifyHtml = `<span class="no-spotify">Local</span>`;
+            }
+            
+            return `
+                <li class="chart-item ${isTop3 ? 'top-3' : ''}">
+                    <div class="rank ${rankClass}">${song.rank}</div>
+                    ${imageHtml}
+                    <div class="song-info">
+                        <div class="song-title">${escapeHtml(song.title)}</div>
+                        <div class="song-artist">${escapeHtml(song.artists)}</div>
+                        ${song.album ? `<div class="song-album">${escapeHtml(song.album)}</div>` : ''}
+                    </div>
+                    <div class="vote-count">
+                        <div class="vote-number">${song.count}</div>
+                        <div class="vote-label">votes</div>
+                    </div>
+                    ${spotifyHtml}
+                </li>
+            `;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        async function fetchChart() {
+            try {
+                const response = await fetch(API_URL);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                
+                const data = await response.json();
+                
+                loadingEl.style.display = 'none';
+                errorEl.style.display = 'none';
+                
+                if (data.top100.length === 0) {
+                    chartListEl.style.display = 'none';
+                    emptyEl.style.display = 'block';
+                } else {
+                    emptyEl.style.display = 'none';
+                    chartListEl.style.display = 'block';
+                    chartListEl.innerHTML = data.top100.map(createChartItem).join('');
+                }
+                
+                // Update stats
+                const totalVotes = data.top100.reduce((sum, s) => sum + s.count, 0);
+                totalSongsEl.textContent = data.total_songs;
+                totalVotesEl.textContent = totalVotes;
+                chartDateEl.textContent = formatDate(data.date);
+                lastUpdateEl.textContent = formatTime(data.updated_at);
+                
+            } catch (err) {
+                console.error('Failed to fetch chart:', err);
+                loadingEl.style.display = 'none';
+                errorEl.style.display = 'block';
+                errorEl.textContent = `Failed to load chart: ${err.message}. Retrying...`;
+            }
+        }
+
+        // Initial load
+        fetchChart();
+
+        // Auto-refresh
+        setInterval(fetchChart, REFRESH_INTERVAL);
+
+        // Visibility API - refresh when tab becomes visible
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) {
+                fetchChart();
+            }
+        });
+    </script>
+</body>
+</html>
