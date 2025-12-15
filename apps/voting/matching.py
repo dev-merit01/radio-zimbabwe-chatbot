@@ -158,9 +158,10 @@ def normalize_vote_input(artist_raw: str, song_raw: str) -> tuple[str, str, str,
     Process:
     1. Apply text cleaning (normalize words, extract features, clean title)
     2. Correct common typos
-    3. Try to match artist against verified artists
-    4. Use canonical name if matched, otherwise clean the input
-    5. Create match_key for grouping
+    3. Try to match against pre-loaded CleanedSong database
+    4. Try to match artist against verified artists
+    5. Use canonical name if matched, otherwise clean the input
+    6. Create match_key for grouping
     """
     # Step 1: Apply text cleaning (handles "ft", "&", "(Official Video)", etc.)
     artist_cleaned, song_cleaned = clean_vote_text(artist_raw, song_raw)
@@ -168,7 +169,12 @@ def normalize_vote_input(artist_raw: str, song_raw: str) -> tuple[str, str, str,
     # Step 2: Correct common typos
     artist_cleaned = correct_artist_typo(artist_cleaned)
     
-    # Step 3: Try to match against verified artists
+    # Step 3: Try to match against pre-loaded songs (CleanedSong database)
+    known_match = match_against_known_songs(artist_cleaned, song_cleaned)
+    if known_match:
+        return known_match  # (artist, title, match_key, display_name)
+    
+    # Step 4: Try to match against verified artists
     verified_artist = match_verified_artist(artist_cleaned)
     
     if verified_artist:
@@ -287,6 +293,107 @@ def find_song_by_title_only(song_raw: str) -> Optional[tuple[str, str, str, str]
                 return (display_parts[0], display_parts[1], tally.match_key, tally.display_name)
     
     return None
+
+
+# ============================================================
+# Match against pre-loaded CleanedSong database
+# ============================================================
+
+def match_against_known_songs(artist_input: str, song_input: str, threshold: float = 0.75) -> Optional[tuple[str, str, str, str]]:
+    """
+    Match user input against pre-loaded CleanedSong database.
+    
+    This provides much better matching accuracy when songs are pre-loaded.
+    
+    Args:
+        artist_input: Raw artist name from user
+        song_input: Raw song title from user
+        threshold: Minimum similarity score (0.0 to 1.0)
+        
+    Returns:
+        Tuple of (artist, title, match_key, display_name) or None if no match
+    """
+    from .models import CleanedSong
+    
+    artist_norm = normalize_text(artist_input)
+    song_norm = normalize_text(song_input)
+    
+    best_match = None
+    best_score = 0.0
+    
+    # Get verified songs for better matching
+    verified_songs = CleanedSong.objects.filter(status='verified')
+    
+    for song in verified_songs:
+        artist_db = normalize_text(song.artist)
+        title_db = normalize_text(song.title)
+        
+        # Calculate combined score (weighted: song title matters more)
+        artist_score = similarity_ratio(artist_norm, artist_db)
+        title_score = similarity_ratio(song_norm, title_db)
+        
+        # Combined score: 40% artist, 60% title
+        combined_score = (artist_score * 0.4) + (title_score * 0.6)
+        
+        # Also check if either matches very well
+        if artist_score >= 0.9 and title_score >= 0.7:
+            combined_score = max(combined_score, 0.85)
+        if title_score >= 0.9 and artist_score >= 0.6:
+            combined_score = max(combined_score, 0.80)
+        
+        if combined_score > best_score and combined_score >= threshold:
+            best_score = combined_score
+            best_match = song
+    
+    if best_match:
+        match_key = f"{normalize_text(best_match.artist)}::{normalize_text(best_match.title)}"
+        return (
+            best_match.artist,
+            best_match.title,
+            match_key,
+            best_match.canonical_name
+        )
+    
+    return None
+
+
+def get_song_suggestions(user_input: str, limit: int = 3) -> list[tuple]:
+    """
+    Get song suggestions based on partial user input.
+    
+    Useful for "Did you mean...?" responses.
+    
+    Args:
+        user_input: What the user typed
+        limit: Maximum number of suggestions
+        
+    Returns:
+        List of (CleanedSong, score) tuples
+    """
+    from .models import CleanedSong
+    
+    user_norm = normalize_text(user_input)
+    matches = []
+    
+    for song in CleanedSong.objects.filter(status='verified'):
+        # Check against title, artist, and full canonical name
+        title_score = similarity_ratio(user_norm, normalize_text(song.title))
+        artist_score = similarity_ratio(user_norm, normalize_text(song.artist))
+        full_score = similarity_ratio(user_norm, normalize_text(song.canonical_name))
+        
+        # Also check if input is contained in title or vice versa
+        title_norm = normalize_text(song.title)
+        if user_norm in title_norm or title_norm in user_norm:
+            title_score = max(title_score, 0.7)
+        
+        score = max(title_score, artist_score * 0.8, full_score)
+        
+        if score > 0.4:
+            matches.append((song, score))
+    
+    # Sort by score descending and return top matches
+    matches.sort(key=lambda x: x[1], reverse=True)
+    return matches[:limit]
 
 
 # ============================================================
