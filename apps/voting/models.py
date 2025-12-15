@@ -156,6 +156,19 @@ class CleanedSong(models.Model):
         # Auto-generate canonical_name
         if not self.canonical_name:
             self.canonical_name = f"{self.artist} - {self.title}"
+        
+        # Check for case-insensitive duplicates and use existing if found
+        existing = CleanedSong.objects.filter(
+            canonical_name__iexact=self.canonical_name
+        ).exclude(pk=self.pk).first()
+        
+        if existing:
+            from django.core.exceptions import ValidationError
+            raise ValidationError(
+                f'A song with this name already exists: "{existing.canonical_name}" (ID: {existing.pk}). '
+                f'Please edit the existing entry instead.'
+            )
+        
         super().save(*args, **kwargs)
 
 
