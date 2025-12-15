@@ -135,6 +135,23 @@ class CleanedSong(models.Model):
         status_icon = {'pending': '⏳', 'verified': '✅', 'rejected': '❌'}.get(self.status, '')
         return f"{status_icon} {self.canonical_name}"
     
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        # Auto-generate canonical_name if not provided
+        if not self.canonical_name:
+            self.canonical_name = f"{self.artist} - {self.title}"
+        
+        # Check for case-insensitive duplicates
+        existing = CleanedSong.objects.filter(
+            canonical_name__iexact=self.canonical_name
+        ).exclude(pk=self.pk).first()
+        
+        if existing:
+            raise ValidationError({
+                'canonical_name': f'A song with this name already exists: "{existing.canonical_name}" (ID: {existing.pk}). '
+                                  f'Please edit the existing entry instead or use a different name.'
+            })
+    
     def save(self, *args, **kwargs):
         # Auto-generate canonical_name
         if not self.canonical_name:

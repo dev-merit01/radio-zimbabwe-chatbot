@@ -20,7 +20,7 @@ from difflib import SequenceMatcher
 from typing import List, Tuple, Optional, Dict
 from collections import defaultdict
 
-from django.db import transaction
+from django.db import transaction, IntegrityError
 from django.db.models import Sum, Count
 from django.utils import timezone
 
@@ -319,17 +319,30 @@ class CleaningService:
             logger.info(f"Found existing song (case-insensitive): '{existing.canonical_name}'")
             return existing
         
-        cleaned_song = CleanedSong.objects.create(
-            artist=artist,
-            title=title,
-            canonical_name=canonical_name,
-            spotify_track_id=track['id'],
-            album=track.get('album', ''),
-            image_url=track.get('image_url', ''),
-            preview_url=track.get('preview_url', ''),
-            status='verified',  # Auto-verified because Spotify confirmed
-        )
-        return cleaned_song
+        # Use get_or_create with IntegrityError fallback for race conditions
+        try:
+            cleaned_song = CleanedSong.objects.create(
+                artist=artist,
+                title=title,
+                canonical_name=canonical_name,
+                spotify_track_id=track['id'],
+                album=track.get('album', ''),
+                image_url=track.get('image_url', ''),
+                preview_url=track.get('preview_url', ''),
+                status='verified',  # Auto-verified because Spotify confirmed
+            )
+            return cleaned_song
+        except IntegrityError:
+            # Race condition: another process created this song, fetch and return it
+            existing = CleanedSong.objects.filter(
+                canonical_name__iexact=canonical_name
+            ).first()
+            if existing:
+                if not existing.spotify_track_id:
+                    self._enrich_with_spotify(existing, track)
+                logger.info(f"Found existing song after race condition: '{existing.canonical_name}'")
+                return existing
+            raise  # Re-raise if we still can't find it
     
     def _create_cleaned_song_from_tally(self, tally: RawSongTally) -> CleanedSong:
         """Create a new CleanedSong from a raw tally (pending review)."""
@@ -356,13 +369,24 @@ class CleaningService:
             logger.info(f"Found existing song (case-insensitive): '{existing.canonical_name}'")
             return existing
         
-        cleaned_song = CleanedSong.objects.create(
-            artist=artist,
-            title=title,
-            canonical_name=canonical_name,
-            status='pending',  # Needs manual review
-        )
-        return cleaned_song
+        # Use get_or_create with IntegrityError fallback for race conditions
+        try:
+            cleaned_song = CleanedSong.objects.create(
+                artist=artist,
+                title=title,
+                canonical_name=canonical_name,
+                status='pending',  # Needs manual review
+            )
+            return cleaned_song
+        except IntegrityError:
+            # Race condition: another process created this song, fetch and return it
+            existing = CleanedSong.objects.filter(
+                canonical_name__iexact=canonical_name
+            ).first()
+            if existing:
+                logger.info(f"Found existing song after race condition: '{existing.canonical_name}'")
+                return existing
+            raise  # Re-raise if we still can't find it
     
     def _enrich_with_spotify(self, song: CleanedSong, track: dict):
         """Update an existing CleanedSong with Spotify data."""

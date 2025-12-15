@@ -158,11 +158,16 @@ class Command(BaseCommand):
         for artist, title in KNOWN_SONGS:
             canonical_name = f"{artist} - {title}"
             
-            # Try to find existing song (case-insensitive)
+            # Try to find existing song (case-insensitive) - check both artist/title AND canonical_name
             existing = CleanedSong.objects.filter(
-                artist__iexact=artist,
-                title__iexact=title
+                canonical_name__iexact=canonical_name
             ).first()
+            
+            if not existing:
+                existing = CleanedSong.objects.filter(
+                    artist__iexact=artist,
+                    title__iexact=title
+                ).first()
             
             if existing:
                 if existing.status != 'verified':
