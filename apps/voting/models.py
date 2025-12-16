@@ -136,38 +136,20 @@ class CleanedSong(models.Model):
         return f"{status_icon} {self.canonical_name}"
     
     def clean(self):
-        from django.core.exceptions import ValidationError
         # Auto-generate canonical_name if not provided
         if not self.canonical_name:
             self.canonical_name = f"{self.artist} - {self.title}"
         
-        # Check for case-insensitive duplicates
-        existing = CleanedSong.objects.filter(
-            canonical_name__iexact=self.canonical_name
-        ).exclude(pk=self.pk).first()
-        
-        if existing:
-            raise ValidationError({
-                'canonical_name': f'A song with this name already exists: "{existing.canonical_name}" (ID: {existing.pk}). '
-                                  f'Please edit the existing entry instead or use a different name.'
-            })
+        # Note: Duplicate checking is now handled in admin.save_model() 
+        # which will merge duplicates instead of blocking
     
     def save(self, *args, **kwargs):
         # Auto-generate canonical_name
         if not self.canonical_name:
             self.canonical_name = f"{self.artist} - {self.title}"
         
-        # Check for case-insensitive duplicates and use existing if found
-        existing = CleanedSong.objects.filter(
-            canonical_name__iexact=self.canonical_name
-        ).exclude(pk=self.pk).first()
-        
-        if existing:
-            from django.core.exceptions import ValidationError
-            raise ValidationError(
-                f'A song with this name already exists: "{existing.canonical_name}" (ID: {existing.pk}). '
-                f'Please edit the existing entry instead.'
-            )
+        # Note: Duplicate checking/merging is handled in admin.save_model()
+        # Direct saves (outside admin) will rely on database unique constraint
         
         super().save(*args, **kwargs)
 

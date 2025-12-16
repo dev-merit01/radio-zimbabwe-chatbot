@@ -51,6 +51,114 @@ class RawVoteAdmin(admin.ModelAdmin):
     )
     readonly_fields = ('created_at',)
 
+    def save_model(self, request, obj, form, change):
+        """
+        When editing a RawVote, update the RawSongTally counts:
+        - Decrement old song's tally (if match_key changed)
+        - Increment new song's tally
+        """
+        from .models import normalize_text, create_match_key, make_display_name
+        
+        old_match_key = None
+        old_vote_date = None
+        
+        # If editing an existing vote, get the old match_key
+        if change and obj.pk:
+            try:
+                old_obj = RawVote.objects.get(pk=obj.pk)
+                old_match_key = old_obj.match_key
+                old_vote_date = old_obj.vote_date
+            except RawVote.DoesNotExist:
+                pass
+        
+        # Auto-update normalized fields and match_key based on edited artist/song
+        obj.artist_normalized = normalize_text(obj.artist_raw)
+        obj.song_normalized = normalize_text(obj.song_raw)
+        obj.match_key = create_match_key(obj.artist_raw, obj.song_raw)
+        obj.display_name = make_display_name(obj.artist_raw, obj.song_raw)
+        
+        # Save the vote
+        super().save_model(request, obj, form, change)
+        
+        # Update tallies if match_key or date changed
+        new_match_key = obj.match_key
+        new_vote_date = obj.vote_date
+        
+        if change and (old_match_key != new_match_key or old_vote_date != new_vote_date):
+            # Decrement old tally
+            if old_match_key and old_vote_date:
+                old_tally = RawSongTally.objects.filter(
+                    match_key=old_match_key,
+                    date=old_vote_date
+                ).first()
+                if old_tally:
+                    old_tally.count = max(0, old_tally.count - 1)
+                    if old_tally.count == 0:
+                        old_tally.delete()
+                    else:
+                        old_tally.save()
+            
+            # Increment new tally
+            new_tally, created = RawSongTally.objects.get_or_create(
+                match_key=new_match_key,
+                date=new_vote_date,
+                defaults={'display_name': obj.display_name, 'count': 0}
+            )
+            new_tally.count += 1
+            new_tally.display_name = obj.display_name
+            new_tally.save()
+            
+            messages.success(
+                request,
+                f"✅ Vote updated and tally adjusted for '{obj.display_name}'"
+            )
+        elif not change:
+            # New vote - increment tally
+            new_tally, created = RawSongTally.objects.get_or_create(
+                match_key=new_match_key,
+                date=new_vote_date,
+                defaults={'display_name': obj.display_name, 'count': 0}
+            )
+            new_tally.count += 1
+            new_tally.display_name = obj.display_name
+            new_tally.save()
+
+    def delete_model(self, request, obj):
+        """When deleting a vote, decrement the tally."""
+        tally = RawSongTally.objects.filter(
+            match_key=obj.match_key,
+            date=obj.vote_date
+        ).first()
+        
+        super().delete_model(request, obj)
+        
+        if tally:
+            tally.count = max(0, tally.count - 1)
+            if tally.count == 0:
+                tally.delete()
+            else:
+                tally.save()
+
+    def delete_queryset(self, request, queryset):
+        """When bulk deleting votes, decrement all tallies."""
+        # Collect all match_key/date pairs before deletion
+        vote_data = list(queryset.values('match_key', 'vote_date'))
+        
+        super().delete_queryset(request, queryset)
+        
+        # Decrement tallies
+        for data in vote_data:
+            tally = RawSongTally.objects.filter(
+                match_key=data['match_key'],
+                date=data['vote_date']
+            ).first()
+            if tally:
+                tally.count = max(0, tally.count - 1)
+                if tally.count == 0:
+                    tally.delete()
+                else:
+                    tally.save()
+
 
 @admin.register(RawSongTally)
 class RawSongTallyAdmin(admin.ModelAdmin):
@@ -222,12 +330,33 @@ class CleanedSongAdmin(admin.ModelAdmin):
         self.message_user(request, f'{count} songs marked as pending.')
     
     def save_model(self, request, obj, form, change):
-        """Auto-verify pending songs when edited, search Spotify, and update dashboard tallies."""
+        """
+        Auto-verify pending songs when edited, search Spotify, and update dashboard tallies.
+        If the song matches an existing one, merge them instead of blocking.
+        """
         was_pending = False
+        old_canonical_name = None
+        
         if change and obj.pk:
-            # Check if it was previously pending
+            # Check if it was previously pending and get old canonical name
             old_obj = CleanedSong.objects.filter(pk=obj.pk).first()
-            was_pending = old_obj and old_obj.status == 'pending'
+            if old_obj:
+                was_pending = old_obj.status == 'pending'
+                old_canonical_name = old_obj.canonical_name
+        
+        # Update canonical_name based on artist and title
+        new_canonical_name = f"{obj.artist} - {obj.title}"
+        obj.canonical_name = new_canonical_name
+        
+        # Check if this matches an existing song (case-insensitive)
+        existing = CleanedSong.objects.filter(
+            canonical_name__iexact=new_canonical_name
+        ).exclude(pk=obj.pk).first()
+        
+        if existing:
+            # MERGE: Transfer all mappings and tallies to the existing song
+            self._merge_into_existing(request, obj, existing)
+            return  # Don't save the current object, it will be deleted
         
         # If editing a pending song and status wasn't explicitly changed to rejected
         if was_pending and obj.status == 'pending':
@@ -245,6 +374,7 @@ class CleanedSongAdmin(admin.ModelAdmin):
                     if is_high_confidence(confidence):
                         obj.artist = ', '.join(match['artists'])
                         obj.title = match['title']
+                        obj.canonical_name = f"{obj.artist} - {obj.title}"
                     self.message_user(
                         request, 
                         f"✅ Found on Spotify: \"{match['title']}\" by {', '.join(match['artists'])} (confidence: {confidence:.0%})"
@@ -265,14 +395,54 @@ class CleanedSongAdmin(admin.ModelAdmin):
             # Mark as verified
             obj.status = 'verified'
         
-        # Update canonical_name based on artist and title
-        obj.canonical_name = f"{obj.artist} - {obj.title}"
-        
         super().save_model(request, obj, form, change)
         
         # If song is now verified, ensure it has tallies in the dashboard
         if obj.status == 'verified':
             self._update_tallies(obj)
+
+    def _merge_into_existing(self, request, source_song, target_song):
+        """
+        Merge source_song into target_song:
+        - Transfer all MatchKeyMappings
+        - Merge CleanedSongTally counts
+        - Delete source_song
+        """
+        from django.db import transaction
+        from django.db.models import F
+        
+        with transaction.atomic():
+            # Transfer MatchKeyMappings from source to target
+            mappings_transferred = MatchKeyMapping.objects.filter(
+                cleaned_song=source_song
+            ).update(cleaned_song=target_song)
+            
+            # Merge CleanedSongTally - add source counts to target
+            source_tallies = CleanedSongTally.objects.filter(cleaned_song=source_song)
+            for source_tally in source_tallies:
+                target_tally, created = CleanedSongTally.objects.get_or_create(
+                    date=source_tally.date,
+                    cleaned_song=target_song,
+                    defaults={'count': 0}
+                )
+                target_tally.count += source_tally.count
+                target_tally.save()
+            
+            # Delete source tallies
+            source_tallies.delete()
+            
+            # Delete the source song (if it exists in DB)
+            if source_song.pk:
+                source_song.delete()
+            
+            # Update tallies on target
+            self._update_tallies(target_song)
+        
+        messages.success(
+            request,
+            f"✅ Merged into existing song \"{target_song.canonical_name}\" (ID: {target_song.pk}). "
+            f"{mappings_transferred} vote mapping(s) transferred."
+        )
     
     def _update_tallies(self, cleaned_song):
         """Update CleanedSongTally based on MatchKeyMappings."""
