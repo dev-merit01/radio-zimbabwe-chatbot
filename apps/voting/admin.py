@@ -5,6 +5,7 @@ from django.urls import path
 from django.utils.html import format_html
 from django.utils import timezone
 from django.db.models import Sum
+from django import forms
 from .models import (
     User,
     RawVote,
@@ -15,6 +16,21 @@ from .models import (
     VerifiedArtist,
 )
 from .cleaning import CleaningService
+
+
+class CleanedSongForm(forms.ModelForm):
+    """Custom form that allows duplicate canonical_name for merging."""
+    
+    class Meta:
+        model = CleanedSong
+        fields = '__all__'
+    
+    def validate_unique(self):
+        """Skip unique validation - we handle duplicates via merge in save_model."""
+        try:
+            self.instance.validate_unique(exclude=['canonical_name'])
+        except forms.ValidationError as e:
+            self._update_errors(e)
 
 
 @admin.register(User)
@@ -215,6 +231,7 @@ class MatchKeyMappingInline(admin.TabularInline):
 
 @admin.register(CleanedSong)
 class CleanedSongAdmin(admin.ModelAdmin):
+    form = CleanedSongForm  # Custom form that allows duplicate canonical_name for merging
     list_display = ('id', 'status_badge', 'canonical_name', 'total_votes', 'has_spotify', 'created_at')
     list_filter = ('status', 'created_at')
     search_fields = ('artist', 'title', 'canonical_name')
