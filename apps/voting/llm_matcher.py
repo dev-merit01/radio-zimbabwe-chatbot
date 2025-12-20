@@ -31,7 +31,7 @@ from .models import (
 logger = logging.getLogger(__name__)
 
 # Maximum songs to include in prompt (to stay within token limits)
-MAX_SONGS_IN_PROMPT = 100
+MAX_SONGS_IN_PROMPT = 500  # Increased to handle larger song databases
 # Batch size for processing
 BATCH_SIZE = 15  # Smaller batches for Cohere token limits
 
@@ -144,40 +144,45 @@ def get_unmatched_tallies(date=None, limit: int = 100) -> List[RawSongTally]:
 def build_matching_prompt(votes: List[Dict], songs: List[Dict]) -> str:
     """Build the prompt for batch matching."""
     songs_text = "\n".join([
-        f"  {i+1}. [{s['id']}] {s['canonical_name']}"
-        for i, s in enumerate(songs)
+        f"  [{s['id']}] {s['canonical_name']}"
+        for s in songs
     ])
     
     votes_text = "\n".join([
-        f"  {i+1}. \"{v['display_name']}\" (match_key: {v['match_key']}, votes: {v['count']})"
+        f"  {i+1}. \"{v['display_name']}\" (match_key: {v['match_key']})"
         for i, v in enumerate(votes)
     ])
     
     return f"""Match these user votes to the verified songs database.
 
-VERIFIED SONGS DATABASE:
+VERIFIED SONGS DATABASE (format: [ID] Artist - Song Title):
 {songs_text}
 
 USER VOTES TO MATCH:
 {votes_text}
 
-For each vote, determine the best matching song from the database.
+INSTRUCTIONS:
+1. For each vote, find the EXACT or closest matching song from the database above
+2. Match by BOTH artist AND song title - they should both match
+3. Handle typos: "winkyd" = "Winky D", "jah prayza" = "Jah Prayzah"
+4. If vote says "Winky D - Kasong Kejecha", match to "[ID] Winky D - Kasong Kejecha"
+5. Return the song ID number from the database in matched_song_id
 
-Respond with ONLY a JSON array (no markdown):
+Respond with ONLY a JSON array:
 [
   {{
     "vote_index": 0,
-    "match_key": "the match_key from the vote",
-    "matched_song_id": 123 or null if no match,
-    "confidence": "high" or "medium" or "low" or "none",
-    "reasoning": "brief explanation"
-  }},
-  ...
+    "match_key": "copy the match_key from the vote",
+    "matched_song_id": 41,
+    "confidence": "high",
+    "reasoning": "Exact match for Winky D - Kasong Kejecha"
+  }}
 ]
 
-Rules:
-- "high" confidence: 95%+ sure, auto-link without review
-- "medium" confidence: 70-95% sure, human should verify  
+Confidence levels:
+- "high": Exact or near-exact match (same artist + same song)
+- "medium": Likely match but artist OR song has significant differences
+- "low" or "none": Cannot find a match, set matched_song_id to null  
 - "low" or "none": Don't match, leave for manual review
 - If vote is just a number or gibberish, set matched_song_id to null"""
 
