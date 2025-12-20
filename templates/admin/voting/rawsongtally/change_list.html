@@ -3,6 +3,11 @@
 
 {% block object-tools-items %}
 <li>
+    <a href="{% url 'admin:voting_rawsongtally_llm_match' %}" class="button" style="background: #9b59b6; color: white;">
+        🤖 LLM Match Unmatched
+    </a>
+</li>
+<li>
     <a href="{% url 'admin:voting_rawsongtally_process_votes' %}" class="button" style="background: #417690; color: white;">
         🔄 Process Today's Votes
     </a>

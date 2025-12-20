@@ -178,11 +178,24 @@ class RawVoteAdmin(admin.ModelAdmin):
 
 @admin.register(RawSongTally)
 class RawSongTallyAdmin(admin.ModelAdmin):
-    list_display = ('id', 'display_name', 'count', 'date', 'match_key')
+    list_display = ('id', 'display_name', 'count', 'date', 'match_key', 'is_matched')
     list_filter = ('date',)
     search_fields = ('display_name', 'match_key')
     ordering = ('-date', '-count')
     change_list_template = 'admin/voting/rawsongtally/change_list.html'
+    actions = ['llm_match_selected', 'llm_match_all_unmatched']
+    
+    def is_matched(self, obj):
+        """Show if this tally is linked to a CleanedSong."""
+        mapping = MatchKeyMapping.objects.filter(match_key=obj.match_key).first()
+        if mapping:
+            return format_html(
+                '<span style="color: green;" title="{}">✓ {}</span>',
+                mapping.cleaned_song.canonical_name,
+                mapping.cleaned_song.canonical_name[:30] + '...' if len(mapping.cleaned_song.canonical_name) > 30 else mapping.cleaned_song.canonical_name
+            )
+        return format_html('<span style="color: orange;">⏳ Pending</span>')
+    is_matched.short_description = 'Matched To'
     
     def get_urls(self):
         urls = super().get_urls()
@@ -192,8 +205,107 @@ class RawSongTallyAdmin(admin.ModelAdmin):
                 self.admin_site.admin_view(self.process_votes_view),
                 name='voting_rawsongtally_process_votes',
             ),
+            path(
+                'llm-match/',
+                self.admin_site.admin_view(self.llm_match_view),
+                name='voting_rawsongtally_llm_match',
+            ),
         ]
         return custom_urls + urls
+    
+    @admin.action(description='🤖 LLM Match selected votes')
+    def llm_match_selected(self, request, queryset):
+        """Use LLM to match selected vote tallies."""
+        from .llm_matcher import match_votes_with_llm, get_verified_songs_list, create_match_mapping
+        
+        songs = get_verified_songs_list()
+        if not songs:
+            messages.error(request, '❌ No verified songs in database. Add some songs first!')
+            return
+        
+        votes_data = [
+            {
+                'display_name': t.display_name,
+                'match_key': t.match_key,
+                'count': t.count,
+            }
+            for t in queryset
+        ]
+        
+        try:
+            results = match_votes_with_llm(votes_data, songs)
+            
+            auto_linked = 0
+            for result in results:
+                if result.should_auto_link:
+                    tally = queryset.filter(match_key=result.match_key).first()
+                    create_match_mapping(
+                        match_key=result.match_key,
+                        cleaned_song_id=result.matched_song_id,
+                        sample_display_name=result.raw_input,
+                        vote_count=tally.count if tally else 0,
+                        is_auto_mapped=True,
+                    )
+                    auto_linked += 1
+            
+            high = sum(1 for r in results if r.confidence == 'high')
+            medium = sum(1 for r in results if r.confidence == 'medium')
+            
+            messages.success(
+                request,
+                f'🤖 LLM Matching complete: {high} high confidence, {medium} medium confidence. '
+                f'Auto-linked {auto_linked} votes.'
+            )
+        except Exception as e:
+            messages.error(request, f'❌ LLM matching error: {e}')
+    
+    @admin.action(description='🤖 LLM Match ALL unmatched (up to 100)')
+    def llm_match_all_unmatched(self, request, queryset):
+        """Use LLM to match all unmatched vote tallies."""
+        from .llm_matcher import process_unmatched_votes
+        
+        try:
+            result = process_unmatched_votes(limit=100, auto_link_high_confidence=True)
+            
+            if 'error' in result:
+                messages.error(request, f"❌ {result['error']}")
+                return
+            
+            stats = result.get('stats', {})
+            messages.success(
+                request,
+                f"🤖 LLM Matching complete: "
+                f"{stats.get('high_confidence', 0)} high, "
+                f"{stats.get('medium_confidence', 0)} medium, "
+                f"{stats.get('low_confidence', 0)} low confidence. "
+                f"Auto-linked {stats.get('auto_linked', 0)} votes."
+            )
+        except Exception as e:
+            messages.error(request, f'❌ LLM matching error: {e}')
+    
+    def llm_match_view(self, request):
+        """Admin view to run LLM matching on all unmatched votes."""
+        from .llm_matcher import process_unmatched_votes
+        
+        try:
+            result = process_unmatched_votes(limit=100, auto_link_high_confidence=True)
+            
+            if 'error' in result:
+                messages.error(request, f"❌ {result['error']}")
+            else:
+                stats = result.get('stats', {})
+                messages.success(
+                    request,
+                    f"🤖 LLM Matching complete: "
+                    f"{stats.get('high_confidence', 0)} high, "
+                    f"{stats.get('medium_confidence', 0)} medium, "
+                    f"{stats.get('low_confidence', 0)} low confidence. "
+                    f"Auto-linked {stats.get('auto_linked', 0)} votes."
+                )
+        except Exception as e:
+            messages.error(request, f'❌ LLM matching error: {e}')
+        
+        return redirect('admin:voting_rawsongtally_changelist')
     
     def process_votes_view(self, request):
         """Admin view to process votes for today."""
