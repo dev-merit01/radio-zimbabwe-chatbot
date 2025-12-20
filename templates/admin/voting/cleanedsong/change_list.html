@@ -7,5 +7,10 @@
         🔄 Process Today's Votes
     </a>
 </li>
+<li>
+    <a href="{% url 'admin:voting_cleanedsong_llm_review' %}" class="button" style="background: #9b59b6; color: white;">
+        🤖 LLM Review Pending
+    </a>
+</li>
 {{ block.super }}
 {% endblock %}

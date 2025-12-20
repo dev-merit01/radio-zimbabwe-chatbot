@@ -348,7 +348,7 @@ class CleanedSongAdmin(admin.ModelAdmin):
     list_filter = ('status', 'created_at')
     search_fields = ('artist', 'title', 'canonical_name')
     list_editable = ('status',) if False else ()  # Enable for bulk status changes
-    actions = ['verify_songs', 'reject_songs', 'mark_pending']
+    actions = ['verify_songs', 'reject_songs', 'mark_pending', 'llm_review_selected']
     inlines = [MatchKeyMappingInline]
     change_list_template = 'admin/voting/cleanedsong/change_list.html'
     
@@ -359,6 +359,11 @@ class CleanedSongAdmin(admin.ModelAdmin):
                 'process-votes/',
                 self.admin_site.admin_view(self.process_votes_view),
                 name='voting_cleanedsong_process_votes',
+            ),
+            path(
+                'llm-review-pending/',
+                self.admin_site.admin_view(self.llm_review_pending_view),
+                name='voting_cleanedsong_llm_review',
             ),
         ]
         return custom_urls + urls
@@ -386,6 +391,92 @@ class CleanedSongAdmin(admin.ModelAdmin):
                 )
         except Exception as e:
             messages.error(request, f"❌ Error processing votes: {e}")
+        
+        return redirect('admin:voting_cleanedsong_changelist')
+    
+    def llm_review_pending_view(self, request):
+        """Admin view to process pending songs with LLM."""
+        from .llm_matcher import process_pending_songs, get_pending_songs
+        
+        pending = get_pending_songs()
+        if not pending:
+            messages.info(request, "✅ No pending songs to review!")
+            return redirect('admin:voting_cleanedsong_changelist')
+        
+        try:
+            result = process_pending_songs(
+                limit=50,  # Process 50 at a time
+                auto_merge=True,
+                auto_reject=True,
+                dry_run=False,
+            )
+            
+            if 'error' in result:
+                messages.error(request, f"❌ LLM Error: {result['error']}")
+            else:
+                stats = result.get('stats', {})
+                messages.success(
+                    request,
+                    f"🤖 LLM Review Complete: "
+                    f"{stats.get('matched', 0)} matched to verified songs, "
+                    f"{stats.get('rejected', 0)} rejected as spam, "
+                    f"{stats.get('new_songs', 0)} marked as new songs"
+                )
+                if stats.get('auto_merged', 0) > 0:
+                    messages.info(
+                        request,
+                        f"🔗 Auto-merged {stats.get('auto_merged', 0)} songs"
+                    )
+                if stats.get('auto_rejected', 0) > 0:
+                    messages.warning(
+                        request,
+                        f"🗑️ Auto-rejected {stats.get('auto_rejected', 0)} spam entries"
+                    )
+        except Exception as e:
+            messages.error(request, f"❌ LLM processing error: {e}")
+        
+        return redirect('admin:voting_cleanedsong_changelist')
+    
+    @admin.action(description='🤖 LLM Review Selected')
+    def llm_review_selected(self, request, queryset):
+        """Use LLM to review selected pending songs."""
+        from .llm_matcher import match_pending_songs_with_llm, get_verified_songs_list, merge_pending_to_verified
+        
+        # Only process pending songs
+        pending_songs = queryset.filter(status='pending')
+        if not pending_songs.exists():
+            self.message_user(request, "⚠️ No pending songs in selection.", level='warning')
+            return
+        
+        verified_songs = get_verified_songs_list()
+        if not verified_songs:
+            self.message_user(request, "❌ No verified songs to match against.", level='error')
+            return
+        
+        try:
+            results = match_pending_songs_with_llm(list(pending_songs), verified_songs)
+            
+            merged = 0
+            rejected = 0
+            new_songs = 0
+            
+            for r in results:
+                if r.action == 'match' and r.confidence == 'high':
+                    if merge_pending_to_verified(r.pending_song, r.matched_song_name):
+                        merged += 1
+                elif r.action == 'reject':
+                    r.pending_song.status = 'rejected'
+                    r.pending_song.save()
+                    rejected += 1
+                else:
+                    new_songs += 1
+            
+            self.message_user(
+                request,
+                f"🤖 LLM Review: {merged} merged, {rejected} rejected, {new_songs} need manual review"
+            )
+        except Exception as e:
+            self.message_user(request, f"❌ LLM Error: {e}", level='error')
         
         return redirect('admin:voting_cleanedsong_changelist')
     

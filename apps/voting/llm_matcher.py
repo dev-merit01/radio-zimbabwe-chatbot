@@ -124,6 +124,14 @@ def get_verified_songs_list() -> List[Dict]:
     ]
 
 
+def get_pending_songs(limit: int = 100) -> List[CleanedSong]:
+    """
+    Get CleanedSong entries with 'pending' status.
+    These need to be reviewed and matched to verified songs.
+    """
+    return list(CleanedSong.objects.filter(status='pending').order_by('-created_at')[:limit])
+
+
 def get_unmatched_tallies(date=None, limit: int = 100) -> List[RawSongTally]:
     """
     Get RawSongTally entries that don't have a MatchKeyMapping.
@@ -139,6 +147,48 @@ def get_unmatched_tallies(date=None, limit: int = 100) -> List[RawSongTally]:
         queryset = queryset.filter(date=date)
     
     return list(queryset.order_by('-count')[:limit])
+
+
+def build_pending_songs_prompt(pending_songs: List[Dict], verified_songs: List[Dict]) -> str:
+    """Build prompt for matching pending songs to verified songs."""
+    verified_text = "\n".join([
+        f"  [{s['id']}] {s['canonical_name']}"
+        for s in verified_songs
+    ])
+    
+    pending_text = "\n".join([
+        f"  {i+1}. [PENDING_ID:{s['id']}] \"{s['canonical_name']}\""
+        for i, s in enumerate(pending_songs)
+    ])
+    
+    return f"""Match these PENDING songs to VERIFIED songs in the database.
+
+VERIFIED SONGS DATABASE (these are correct, canonical song names):
+{verified_text}
+
+PENDING SONGS TO REVIEW (may have typos, wrong format, or be duplicates):
+{pending_text}
+
+TASK: For each pending song, determine if it matches a verified song.
+- If it's the same song (even with typos), return the verified song's ID
+- If it's spam, gibberish, or not a real song, mark as "reject"
+- If it's a valid song but NOT in verified list, mark as "new"
+
+Respond with ONLY a JSON array:
+[
+  {{
+    "pending_id": 123,
+    "action": "match" or "reject" or "new",
+    "matched_verified_id": 456 or null,
+    "confidence": "high" or "medium" or "low",
+    "reasoning": "brief explanation"
+  }}
+]
+
+Examples:
+- "Winkyd - Ijipitha" matches "Winky D - Ijipita" -> action: "match", matched_verified_id: [ID of Winky D - Ijipita]
+- "Get Free Data at xyz.com" -> action: "reject" (spam)
+- "New Artist - New Song" (not in verified list) -> action: "new", matched_verified_id: null"""
 
 
 def build_matching_prompt(votes: List[Dict], songs: List[Dict]) -> str:
@@ -491,3 +541,248 @@ def match_single_vote(raw_input: str) -> Optional[MatchResult]:
     
     results = match_votes_with_llm(vote_data, songs)
     return results[0] if results else None
+
+
+@dataclass
+class PendingSongResult:
+    """Result of LLM review for a pending song."""
+    pending_id: int
+    pending_name: str
+    action: str  # "match", "reject", "new"
+    matched_verified_id: Optional[int]
+    matched_verified_name: Optional[str]
+    confidence: str
+    reasoning: str
+
+
+def match_pending_songs_with_llm(
+    pending_songs: List[Dict],
+    verified_songs: List[Dict]
+) -> List[PendingSongResult]:
+    """
+    Use LLM to match pending songs to verified songs.
+    """
+    if not pending_songs:
+        return []
+    
+    prompt = build_pending_songs_prompt(pending_songs, verified_songs)
+    
+    try:
+        response_text = call_cohere_api(prompt)
+        response_text = response_text.strip()
+        
+        # Clean up response
+        if response_text.startswith('```'):
+            lines = response_text.split('\n')
+            response_text = '\n'.join(lines[1:-1])
+        if response_text.endswith('```'):
+            response_text = response_text[:-3]
+        
+        # Find JSON array
+        start_idx = response_text.find('[')
+        end_idx = response_text.rfind(']') + 1
+        if start_idx != -1 and end_idx > start_idx:
+            response_text = response_text[start_idx:end_idx]
+        
+        results = json.loads(response_text)
+        
+        verified_by_id = {s['id']: s for s in verified_songs}
+        pending_by_id = {s['id']: s for s in pending_songs}
+        
+        match_results = []
+        for r in results:
+            pending_id = r.get('pending_id')
+            if pending_id is None:
+                continue
+            
+            try:
+                pending_id = int(pending_id)
+            except (ValueError, TypeError):
+                continue
+            
+            pending_song = pending_by_id.get(pending_id)
+            if not pending_song:
+                continue
+            
+            matched_id = r.get('matched_verified_id')
+            if matched_id is not None:
+                try:
+                    matched_id = int(matched_id)
+                except (ValueError, TypeError):
+                    matched_id = None
+            
+            matched_song = verified_by_id.get(matched_id) if matched_id else None
+            
+            match_results.append(PendingSongResult(
+                pending_id=pending_id,
+                pending_name=pending_song['canonical_name'],
+                action=r.get('action', 'new').lower(),
+                matched_verified_id=matched_id,
+                matched_verified_name=matched_song['canonical_name'] if matched_song else None,
+                confidence=r.get('confidence', 'low').lower(),
+                reasoning=r.get('reasoning', ''),
+            ))
+        
+        return match_results
+        
+    except json.JSONDecodeError as e:
+        logger.error(f"Failed to parse LLM response: {e}")
+        logger.error(f"Response was: {response_text[:500]}")
+        return []
+    except Exception as e:
+        logger.exception(f"LLM matching error: {e}")
+        return []
+
+
+@transaction.atomic
+def merge_pending_to_verified(pending_id: int, verified_id: int) -> bool:
+    """
+    Merge a pending song into a verified song.
+    - Transfer all MatchKeyMappings from pending to verified
+    - Delete the pending song
+    """
+    try:
+        pending = CleanedSong.objects.get(id=pending_id)
+        verified = CleanedSong.objects.get(id=verified_id)
+        
+        # Transfer all match key mappings
+        MatchKeyMapping.objects.filter(cleaned_song=pending).update(cleaned_song=verified)
+        
+        # Also create a mapping for the pending song's canonical name
+        pending_match_key = f"{normalize_text(pending.artist)}::{normalize_text(pending.title)}"
+        MatchKeyMapping.objects.get_or_create(
+            match_key=pending_match_key,
+            defaults={
+                'cleaned_song': verified,
+                'sample_display_name': pending.canonical_name,
+                'vote_count': 0,
+                'is_auto_mapped': True,
+            }
+        )
+        
+        # Delete the pending song
+        pending.delete()
+        
+        logger.info(f"Merged '{pending.canonical_name}' into '{verified.canonical_name}'")
+        return True
+        
+    except CleanedSong.DoesNotExist:
+        logger.error(f"Song not found: pending={pending_id}, verified={verified_id}")
+        return False
+    except Exception as e:
+        logger.exception(f"Merge failed: {e}")
+        return False
+
+
+def process_pending_songs(
+    limit: int = 100,
+    auto_merge: bool = True,
+    auto_reject: bool = True,
+    dry_run: bool = False,
+) -> Dict:
+    """
+    Main function to process pending songs using LLM.
+    
+    Args:
+        limit: Max pending songs to process
+        auto_merge: If True, auto-merge high confidence matches
+        auto_reject: If True, auto-reject spam/invalid entries
+        dry_run: If True, don't save anything
+        
+    Returns:
+        Dict with statistics and results
+    """
+    verified_songs = get_verified_songs_list()
+    if not verified_songs:
+        return {
+            'error': 'No verified songs in database.',
+            'processed': 0,
+        }
+    
+    pending = get_pending_songs(limit=limit)
+    if not pending:
+        return {
+            'message': 'No pending songs to review.',
+            'processed': 0,
+        }
+    
+    # Convert to dicts
+    pending_data = [
+        {
+            'id': s.id,
+            'artist': s.artist,
+            'title': s.title,
+            'canonical_name': s.canonical_name,
+        }
+        for s in pending
+    ]
+    
+    stats = {
+        'total_processed': 0,
+        'matched': 0,
+        'rejected': 0,
+        'new_songs': 0,
+        'auto_merged': 0,
+        'auto_rejected': 0,
+        'errors': 0,
+    }
+    
+    all_results = []
+    
+    # Process in batches
+    for i in range(0, len(pending_data), BATCH_SIZE):
+        batch = pending_data[i:i + BATCH_SIZE]
+        logger.info(f"Processing pending batch {i//BATCH_SIZE + 1}, {len(batch)} songs")
+        
+        try:
+            results = match_pending_songs_with_llm(batch, verified_songs)
+            all_results.extend(results)
+            
+            for result in results:
+                stats['total_processed'] += 1
+                
+                if result.action == 'match':
+                    stats['matched'] += 1
+                    
+                    # Auto-merge high confidence matches
+                    if auto_merge and result.confidence == 'high' and result.matched_verified_id and not dry_run:
+                        if merge_pending_to_verified(result.pending_id, result.matched_verified_id):
+                            stats['auto_merged'] += 1
+                            logger.info(f"Auto-merged: '{result.pending_name}' -> '{result.matched_verified_name}'")
+                        else:
+                            stats['errors'] += 1
+                            
+                elif result.action == 'reject':
+                    stats['rejected'] += 1
+                    
+                    # Auto-reject spam
+                    if auto_reject and result.confidence == 'high' and not dry_run:
+                        try:
+                            CleanedSong.objects.filter(id=result.pending_id).update(status='rejected')
+                            stats['auto_rejected'] += 1
+                            logger.info(f"Auto-rejected: '{result.pending_name}'")
+                        except Exception as e:
+                            logger.error(f"Failed to reject: {e}")
+                            stats['errors'] += 1
+                            
+                else:  # "new"
+                    stats['new_songs'] += 1
+                    
+        except Exception as e:
+            logger.exception(f"Batch processing error: {e}")
+            stats['errors'] += 1
+    
+    return {
+        'stats': stats,
+        'results': [
+            {
+                'pending_id': r.pending_id,
+                'pending_name': r.pending_name,
+                'action': r.action,
+                'matched_to': r.matched_verified_name,
+                'confidence': r.confidence,
+                'reasoning': r.reasoning,
+            }
+            for r in all_results
+        ],
+    }
