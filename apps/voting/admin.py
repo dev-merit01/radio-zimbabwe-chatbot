@@ -405,7 +405,7 @@ class CleanedSongAdmin(admin.ModelAdmin):
         
         try:
             result = process_pending_songs(
-                limit=50,  # Process 50 at a time
+                limit=10,  # Process 10 at a time to avoid Render timeout
                 auto_merge=True,
                 auto_reject=True,
                 dry_run=False,
