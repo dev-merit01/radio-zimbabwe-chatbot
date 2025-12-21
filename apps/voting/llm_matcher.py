@@ -674,6 +674,399 @@ def merge_pending_to_verified(pending_id: int, verified_id: int) -> bool:
         return False
 
 
+def build_raw_vote_prompt(raw_votes: List[Dict], verified_songs: List[Dict]) -> str:
+    """Build prompt for processing raw votes directly."""
+    verified_text = "\n".join([
+        f"  [{s['id']}] {s['canonical_name']}"
+        for s in verified_songs
+    ])
+    
+    votes_text = "\n".join([
+        f"  {i+1}. \"{v['display_name']}\" ({v['vote_count']} votes)"
+        for i, v in enumerate(raw_votes)
+    ])
+    
+    return f"""You are reviewing raw user votes for a Zimbabwean music chart.
+
+VERIFIED SONGS DATABASE (these are correct, canonical song names):
+{verified_text}
+
+RAW VOTES TO PROCESS (may have typos, wrong format, spam, or be new songs):
+{votes_text}
+
+TASK: For each raw vote, determine what to do with it:
+
+1. "match" - It matches an existing verified song (even with typos/format issues)
+   Examples: "Winkyd - Ijipitha" matches "Winky D - Ijipita"
+            "holy10 ngaende" matches "Holy Ten - Ngaende"
+            
+2. "reject" - It's spam, gibberish, links, or clearly not a real song
+   Examples: "Get free airtime", "Hello", "www.xyz.com", "123456"
+   
+3. "new" - It's a legitimate Zimbabwean song NOT in the verified database
+   Examples: A real artist/song that just hasn't been added yet
+
+IMPORTANT:
+- Be generous with matching - if it's clearly the same song, match it even with typos
+- Only reject obvious spam - if it looks like a real song attempt, mark as "new"
+- Consider that Zimbabwean artists include: Winky D, Jah Prayzah, Holy Ten, Killer T, Seh Calaz, Freeman, etc.
+
+Respond with ONLY a JSON array:
+[
+  {{
+    "vote_index": 0,
+    "action": "match" or "reject" or "new",
+    "matched_song_id": 123 or null,
+    "confidence": "high" or "medium" or "low",
+    "reasoning": "brief explanation",
+    "suggested_artist": "Artist Name",
+    "suggested_title": "Song Title"
+  }}
+]
+
+For "new" songs, provide suggested_artist and suggested_title to create the song properly."""
+
+
+def process_raw_votes_with_llm(
+    raw_votes: List[Dict],
+    verified_songs: List[Dict]
+) -> List[Dict]:
+    """
+    Use LLM to process raw votes - match, reject, or create new.
+    """
+    if not raw_votes:
+        return []
+    
+    prompt = build_raw_vote_prompt(raw_votes, verified_songs)
+    
+    try:
+        response_text = call_anthropic_api(prompt)
+        response_text = response_text.strip()
+        
+        # Clean up response
+        if response_text.startswith('```'):
+            lines = response_text.split('\n')
+            response_text = '\n'.join(lines[1:-1])
+        if response_text.endswith('```'):
+            response_text = response_text[:-3]
+        
+        # Find JSON array
+        start_idx = response_text.find('[')
+        end_idx = response_text.rfind(']') + 1
+        if start_idx != -1 and end_idx > start_idx:
+            response_text = response_text[start_idx:end_idx]
+        
+        results = json.loads(response_text)
+        
+        verified_by_id = {s['id']: s for s in verified_songs}
+        
+        processed_results = []
+        for r in results:
+            vote_idx = r.get('vote_index', 0)
+            if vote_idx >= len(raw_votes):
+                continue
+            
+            vote = raw_votes[vote_idx]
+            matched_id = r.get('matched_song_id')
+            
+            if matched_id is not None:
+                try:
+                    matched_id = int(matched_id)
+                except (ValueError, TypeError):
+                    matched_id = None
+            
+            matched_song = verified_by_id.get(matched_id) if matched_id else None
+            
+            processed_results.append({
+                'vote_index': vote_idx,
+                'match_key': vote['match_key'],
+                'display_name': vote['display_name'],
+                'vote_count': vote['vote_count'],
+                'action': r.get('action', 'new').lower(),
+                'matched_song_id': matched_id,
+                'matched_song_name': matched_song['canonical_name'] if matched_song else None,
+                'confidence': r.get('confidence', 'low').lower(),
+                'reasoning': r.get('reasoning', ''),
+                'suggested_artist': r.get('suggested_artist', ''),
+                'suggested_title': r.get('suggested_title', ''),
+            })
+        
+        return processed_results
+        
+    except json.JSONDecodeError as e:
+        logger.error(f"Failed to parse LLM response: {e}")
+        logger.error(f"Response was: {response_text[:500]}")
+        return []
+    except Exception as e:
+        logger.exception(f"LLM raw vote processing error: {e}")
+        return []
+
+
+@transaction.atomic
+def apply_raw_vote_result(result: Dict) -> bool:
+    """
+    Apply the LLM decision for a raw vote.
+    
+    SAFE: Only creates NEW mappings and songs.
+    NEVER modifies existing verified songs or their vote counts.
+    
+    - match: Create MatchKeyMapping to existing verified song
+    - reject: Create a rejected CleanedSong entry (for tracking) - but NEVER change existing verified
+    - new: Create a new verified CleanedSong and mapping - but NEVER change existing
+    """
+    try:
+        match_key = result['match_key']
+        display_name = result['display_name']
+        vote_count = result['vote_count']
+        action = result['action']
+        
+        # SAFETY CHECK: If mapping already exists, skip
+        if MatchKeyMapping.objects.filter(match_key=match_key).exists():
+            logger.info(f"Mapping already exists for {match_key}, skipping")
+            return False
+        
+        if action == 'match' and result['matched_song_id']:
+            # Verify the target song exists and is verified
+            target_song = CleanedSong.objects.filter(
+                id=result['matched_song_id'], 
+                status='verified'
+            ).first()
+            if not target_song:
+                logger.warning(f"Target song {result['matched_song_id']} not found or not verified")
+                return False
+            
+            # Create mapping to existing verified song (safe - doesn't modify the song)
+            create_match_mapping(
+                match_key=match_key,
+                cleaned_song_id=result['matched_song_id'],
+                sample_display_name=display_name,
+                vote_count=vote_count,
+                is_auto_mapped=True,
+            )
+            return True
+            
+        elif action == 'reject':
+            # Create a NEW rejected CleanedSong for tracking spam
+            parts = display_name.split(' - ', 1)
+            if len(parts) == 2:
+                artist, title = parts
+            else:
+                artist = "SPAM"
+                title = display_name
+            
+            canonical = f"{artist.strip()} - {title.strip()}"
+            
+            # Check if already exists
+            existing = CleanedSong.objects.filter(canonical_name=canonical).first()
+            if existing:
+                # SAFETY: Never change existing verified songs!
+                if existing.status == 'verified':
+                    logger.info(f"Song '{canonical}' is verified, won't reject. Creating mapping instead.")
+                    create_match_mapping(
+                        match_key=match_key,
+                        cleaned_song_id=existing.id,
+                        sample_display_name=display_name,
+                        vote_count=vote_count,
+                        is_auto_mapped=True,
+                    )
+                    return True
+                else:
+                    # Use existing non-verified entry
+                    cleaned_song = existing
+            else:
+                # Create new rejected entry
+                cleaned_song = CleanedSong.objects.create(
+                    artist=artist.strip(),
+                    title=title.strip(),
+                    canonical_name=canonical,
+                    status='rejected',
+                )
+            
+            # Create mapping to rejected song (so we don't re-process)
+            create_match_mapping(
+                match_key=match_key,
+                cleaned_song_id=cleaned_song.id,
+                sample_display_name=display_name,
+                vote_count=vote_count,
+                is_auto_mapped=True,
+            )
+            return True
+            
+        elif action == 'new':
+            # Create new verified song
+            artist = result.get('suggested_artist', '').strip()
+            title = result.get('suggested_title', '').strip()
+            
+            # Fall back to parsing display_name
+            if not artist or not title:
+                parts = display_name.split(' - ', 1)
+                if len(parts) == 2:
+                    artist = artist or parts[0].strip()
+                    title = title or parts[1].strip()
+                else:
+                    artist = artist or "Unknown Artist"
+                    title = title or display_name.strip()
+            
+            canonical = f"{artist} - {title}"
+            
+            # Check if already exists
+            existing = CleanedSong.objects.filter(canonical_name=canonical).first()
+            if existing:
+                # Use existing song (don't change its status!)
+                cleaned_song = existing
+                logger.info(f"Song '{canonical}' already exists with status={existing.status}, using it")
+            else:
+                # Create brand new song
+                cleaned_song = CleanedSong.objects.create(
+                    artist=artist,
+                    title=title,
+                    canonical_name=canonical,
+                    status='verified',
+                )
+                logger.info(f"Created new song: '{canonical}'")
+            
+            # Create mapping
+            create_match_mapping(
+                match_key=match_key,
+                cleaned_song_id=cleaned_song.id,
+                sample_display_name=display_name,
+                vote_count=vote_count,
+                is_auto_mapped=True,
+            )
+            return True
+            
+        return False
+        
+    except Exception as e:
+        logger.exception(f"Failed to apply raw vote result: {e}")
+        return False
+
+
+def process_all_raw_votes(
+    limit: int = 500,
+    batch_size: int = 20,
+    dry_run: bool = False,
+) -> Dict:
+    """
+    Process ALL unmapped raw votes directly using LLM.
+    
+    This is the main function to call - it processes RawSongTally entries
+    that don't yet have a MatchKeyMapping.
+    
+    Args:
+        limit: Max total votes to process
+        batch_size: Votes per LLM call
+        dry_run: If True, don't save anything
+        
+    Returns:
+        Dict with statistics and results
+    """
+    # Get verified songs for matching
+    verified_songs = get_verified_songs_list()
+    
+    # Get unmapped raw tallies (votes without mappings)
+    unmapped = get_unmatched_tallies(limit=limit)
+    
+    if not unmapped:
+        return {
+            'message': 'No unmapped raw votes found! All votes are already processed.',
+            'processed': 0,
+            'total_unmapped': 0,
+        }
+    
+    # Count total unmapped for progress reporting
+    all_mapped_keys = set(MatchKeyMapping.objects.values_list('match_key', flat=True))
+    total_unmapped = RawSongTally.objects.exclude(match_key__in=all_mapped_keys).count()
+    
+    # Convert to dicts
+    votes_data = [
+        {
+            'match_key': t.match_key,
+            'display_name': t.display_name,
+            'vote_count': t.count,
+            'date': str(t.date),
+        }
+        for t in unmapped
+    ]
+    
+    stats = {
+        'total_unmapped': total_unmapped,
+        'processed': 0,
+        'matched': 0,
+        'rejected': 0,
+        'new_songs': 0,
+        'applied': 0,
+        'errors': 0,
+    }
+    
+    all_results = []
+    
+    # Process in batches
+    for i in range(0, len(votes_data), batch_size):
+        batch = votes_data[i:i + batch_size]
+        logger.info(f"Processing raw vote batch {i//batch_size + 1}, {len(batch)} votes")
+        
+        try:
+            results = process_raw_votes_with_llm(batch, verified_songs)
+            
+            for result in results:
+                stats['processed'] += 1
+                was_applied = False
+                
+                if result['action'] == 'match':
+                    stats['matched'] += 1
+                elif result['action'] == 'reject':
+                    stats['rejected'] += 1
+                else:  # new
+                    stats['new_songs'] += 1
+                
+                # Apply the result
+                if not dry_run:
+                    if apply_raw_vote_result(result):
+                        stats['applied'] += 1
+                        was_applied = True
+                    else:
+                        stats['errors'] += 1
+                
+                # Log decision
+                if not dry_run:
+                    try:
+                        action_for_log = result['action']
+                        if result['action'] == 'match' and was_applied:
+                            action_for_log = 'auto_merge'
+                        elif result['action'] == 'reject' and was_applied:
+                            action_for_log = 'auto_reject'
+                        
+                        LLMDecisionLog.objects.create(
+                            input_text=result['display_name'],
+                            input_type='raw_vote',
+                            action=action_for_log,
+                            confidence=result['confidence'],
+                            reasoning=result['reasoning'],
+                            matched_song_id=result['matched_song_id'],
+                            matched_song_name=result.get('matched_song_name', ''),
+                            was_applied=was_applied,
+                        )
+                    except Exception as e:
+                        logger.error(f"Failed to log decision: {e}")
+                
+                all_results.append(result)
+                
+        except Exception as e:
+            logger.exception(f"Batch error: {e}")
+            stats['errors'] += 1
+    
+    # Update tallies
+    if stats['applied'] > 0 and not dry_run:
+        update_cleaned_song_tallies()
+    
+    return {
+        'stats': stats,
+        'results': all_results,
+        'remaining': total_unmapped - stats['processed'],
+    }
+
+
 def process_pending_songs(
     limit: int = 100,
     auto_merge: bool = True,

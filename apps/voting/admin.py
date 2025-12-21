@@ -366,8 +366,61 @@ class CleanedSongAdmin(admin.ModelAdmin):
                 self.admin_site.admin_view(self.llm_review_pending_view),
                 name='voting_cleanedsong_llm_review',
             ),
+            path(
+                'llm-process-raw-votes/',
+                self.admin_site.admin_view(self.llm_process_raw_votes_view),
+                name='voting_cleanedsong_llm_raw_votes',
+            ),
         ]
         return custom_urls + urls
+    
+    def llm_process_raw_votes_view(self, request):
+        """Admin view to process raw votes directly with LLM."""
+        from .llm_matcher import process_all_raw_votes, get_unmatched_tallies
+        from .models import RawSongTally, MatchKeyMapping
+        
+        # Count total unmapped
+        mapped_keys = set(MatchKeyMapping.objects.values_list('match_key', flat=True))
+        total_unmapped = RawSongTally.objects.exclude(match_key__in=mapped_keys).count()
+        
+        if total_unmapped == 0:
+            messages.info(request, "✅ All raw votes are already mapped!")
+            return redirect('admin:voting_cleanedsong_changelist')
+        
+        try:
+            result = process_all_raw_votes(
+                limit=100,  # Process up to 100 per click
+                batch_size=20,  # 20 per LLM call
+                dry_run=False,
+            )
+            
+            if 'error' in result:
+                messages.error(request, f"❌ LLM Error: {result['error']}")
+            else:
+                stats = result.get('stats', {})
+                remaining = result.get('remaining', 0)
+                
+                messages.success(
+                    request,
+                    f"🤖 Processed {stats.get('processed', 0)} raw votes: "
+                    f"{stats.get('matched', 0)} matched to existing songs, "
+                    f"{stats.get('new_songs', 0)} new songs created, "
+                    f"{stats.get('rejected', 0)} rejected as spam. "
+                    f"({stats.get('applied', 0)} applied, {stats.get('errors', 0)} errors)"
+                )
+                
+                if remaining > 0:
+                    messages.warning(
+                        request,
+                        f"⏳ {remaining} more unmapped votes remaining. Click '🎵 LLM Process Raw Votes' again to continue."
+                    )
+                else:
+                    messages.success(request, "✅ All raw votes have been processed!")
+                    
+        except Exception as e:
+            messages.error(request, f"❌ Error: {e}")
+        
+        return redirect('admin:voting_cleanedsong_changelist')
     
     def process_votes_view(self, request):
         """Admin view to process votes for today."""
