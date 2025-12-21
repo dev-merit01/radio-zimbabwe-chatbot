@@ -253,6 +253,68 @@ class DailyChart(models.Model):
 
 
 # ============================================================
+# LLM Decision Logging
+# ============================================================
+
+class LLMDecisionLog(models.Model):
+    """
+    Logs LLM decisions for auditing and review.
+    Helps verify if the LLM is making correct matching/rejection decisions.
+    """
+    ACTION_CHOICES = (
+        ('match', 'Matched to Verified'),
+        ('reject', 'Rejected as Spam'),
+        ('new', 'Marked as New Song'),
+        ('auto_merge', 'Auto-Merged'),
+        ('auto_reject', 'Auto-Rejected'),
+    )
+    
+    # What was being processed
+    input_text = models.CharField(max_length=512, help_text="Original song name being processed")
+    input_type = models.CharField(max_length=32, default='pending_song', help_text="Type: pending_song, raw_vote")
+    
+    # LLM decision
+    action = models.CharField(max_length=32, choices=ACTION_CHOICES)
+    confidence = models.CharField(max_length=16, help_text="high, medium, low, none")
+    reasoning = models.TextField(blank=True, help_text="LLM's explanation")
+    
+    # What it was matched to (if applicable)
+    matched_song = models.ForeignKey(
+        'CleanedSong', 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True,
+        related_name='llm_matches'
+    )
+    matched_song_name = models.CharField(max_length=512, blank=True, help_text="Snapshot of matched song name")
+    
+    # Was the action applied?
+    was_applied = models.BooleanField(default=False, help_text="Whether the action was actually applied")
+    
+    # Metadata
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'LLM Decision Log'
+        verbose_name_plural = 'LLM Decision Logs'
+        indexes = [
+            models.Index(fields=['-created_at']),
+            models.Index(fields=['action']),
+        ]
+    
+    def __str__(self):
+        icon = {
+            'match': '🔗',
+            'reject': '🗑️',
+            'new': '🆕',
+            'auto_merge': '✅',
+            'auto_reject': '❌',
+        }.get(self.action, '❓')
+        return f"{icon} {self.input_text[:50]} → {self.action} ({self.confidence})"
+
+
+# ============================================================
 # Verified Artists
 # ============================================================
 

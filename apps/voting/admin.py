@@ -14,6 +14,7 @@ from .models import (
     MatchKeyMapping,
     CleanedSongTally,
     VerifiedArtist,
+    LLMDecisionLog,
 )
 from .cleaning import CleaningService
 
@@ -407,7 +408,7 @@ class CleanedSongAdmin(admin.ModelAdmin):
             result = process_pending_songs(
                 limit=10,  # Process 10 at a time to avoid Render timeout
                 auto_merge=True,
-                auto_reject=True,
+                auto_reject=False,  # Don't auto-reject, keep for manual review
                 dry_run=False,
             )
             
@@ -415,23 +416,35 @@ class CleanedSongAdmin(admin.ModelAdmin):
                 messages.error(request, f"❌ LLM Error: {result['error']}")
             else:
                 stats = result.get('stats', {})
+                results = result.get('results', [])
+                
+                # Show detailed merge results
+                merge_details = [r for r in results if r['action'] == 'match' and r['matched_to']]
+                reject_suggestions = [r for r in results if r['action'] == 'reject']
+                
                 messages.success(
                     request,
                     f"🤖 LLM Review Complete: "
-                    f"{stats.get('matched', 0)} matched to verified songs, "
-                    f"{stats.get('rejected', 0)} rejected as spam, "
-                    f"{stats.get('new_songs', 0)} marked as new songs"
+                    f"{stats.get('auto_merged', 0)} auto-merged, "
+                    f"{stats.get('rejected', 0)} suggested for rejection (kept pending), "
+                    f"{stats.get('new_songs', 0)} marked as new songs. "
+                    f"Check LLM Decision Logs for details."
                 )
-                if stats.get('auto_merged', 0) > 0:
+                
+                # Show what was merged
+                for r in merge_details[:5]:  # Show up to 5 examples
                     messages.info(
                         request,
-                        f"🔗 Auto-merged {stats.get('auto_merged', 0)} songs"
+                        f"🔗 \"{r['pending_name']}\" → \"{r['matched_to']}\" ({r['confidence']})"
                     )
-                if stats.get('auto_rejected', 0) > 0:
+                
+                # Show rejection suggestions
+                for r in reject_suggestions[:3]:
                     messages.warning(
                         request,
-                        f"🗑️ Auto-rejected {stats.get('auto_rejected', 0)} spam entries"
+                        f"⚠️ Review: \"{r['pending_name']}\" - {r['reasoning']}"
                     )
+                    
         except Exception as e:
             messages.error(request, f"❌ LLM processing error: {e}")
         
@@ -738,3 +751,46 @@ class VerifiedArtistAdmin(admin.ModelAdmin):
             return format_html('<span style="color: green;">{check}</span>', check='✓')
         return format_html('<span style="color: gray;">{dash}</span>', dash='-')
     has_spotify.short_description = 'Spotify'
+
+
+@admin.register(LLMDecisionLog)
+class LLMDecisionLogAdmin(admin.ModelAdmin):
+    """Admin for reviewing LLM matching decisions."""
+    list_display = ('id', 'action_icon', 'input_text_short', 'action', 'confidence', 'matched_to', 'was_applied', 'created_at')
+    list_filter = ('action', 'confidence', 'was_applied', 'input_type', 'created_at')
+    search_fields = ('input_text', 'matched_song_name', 'reasoning')
+    ordering = ('-created_at',)
+    date_hierarchy = 'created_at'
+    readonly_fields = ('input_text', 'input_type', 'action', 'confidence', 'reasoning', 'matched_song', 'matched_song_name', 'was_applied', 'created_at')
+    
+    list_per_page = 50
+    
+    def action_icon(self, obj):
+        icons = {
+            'match': '🔗',
+            'reject': '🗑️',
+            'new': '🆕',
+            'auto_merge': '✅',
+            'auto_reject': '❌',
+        }
+        return icons.get(obj.action, '❓')
+    action_icon.short_description = ''
+    
+    def input_text_short(self, obj):
+        text = obj.input_text
+        if len(text) > 50:
+            return text[:50] + '...'
+        return text
+    input_text_short.short_description = 'Input'
+    
+    def matched_to(self, obj):
+        if obj.matched_song_name:
+            return obj.matched_song_name[:40] + '...' if len(obj.matched_song_name) > 40 else obj.matched_song_name
+        return '-'
+    matched_to.short_description = 'Matched To'
+    
+    def has_add_permission(self, request):
+        return False  # Logs are auto-created
+    
+    def has_change_permission(self, request, obj=None):
+        return False  # Read-only

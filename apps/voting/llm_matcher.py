@@ -1,5 +1,5 @@
 """
-LLM-powered vote matching using Cohere.
+LLM-powered vote matching using Anthropic Claude.
 
 This module handles messy votes that don't follow the "artist - song" format:
 - Just a song name: "Ibotso"
@@ -25,26 +25,27 @@ from .models import (
     RawSongTally,
     MatchKeyMapping,
     CleanedSongTally,
+    LLMDecisionLog,
     normalize_text,
 )
 
 logger = logging.getLogger(__name__)
 
 # Maximum songs to include in prompt (to stay within token limits)
-MAX_SONGS_IN_PROMPT = 500  # Increased to handle larger song databases
+MAX_SONGS_IN_PROMPT = 500  # Claude can handle larger contexts
 # Batch size for processing
-BATCH_SIZE = 15  # Smaller batches for Cohere token limits
+BATCH_SIZE = 20  # Claude handles larger batches well
 
-# Cohere API settings
-COHERE_API_URL = "https://api.cohere.com/v2/chat"
-COHERE_MODEL = "command-r-08-2024"  # Updated model name
+# Anthropic API settings
+ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
+ANTHROPIC_MODEL = "claude-3-haiku-20240307"  # Fast and cost-effective model
 
 
-def get_cohere_api_key() -> str:
-    """Get Cohere API key from settings."""
-    api_key = getattr(settings, 'COHERE_API_KEY', '')
+def get_anthropic_api_key() -> str:
+    """Get Anthropic API key from settings."""
+    api_key = getattr(settings, 'ANTHROPIC_API_KEY', '')
     if not api_key:
-        raise RuntimeError('COHERE_API_KEY is not configured in .env')
+        raise RuntimeError('ANTHROPIC_API_KEY is not configured in .env')
     return api_key
 
 
@@ -72,46 +73,44 @@ RULES:
    - Typos: "winkyd", "jah prayza", "holy10" etc.
    - Numbers: Some users vote by typing just a number - this might mean chart position, ignore these
 3. Only return HIGH confidence if you're 95%+ sure
-4. Return MEDIUM if you're 70-95% sure (human should review)
+4. Return MEDIUM if you're 70-95% sure
 5. Return LOW or NONE if unsure - don't guess!
 
 IMPORTANT: You must match to songs in the provided list ONLY. Do not invent matches."""
 
 
-def call_cohere_api(prompt: str) -> str:
-    """Call Cohere Chat API and return the response text."""
-    api_key = get_cohere_api_key()
+def call_anthropic_api(prompt: str) -> str:
+    """Call Anthropic Claude API and return the response text."""
+    api_key = get_anthropic_api_key()
     
     headers = {
-        "Authorization": f"Bearer {api_key}",
+        "x-api-key": api_key,
+        "anthropic-version": "2023-06-01",
         "Content-Type": "application/json",
     }
     
-    # Cohere v2 Chat API format
     payload = {
-        "model": COHERE_MODEL,
+        "model": ANTHROPIC_MODEL,
+        "max_tokens": 4096,
+        "system": SYSTEM_PROMPT,
         "messages": [
-            {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": prompt}
         ],
         "temperature": 0.1,
-        "max_tokens": 4000,
     }
     
-    response = requests.post(COHERE_API_URL, headers=headers, json=payload, timeout=60)
+    response = requests.post(ANTHROPIC_API_URL, headers=headers, json=payload, timeout=120)
     response.raise_for_status()
     
     data = response.json()
-    # v2 API returns message.content[0].text
-    message = data.get("message", {})
-    content = message.get("content", [])
+    content = data.get("content", [])
     if content and len(content) > 0:
         return content[0].get("text", "")
     return ""
 
 
 def get_verified_songs_list() -> List[Dict]:
-    """Get list of verified songs for the prompt."""
+    """Get list of verified songs for the prompt with enriched data."""
     songs = CleanedSong.objects.filter(status='verified').order_by('artist', 'title')[:MAX_SONGS_IN_PROMPT]
     return [
         {
@@ -119,6 +118,7 @@ def get_verified_songs_list() -> List[Dict]:
             'artist': song.artist,
             'title': song.title,
             'canonical_name': song.canonical_name,
+            'spotify_id': song.spotify_track_id or '',
         }
         for song in songs
     ]
@@ -257,7 +257,7 @@ def match_votes_with_llm(
     prompt = build_matching_prompt(votes, songs)
     
     try:
-        response_text = call_cohere_api(prompt)
+        response_text = call_anthropic_api(prompt)
         response_text = response_text.strip()
         
         # Clean up response - remove markdown code blocks if present
@@ -568,7 +568,7 @@ def match_pending_songs_with_llm(
     prompt = build_pending_songs_prompt(pending_songs, verified_songs)
     
     try:
-        response_text = call_cohere_api(prompt)
+        response_text = call_anthropic_api(prompt)
         response_text = response_text.strip()
         
         # Clean up response
@@ -740,33 +740,46 @@ def process_pending_songs(
             
             for result in results:
                 stats['total_processed'] += 1
+                was_applied = False
+                action_for_log = result.action
                 
                 if result.action == 'match':
                     stats['matched'] += 1
                     
-                    # Auto-merge high confidence matches
-                    if auto_merge and result.confidence == 'high' and result.matched_verified_id and not dry_run:
+                    # Auto-merge high AND medium confidence matches
+                    if auto_merge and result.confidence in ('high', 'medium') and result.matched_verified_id and not dry_run:
                         if merge_pending_to_verified(result.pending_id, result.matched_verified_id):
                             stats['auto_merged'] += 1
-                            logger.info(f"Auto-merged: '{result.pending_name}' -> '{result.matched_verified_name}'")
+                            was_applied = True
+                            action_for_log = 'auto_merge'
+                            logger.info(f"Auto-merged ({result.confidence}): '{result.pending_name}' -> '{result.matched_verified_name}'")
                         else:
                             stats['errors'] += 1
                             
                 elif result.action == 'reject':
                     stats['rejected'] += 1
-                    
-                    # Auto-reject spam
-                    if auto_reject and result.confidence == 'high' and not dry_run:
-                        try:
-                            CleanedSong.objects.filter(id=result.pending_id).update(status='rejected')
-                            stats['auto_rejected'] += 1
-                            logger.info(f"Auto-rejected: '{result.pending_name}'")
-                        except Exception as e:
-                            logger.error(f"Failed to reject: {e}")
-                            stats['errors'] += 1
+                    # Don't auto-reject - keep as pending for manual review
+                    # This allows human verification of rejection decisions
+                    logger.info(f"Marked for rejection (needs review): '{result.pending_name}'")
                             
                 else:  # "new"
                     stats['new_songs'] += 1
+                
+                # Log the decision
+                if not dry_run:
+                    try:
+                        LLMDecisionLog.objects.create(
+                            input_text=result.pending_name,
+                            input_type='pending_song',
+                            action=action_for_log,
+                            confidence=result.confidence,
+                            reasoning=result.reasoning or '',
+                            matched_song_id=result.matched_verified_id,
+                            matched_song_name=result.matched_verified_name or '',
+                            was_applied=was_applied,
+                        )
+                    except Exception as e:
+                        logger.error(f"Failed to log LLM decision: {e}")
                     
         except Exception as e:
             logger.exception(f"Batch processing error: {e}")

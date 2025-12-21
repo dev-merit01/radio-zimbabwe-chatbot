@@ -16,6 +16,7 @@ env = environ.Env(
     SPOTIFY_CLIENT_SECRET=(str, ''),
     GEMINI_API_KEY=(str, ''),
     COHERE_API_KEY=(str, ''),
+    ANTHROPIC_API_KEY=(str, ''),
     # OneMsg.io WhatsApp API credentials (legacy)
     ONEMSG_APP_KEY=(str, ''),
     ONEMSG_AUTH_KEY=(str, ''),
@@ -144,8 +145,11 @@ LOGGING = {
 # Gemini API
 GEMINI_API_KEY = env('GEMINI_API_KEY')
 
-# Cohere API (for LLM vote matching)
+# Cohere API (for LLM vote matching - legacy)
 COHERE_API_KEY = env('COHERE_API_KEY')
+
+# Anthropic API (for LLM vote matching)
+ANTHROPIC_API_KEY = env('ANTHROPIC_API_KEY')
 
 # OneMsg.io WhatsApp API (legacy)
 ONEMSG_APP_KEY = env('ONEMSG_APP_KEY')
