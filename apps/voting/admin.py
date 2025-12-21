@@ -408,9 +408,9 @@ class CleanedSongAdmin(admin.ModelAdmin):
             return redirect('admin:voting_cleanedsong_changelist')
         
         try:
-            # Process ALL pending songs (up to 500)
+            # Process pending songs in smaller batches to avoid Render timeout
             result = process_pending_songs(
-                limit=500,  # Process all pending songs
+                limit=20,  # Smaller batch to avoid timeout
                 auto_merge=True,
                 auto_reject=False,  # Don't auto-reject, keep for manual review
                 dry_run=False,
@@ -421,6 +421,7 @@ class CleanedSongAdmin(admin.ModelAdmin):
             else:
                 stats = result.get('stats', {})
                 results = result.get('results', [])
+                remaining = total_pending - stats.get('total_processed', 0)
                 
                 # Show detailed merge results
                 merge_details = [r for r in results if r['action'] == 'match' and r['matched_to']]
@@ -428,12 +429,17 @@ class CleanedSongAdmin(admin.ModelAdmin):
                 
                 messages.success(
                     request,
-                    f"🤖 LLM Review Complete: Scanned {stats.get('total_processed', 0)} pending songs. "
+                    f"🤖 LLM Review Complete: Processed {stats.get('total_processed', 0)} of {total_pending} pending songs. "
                     f"{stats.get('auto_merged', 0)} auto-merged, "
                     f"{stats.get('rejected', 0)} suggested for rejection, "
                     f"{stats.get('new_songs', 0)} new songs. "
-                    f"Check LLM Decision Logs for details."
                 )
+                
+                if remaining > 0:
+                    messages.warning(
+                        request,
+                        f"⏳ {remaining} more pending songs to process. Click 'LLM Review Pending' again to continue."
+                    )
                 
                 # Show what was merged
                 for r in merge_details[:5]:  # Show up to 5 examples
