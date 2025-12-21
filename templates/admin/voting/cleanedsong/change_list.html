@@ -3,6 +3,16 @@
 
 {% block object-tools-items %}
 <li>
+    <a href="{% url 'admin:voting_cleanedsong_diagnose' %}" class="button" style="background: #e74c3c; color: white;">
+        🔍 Diagnose Votes
+    </a>
+</li>
+<li>
+    <a href="{% url 'admin:voting_cleanedsong_recalculate' %}" class="button" style="background: #f39c12; color: white;">
+        🔄 Recalculate Tallies
+    </a>
+</li>
+<li>
     <a href="{% url 'admin:voting_cleanedsong_process_votes' %}" class="button" style="background: #417690; color: white;">
         🔄 Process Today's Votes
     </a>

@@ -371,8 +371,119 @@ class CleanedSongAdmin(admin.ModelAdmin):
                 self.admin_site.admin_view(self.llm_process_raw_votes_view),
                 name='voting_cleanedsong_llm_raw_votes',
             ),
+            path(
+                'diagnose-votes/',
+                self.admin_site.admin_view(self.diagnose_votes_view),
+                name='voting_cleanedsong_diagnose',
+            ),
+            path(
+                'recalculate-tallies/',
+                self.admin_site.admin_view(self.recalculate_tallies_view),
+                name='voting_cleanedsong_recalculate',
+            ),
         ]
         return custom_urls + urls
+    
+    def diagnose_votes_view(self, request):
+        """Diagnose why votes aren't showing on dashboard."""
+        from .models import RawVote, RawSongTally, CleanedSong, MatchKeyMapping, CleanedSongTally
+        from django.db.models import Sum
+        
+        # Raw data
+        raw_vote_count = RawVote.objects.count()
+        raw_tally_count = RawSongTally.objects.count()
+        raw_tally_votes = RawSongTally.objects.aggregate(total=Sum('count'))['total'] or 0
+        
+        # Cleaned songs by status
+        cleaned_total = CleanedSong.objects.count()
+        verified_count = CleanedSong.objects.filter(status='verified').count()
+        pending_count = CleanedSong.objects.filter(status='pending').count()
+        rejected_count = CleanedSong.objects.filter(status='rejected').count()
+        
+        # Mappings
+        mapping_count = MatchKeyMapping.objects.count()
+        
+        # Mappings to verified songs
+        verified_song_ids = set(CleanedSong.objects.filter(status='verified').values_list('id', flat=True))
+        mappings_to_verified = MatchKeyMapping.objects.filter(cleaned_song_id__in=verified_song_ids).count()
+        mappings_to_pending = MatchKeyMapping.objects.filter(cleaned_song__status='pending').count()
+        mappings_to_rejected = MatchKeyMapping.objects.filter(cleaned_song__status='rejected').count()
+        
+        # Votes mapped to verified songs
+        verified_mapped_votes = MatchKeyMapping.objects.filter(
+            cleaned_song_id__in=verified_song_ids
+        ).aggregate(total=Sum('vote_count'))['total'] or 0
+        
+        # Dashboard tallies
+        dashboard_tally_count = CleanedSongTally.objects.count()
+        dashboard_total_votes = CleanedSongTally.objects.aggregate(total=Sum('count'))['total'] or 0
+        
+        # Unmapped raw tallies
+        mapped_keys = set(MatchKeyMapping.objects.values_list('match_key', flat=True))
+        all_raw_keys = set(RawSongTally.objects.values_list('match_key', flat=True))
+        unmapped_keys = all_raw_keys - mapped_keys
+        unmapped_votes = RawSongTally.objects.filter(match_key__in=unmapped_keys).aggregate(total=Sum('count'))['total'] or 0
+        
+        messages.info(request, f"📊 RAW DATA: {raw_vote_count} RawVotes, {raw_tally_count} RawSongTally entries, {raw_tally_votes} total raw votes")
+        messages.info(request, f"📁 CLEANED SONGS: {cleaned_total} total ({verified_count} verified, {pending_count} pending, {rejected_count} rejected)")
+        messages.info(request, f"🔗 MAPPINGS: {mapping_count} total → {mappings_to_verified} to verified, {mappings_to_pending} to pending, {mappings_to_rejected} to rejected")
+        messages.info(request, f"📈 DASHBOARD: {dashboard_tally_count} tally entries, {dashboard_total_votes} votes showing")
+        
+        if len(unmapped_keys) > 0:
+            messages.warning(request, f"⚠️ UNMAPPED: {len(unmapped_keys)} raw entries ({unmapped_votes} votes) have no mapping!")
+        
+        if mappings_to_pending > 0:
+            messages.warning(request, f"⚠️ {mappings_to_pending} mappings point to PENDING songs (not counting on dashboard)")
+        
+        if verified_mapped_votes > dashboard_total_votes:
+            messages.warning(request, f"⚠️ Dashboard shows {dashboard_total_votes} but {verified_mapped_votes} are mapped to verified songs. Click 'Recalculate Tallies'!")
+        
+        return redirect('admin:voting_cleanedsong_changelist')
+    
+    def recalculate_tallies_view(self, request):
+        """Recalculate CleanedSongTally from mappings."""
+        from .models import RawSongTally, CleanedSong, MatchKeyMapping, CleanedSongTally
+        from django.db.models import Sum
+        from collections import defaultdict
+        
+        # Get all mappings to verified songs
+        verified_song_ids = set(CleanedSong.objects.filter(status='verified').values_list('id', flat=True))
+        mappings = MatchKeyMapping.objects.filter(cleaned_song_id__in=verified_song_ids)
+        mapping_dict = {m.match_key: m.cleaned_song_id for m in mappings}
+        
+        # Aggregate votes by cleaned_song and date
+        song_date_counts = defaultdict(lambda: defaultdict(int))
+        
+        for tally in RawSongTally.objects.all():
+            cleaned_song_id = mapping_dict.get(tally.match_key)
+            if cleaned_song_id:
+                song_date_counts[cleaned_song_id][tally.date] += tally.count
+        
+        # Update CleanedSongTally
+        created = 0
+        updated = 0
+        total_votes = 0
+        
+        for song_id, date_counts in song_date_counts.items():
+            for date, count in date_counts.items():
+                obj, was_created = CleanedSongTally.objects.update_or_create(
+                    cleaned_song_id=song_id,
+                    date=date,
+                    defaults={'count': count}
+                )
+                if was_created:
+                    created += 1
+                else:
+                    updated += 1
+                total_votes += count
+        
+        messages.success(
+            request,
+            f"✅ Recalculated tallies: {created} created, {updated} updated. "
+            f"Dashboard now shows {total_votes} total votes across all dates."
+        )
+        
+        return redirect('admin:voting_cleanedsong_changelist')
     
     def llm_process_raw_votes_view(self, request):
         """Admin view to process raw votes directly with LLM."""
