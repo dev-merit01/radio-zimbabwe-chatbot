@@ -3,33 +3,8 @@
 
 {% block object-tools-items %}
 <li>
-    <a href="{% url 'admin:voting_cleanedsong_diagnose' %}" class="button" style="background: #e74c3c; color: white;">
-        🔍 Diagnose Votes
-    </a>
-</li>
-<li>
-    <a href="{% url 'admin:voting_cleanedsong_verify_all_pending' %}" class="button" style="background: #3498db; color: white;">
-        ✅ Verify All Pending
-    </a>
-</li>
-<li>
-    <a href="{% url 'admin:voting_cleanedsong_recalculate' %}" class="button" style="background: #f39c12; color: white;">
-        🔄 Recalculate Tallies
-    </a>
-</li>
-<li>
-    <a href="{% url 'admin:voting_cleanedsong_process_votes' %}" class="button" style="background: #417690; color: white;">
-        🔄 Process Today's Votes
-    </a>
-</li>
-<li>
     <a href="{% url 'admin:voting_cleanedsong_llm_raw_votes' %}" class="button" style="background: #27ae60; color: white;">
-        🎵 LLM Process Raw Votes
-    </a>
-</li>
-<li>
-    <a href="{% url 'admin:voting_cleanedsong_llm_review' %}" class="button" style="background: #9b59b6; color: white;">
-        🤖 LLM Review Pending
+        🎵 LLM Process Votes
     </a>
 </li>
 {{ block.super }}

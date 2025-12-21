@@ -500,54 +500,73 @@ class CleanedSongAdmin(admin.ModelAdmin):
         return redirect('admin:voting_cleanedsong_changelist')
     
     def llm_process_raw_votes_view(self, request):
-        """Admin view to process raw votes directly with LLM."""
+        """Admin view to process raw votes with LLM and update dashboard."""
         from .llm_matcher import process_all_raw_votes
-        from .models import RawSongTally, MatchKeyMapping
+        from .models import RawSongTally, CleanedSong, MatchKeyMapping, CleanedSongTally
+        from django.db.models import Sum
+        from collections import defaultdict
         
-        # Count total unmapped - use exact match comparison
+        # Count total unmapped
         all_raw_keys = list(RawSongTally.objects.values_list('match_key', flat=True))
         mapped_keys = set(MatchKeyMapping.objects.values_list('match_key', flat=True))
         unmapped_keys = [k for k in all_raw_keys if k not in mapped_keys]
-        total_unmapped = len(set(unmapped_keys))  # unique unmapped
+        total_unmapped = len(set(unmapped_keys))
         
-        messages.info(request, f"🔍 Found {len(all_raw_keys)} raw tallies, {len(mapped_keys)} mappings, {total_unmapped} unmapped")
-        
-        if total_unmapped == 0:
-            messages.info(request, "✅ All raw votes are already mapped! Try 'Recalculate Tallies' to update dashboard.")
-            return redirect('admin:voting_cleanedsong_changelist')
-        
-        try:
-            result = process_all_raw_votes(
-                limit=100,  # Process up to 100 per click
-                batch_size=20,  # 20 per LLM call
-                dry_run=False,
-            )
-            
-            if 'error' in result:
-                messages.error(request, f"❌ LLM Error: {result['error']}")
-            else:
-                stats = result.get('stats', {})
-                remaining = result.get('remaining', 0)
-                
-                messages.success(
-                    request,
-                    f"🤖 Processed {stats.get('processed', 0)} raw votes: "
-                    f"{stats.get('matched', 0)} matched to existing songs, "
-                    f"{stats.get('new_songs', 0)} new songs created, "
-                    f"{stats.get('rejected', 0)} rejected as spam. "
-                    f"({stats.get('applied', 0)} applied, {stats.get('errors', 0)} errors)"
+        if total_unmapped > 0:
+            # Process unmapped votes with LLM
+            try:
+                result = process_all_raw_votes(
+                    limit=100,
+                    batch_size=20,
+                    dry_run=False,
                 )
                 
-                if remaining > 0:
-                    messages.warning(
-                        request,
-                        f"⏳ {remaining} more unmapped votes remaining. Click '🎵 LLM Process Raw Votes' again to continue."
-                    )
+                if 'error' in result:
+                    messages.error(request, f"❌ LLM Error: {result['error']}")
                 else:
-                    messages.success(request, "✅ All raw votes have been processed!")
+                    stats = result.get('stats', {})
+                    remaining = result.get('remaining', 0)
                     
-        except Exception as e:
-            messages.error(request, f"❌ Error: {e}")
+                    messages.success(
+                        request,
+                        f"🤖 Processed {stats.get('processed', 0)} votes: "
+                        f"{stats.get('matched', 0)} matched, "
+                        f"{stats.get('new_songs', 0)} new, "
+                        f"{stats.get('rejected', 0)} rejected"
+                    )
+                    
+                    if remaining > 0:
+                        messages.warning(request, f"⏳ {remaining} more to process. Click again!")
+                        
+            except Exception as e:
+                messages.error(request, f"❌ Error: {e}")
+        else:
+            messages.info(request, "✅ All votes already mapped!")
+        
+        # Always recalculate dashboard tallies
+        verified_song_ids = set(CleanedSong.objects.filter(status='verified').values_list('id', flat=True))
+        mappings = MatchKeyMapping.objects.filter(cleaned_song_id__in=verified_song_ids)
+        mapping_dict = {m.match_key: m.cleaned_song_id for m in mappings}
+        
+        song_date_counts = defaultdict(lambda: defaultdict(int))
+        for tally in RawSongTally.objects.all():
+            cleaned_song_id = mapping_dict.get(tally.match_key)
+            if cleaned_song_id:
+                song_date_counts[cleaned_song_id][tally.date] += tally.count
+        
+        total_votes = 0
+        for song_id, date_counts in song_date_counts.items():
+            for date, count in date_counts.items():
+                CleanedSongTally.objects.update_or_create(
+                    cleaned_song_id=song_id,
+                    date=date,
+                    defaults={'count': count}
+                )
+                total_votes += count
+        
+        messages.success(request, f"📊 Dashboard updated: {total_votes} total votes")
+        
+        return redirect('admin:voting_cleanedsong_changelist')
         
         return redirect('admin:voting_cleanedsong_changelist')
     
