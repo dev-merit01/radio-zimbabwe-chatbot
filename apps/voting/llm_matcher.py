@@ -353,11 +353,16 @@ def create_match_mapping(
     return mapping
 
 
+# Vote multiplier - each verified vote counts as this many
+VOTE_MULTIPLIER = 3
+
+
 @transaction.atomic
 def update_cleaned_song_tallies(date=None):
     """
     Recalculate CleanedSongTally based on MatchKeyMappings.
     This aggregates votes from RawSongTally through the mappings.
+    Each vote counts as VOTE_MULTIPLIER (3) votes.
     """
     from django.db.models import F
     
@@ -371,14 +376,14 @@ def update_cleaned_song_tallies(date=None):
     # Get raw tallies for the date
     raw_tallies = RawSongTally.objects.filter(date=date)
     
-    # Aggregate by cleaned song
+    # Aggregate by cleaned song (multiply by VOTE_MULTIPLIER)
     song_counts = {}
     for tally in raw_tallies:
         cleaned_song = mapping_dict.get(tally.match_key)
         if cleaned_song and cleaned_song.status == 'verified':
             if cleaned_song.id not in song_counts:
                 song_counts[cleaned_song.id] = 0
-            song_counts[cleaned_song.id] += tally.count
+            song_counts[cleaned_song.id] += tally.count * VOTE_MULTIPLIER
     
     # Update CleanedSongTally
     for song_id, count in song_counts.items():

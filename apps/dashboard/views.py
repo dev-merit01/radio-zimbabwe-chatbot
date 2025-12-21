@@ -4,9 +4,6 @@ from django.utils import timezone
 from django.db.models import Sum
 from apps.voting.models import RawSongTally, CleanedSongTally, CleanedSong
 
-# Vote multiplier for display
-VOTE_MULTIPLIER = 3
-
 
 def chart_today(request):
     """API endpoint returning the Top 100 as JSON (all-time cumulative votes)."""
@@ -33,7 +30,7 @@ def chart_today(request):
                 'album': song.album or '',
                 'image_url': song.image_url or '',
                 'spotify_track_id': song.spotify_track_id or '',
-                'count': (song.total_votes or 0) * VOTE_MULTIPLIER,
+                'count': song.total_votes or 0,
                 'is_verified': True,
             })
     else:
@@ -61,7 +58,7 @@ def chart_today(request):
                 'artists': artist,
                 'display_name': tally['display_name'],
                 'match_key': tally['match_key'],
-                'count': tally['total_votes'] * VOTE_MULTIPLIER,
+                'count': tally['total_votes'],
                 'is_verified': False,
             })
     

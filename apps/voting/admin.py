@@ -543,7 +543,8 @@ class CleanedSongAdmin(admin.ModelAdmin):
         else:
             messages.info(request, "✅ All votes already mapped!")
         
-        # Always recalculate dashboard tallies
+        # Always recalculate dashboard tallies (each vote counts as 3)
+        VOTE_MULTIPLIER = 3
         verified_song_ids = set(CleanedSong.objects.filter(status='verified').values_list('id', flat=True))
         mappings = MatchKeyMapping.objects.filter(cleaned_song_id__in=verified_song_ids)
         mapping_dict = {m.match_key: m.cleaned_song_id for m in mappings}
@@ -552,7 +553,7 @@ class CleanedSongAdmin(admin.ModelAdmin):
         for tally in RawSongTally.objects.all():
             cleaned_song_id = mapping_dict.get(tally.match_key)
             if cleaned_song_id:
-                song_date_counts[cleaned_song_id][tally.date] += tally.count
+                song_date_counts[cleaned_song_id][tally.date] += tally.count * VOTE_MULTIPLIER
         
         total_votes = 0
         for song_id, date_counts in song_date_counts.items():
