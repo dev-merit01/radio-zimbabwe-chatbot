@@ -758,12 +758,28 @@ def process_pending_songs(
                             
                 elif result.action == 'reject':
                     stats['rejected'] += 1
-                    # Don't auto-reject - keep as pending for manual review
-                    # This allows human verification of rejection decisions
-                    logger.info(f"Marked for rejection (needs review): '{result.pending_name}'")
+                    # Mark as rejected so it doesn't get re-processed
+                    # User can review in admin by filtering status='rejected'
+                    if not dry_run:
+                        try:
+                            CleanedSong.objects.filter(id=result.pending_id).update(status='rejected')
+                            was_applied = True
+                            action_for_log = 'auto_reject'
+                            logger.info(f"Auto-rejected: '{result.pending_name}' - {result.reasoning}")
+                        except Exception as e:
+                            logger.error(f"Failed to reject: {e}")
+                            stats['errors'] += 1
                             
                 else:  # "new"
                     stats['new_songs'] += 1
+                    # Mark as verified - it's a legitimate new song
+                    if not dry_run:
+                        try:
+                            CleanedSong.objects.filter(id=result.pending_id).update(status='verified')
+                            was_applied = True
+                            logger.info(f"Verified as new song: '{result.pending_name}'")
+                        except Exception as e:
+                            logger.error(f"Failed to verify new song: {e}")
                 
                 # Log the decision
                 if not dry_run:
