@@ -568,8 +568,6 @@ class CleanedSongAdmin(admin.ModelAdmin):
         messages.success(request, f"📊 Dashboard updated: {total_votes} total votes")
         
         return redirect('admin:voting_cleanedsong_changelist')
-        
-        return redirect('admin:voting_cleanedsong_changelist')
     
     def process_votes_view(self, request):
         """Admin view to process votes for today."""
