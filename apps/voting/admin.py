@@ -381,8 +381,22 @@ class CleanedSongAdmin(admin.ModelAdmin):
                 self.admin_site.admin_view(self.recalculate_tallies_view),
                 name='voting_cleanedsong_recalculate',
             ),
+            path(
+                'verify-all-pending/',
+                self.admin_site.admin_view(self.verify_all_pending_view),
+                name='voting_cleanedsong_verify_all_pending',
+            ),
         ]
         return custom_urls + urls
+    
+    def verify_all_pending_view(self, request):
+        """Verify all pending songs at once."""
+        from .models import CleanedSong
+        
+        count = CleanedSong.objects.filter(status='pending').update(status='verified')
+        messages.success(request, f"✅ Verified {count} pending songs! Now click 'Recalculate Tallies' to update dashboard.")
+        
+        return redirect('admin:voting_cleanedsong_changelist')
     
     def diagnose_votes_view(self, request):
         """Diagnose why votes aren't showing on dashboard."""
@@ -487,15 +501,19 @@ class CleanedSongAdmin(admin.ModelAdmin):
     
     def llm_process_raw_votes_view(self, request):
         """Admin view to process raw votes directly with LLM."""
-        from .llm_matcher import process_all_raw_votes, get_unmatched_tallies
+        from .llm_matcher import process_all_raw_votes
         from .models import RawSongTally, MatchKeyMapping
         
-        # Count total unmapped
+        # Count total unmapped - use exact match comparison
+        all_raw_keys = list(RawSongTally.objects.values_list('match_key', flat=True))
         mapped_keys = set(MatchKeyMapping.objects.values_list('match_key', flat=True))
-        total_unmapped = RawSongTally.objects.exclude(match_key__in=mapped_keys).count()
+        unmapped_keys = [k for k in all_raw_keys if k not in mapped_keys]
+        total_unmapped = len(set(unmapped_keys))  # unique unmapped
+        
+        messages.info(request, f"🔍 Found {len(all_raw_keys)} raw tallies, {len(mapped_keys)} mappings, {total_unmapped} unmapped")
         
         if total_unmapped == 0:
-            messages.info(request, "✅ All raw votes are already mapped!")
+            messages.info(request, "✅ All raw votes are already mapped! Try 'Recalculate Tallies' to update dashboard.")
             return redirect('admin:voting_cleanedsong_changelist')
         
         try:
