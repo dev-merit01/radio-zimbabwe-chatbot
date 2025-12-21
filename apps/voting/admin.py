@@ -526,6 +526,7 @@ class CleanedSongAdmin(admin.ModelAdmin):
                 else:
                     stats = result.get('stats', {})
                     remaining = result.get('remaining', 0)
+                    results_list = result.get('results', [])
                     
                     messages.success(
                         request,
@@ -534,6 +535,24 @@ class CleanedSongAdmin(admin.ModelAdmin):
                         f"{stats.get('new_songs', 0)} new, "
                         f"{stats.get('rejected', 0)} rejected"
                     )
+                    
+                    # Show individual match details
+                    for r in results_list:
+                        if r['action'] == 'match' and r.get('matched_song_name'):
+                            messages.info(
+                                request,
+                                f"🔗 \"{r['display_name']}\" → \"{r['matched_song_name']}\" ({r['confidence']})"
+                            )
+                        elif r['action'] == 'new':
+                            messages.info(
+                                request,
+                                f"🆕 New song: \"{r['display_name']}\""
+                            )
+                        elif r['action'] == 'reject':
+                            messages.warning(
+                                request,
+                                f"🗑️ Rejected: \"{r['display_name']}\" - {r.get('reasoning', '')[:50]}"
+                            )
                     
                     if remaining > 0:
                         messages.warning(request, f"⏳ {remaining} more to process. Click again!")
