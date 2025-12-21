@@ -396,17 +396,21 @@ class CleanedSongAdmin(admin.ModelAdmin):
         return redirect('admin:voting_cleanedsong_changelist')
     
     def llm_review_pending_view(self, request):
-        """Admin view to process pending songs with LLM."""
+        """Admin view to process ALL pending songs with LLM."""
         from .llm_matcher import process_pending_songs, get_pending_songs
+        from .models import CleanedSong
         
-        pending = get_pending_songs()
-        if not pending:
+        # Get count of ALL pending songs
+        total_pending = CleanedSong.objects.filter(status='pending').count()
+        
+        if total_pending == 0:
             messages.info(request, "✅ No pending songs to review!")
             return redirect('admin:voting_cleanedsong_changelist')
         
         try:
+            # Process ALL pending songs (up to 500)
             result = process_pending_songs(
-                limit=10,  # Process 10 at a time to avoid Render timeout
+                limit=500,  # Process all pending songs
                 auto_merge=True,
                 auto_reject=False,  # Don't auto-reject, keep for manual review
                 dry_run=False,
@@ -424,10 +428,10 @@ class CleanedSongAdmin(admin.ModelAdmin):
                 
                 messages.success(
                     request,
-                    f"🤖 LLM Review Complete: "
+                    f"🤖 LLM Review Complete: Scanned {stats.get('total_processed', 0)} pending songs. "
                     f"{stats.get('auto_merged', 0)} auto-merged, "
-                    f"{stats.get('rejected', 0)} suggested for rejection (kept pending), "
-                    f"{stats.get('new_songs', 0)} marked as new songs. "
+                    f"{stats.get('rejected', 0)} suggested for rejection, "
+                    f"{stats.get('new_songs', 0)} new songs. "
                     f"Check LLM Decision Logs for details."
                 )
                 

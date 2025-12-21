@@ -44,8 +44,8 @@ class Command(BaseCommand):
         parser.add_argument(
             '--limit',
             type=int,
-            default=50,
-            help='Maximum number of items to process (default: 50)',
+            default=500,
+            help='Maximum number of items to process (default: 500, use 0 for all)',
         )
         parser.add_argument(
             '--date',
