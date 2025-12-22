@@ -560,7 +560,14 @@ class CleanedSongAdmin(admin.ModelAdmin):
             except Exception as e:
                 messages.error(request, f"❌ Error: {e}")
         else:
-            messages.info(request, "✅ All votes already mapped!")
+            messages.info(request, "✅ All raw votes already mapped!")
+        
+        # Auto-verify any pending songs (they were created by LLM so we trust them)
+        pending_songs = CleanedSong.objects.filter(status='pending')
+        pending_count = pending_songs.count()
+        if pending_count > 0:
+            pending_songs.update(status='verified')
+            messages.success(request, f"✅ Auto-verified {pending_count} pending songs!")
         
         # Always recalculate dashboard tallies
         verified_song_ids = set(CleanedSong.objects.filter(status='verified').values_list('id', flat=True))
