@@ -356,7 +356,7 @@
     <script>
         const API_URL = '/api/chart/today';
         const REFRESH_INTERVAL = 15000; // 15 seconds
-        const VOTE_DISPLAY_MULTIPLIER = 6; // Display multiplier for public view
+
 
         const loadingEl = document.getElementById('loading');
         const errorEl = document.getElementById('error');
@@ -380,7 +380,7 @@
             const isTop3 = song.rank <= 3;
             const rankClass = song.rank <= 3 ? `rank-${song.rank}` : '';
             const hasSpotify = song.spotify_track_id && song.spotify_track_id.length > 0;
-            const displayVotes = song.count * VOTE_DISPLAY_MULTIPLIER;
+            const displayVotes = song.count * 3;
             
             // Image or placeholder
             let imageHtml;
