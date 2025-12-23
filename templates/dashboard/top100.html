@@ -325,10 +325,6 @@
                 <div class="stat-value" id="total-songs">-</div>
                 <div class="stat-label">Songs</div>
             </div>
-           <!--<div class="stat">
-                <div class="stat-value" id="total-votes">-</div>
-                <div class="stat-label">Votes Today</div>
-            </div> -->
             <div class="stat">
                 <div class="stat-value" id="chart-date">-</div>
                 <div class="stat-label">Date</div>
@@ -368,7 +364,6 @@
         const emptyEl = document.getElementById('empty');
         const lastUpdateEl = document.getElementById('last-update');
         const totalSongsEl = document.getElementById('total-songs');
-        const totalVotesEl = document.getElementById('total-votes');
         const chartDateEl = document.getElementById('chart-date');
 
         function formatTime(isoString) {
@@ -447,10 +442,8 @@
                     chartListEl.innerHTML = data.top100.map(createChartItem).join('');
                 }
                 
-                // Update stats (with multiplier)
-                const totalVotes = data.top100.reduce((sum, s) => sum + s.count, 0) * VOTE_DISPLAY_MULTIPLIER;
+                // Update stats
                 totalSongsEl.textContent = data.total_songs;
-                totalVotesEl.textContent = totalVotes;
                 chartDateEl.textContent = formatDate(data.date);
                 lastUpdateEl.textContent = formatTime(data.updated_at);
                 
