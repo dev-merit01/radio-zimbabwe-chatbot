@@ -333,14 +333,22 @@ class VotingService:
     def _process_vote_async(self, date):
         """
         Process votes in real-time after each vote is recorded.
-        This runs synchronously but is non-blocking for the user response.
+        Uses LLM (Anthropic) to match votes against verified songs.
+        
+        Flow:
+        1. Get the vote's match_key
+        2. Check if already mapped to a verified song
+        3. If not, use CleaningService with LLM to find matches
+        4. If matched, update the tally to link to verified song
+        
         Errors are logged but don't affect the vote confirmation.
         """
         try:
             from .cleaning import CleaningService
             service = CleaningService()
-            service.process_new_votes(date)
-            logger.info(f"Real-time vote processing completed for {date}")
+            # Process with LLM enabled for smart matching
+            stats = service.process_new_votes(date, use_spotify=True, use_llm=True)
+            logger.info(f"Real-time vote processing completed for {date}: {stats}")
         except Exception as e:
             # Log error but don't fail the vote
             logger.error(f"Real-time vote processing error: {e}")

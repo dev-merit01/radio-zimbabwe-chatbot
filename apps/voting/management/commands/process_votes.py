@@ -53,12 +53,16 @@ class Command(BaseCommand):
         
         self.stdout.write(f"\n🔄 Processing votes for {date}...\n")
         
-        result = service.process_new_votes(date)
+        # Process with LLM enabled
+        result = service.process_new_votes(date, use_spotify=True, use_llm=True)
         
         self.stdout.write(self.style.SUCCESS(
             f"\n✅ Done!\n"
-            f"   - New songs created: {result['new']}\n"
-            f"   - Auto-merged: {result['auto_merged']}\n"
+            f"   - Auto-merged (local): {result.get('auto_merged', 0)}\n"
+            f"   - LLM matched: {result.get('llm_matched', 0)}\n"
+            f"   - Spotify enriched: {result.get('spotify_enriched', 0)}\n"
+            f"   - New songs created: {result.get('new', 0)}\n"
+            f"   - Pending review: {result.get('pending_review', 0)}\n"
         ))
         
         # Show pending count
