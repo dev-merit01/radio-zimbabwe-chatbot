@@ -380,7 +380,7 @@
             const isTop3 = song.rank <= 3;
             const rankClass = song.rank <= 3 ? `rank-${song.rank}` : '';
             const hasSpotify = song.spotify_track_id && song.spotify_track_id.length > 0;
-            const displayVotes = song.count * 3;
+            const displayVotes = song.count * 8;
             
             // Image or placeholder
             let imageHtml;
