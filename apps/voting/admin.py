@@ -563,11 +563,13 @@ class CleanedSongAdmin(admin.ModelAdmin):
             messages.info(request, "✅ All raw votes already mapped!")
         
         # Auto-verify any pending songs (they were created by LLM so we trust them)
-        pending_songs = CleanedSong.objects.filter(status='pending')
-        pending_count = pending_songs.count()
-        if pending_count > 0:
-            pending_songs.update(status='verified')
-            messages.success(request, f"✅ Auto-verified {pending_count} pending songs!")
+        pending_songs = list(CleanedSong.objects.filter(status='pending'))
+        if pending_songs:
+            for song in pending_songs:
+                song.status = 'verified'
+                song.save()
+                messages.success(request, f"✅ Verified: \"{song.artist} - {song.title}\"")
+            messages.success(request, f"📋 Total: {len(pending_songs)} songs verified!")
         
         # Always recalculate dashboard tallies
         verified_song_ids = set(CleanedSong.objects.filter(status='verified').values_list('id', flat=True))

@@ -325,10 +325,10 @@
                 <div class="stat-value" id="total-songs">-</div>
                 <div class="stat-label">Songs</div>
             </div>
-            <div class="stat">
+           <!--<div class="stat">
                 <div class="stat-value" id="total-votes">-</div>
                 <div class="stat-label">Votes Today</div>
-            </div>
+            </div> -->
             <div class="stat">
                 <div class="stat-value" id="chart-date">-</div>
                 <div class="stat-label">Date</div>
@@ -360,7 +360,7 @@
     <script>
         const API_URL = '/api/chart/today';
         const REFRESH_INTERVAL = 15000; // 15 seconds
-        const VOTE_DISPLAY_MULTIPLIER = 3; // Display multiplier for public view
+        const VOTE_DISPLAY_MULTIPLIER = 6; // Display multiplier for public view
 
         const loadingEl = document.getElementById('loading');
         const errorEl = document.getElementById('error');
