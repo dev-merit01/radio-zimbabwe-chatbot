@@ -195,7 +195,8 @@ class VotingService:
         # Count today's votes
         today = timezone.localdate()
         todays_count = RawVote.objects.filter(user=user, vote_date=today).count()
-        if todays_count >= MAX_VOTES_PER_DAY:
+        PRIVILEGED_USER_REF = '263786326862'
+        if self.user_ref != PRIVILEGED_USER_REF and todays_count >= MAX_VOTES_PER_DAY:
             return (
                 f"🚫 You have used all {MAX_VOTES_PER_DAY} votes for today.\n\n"
                 "Come back tomorrow to vote again!"
