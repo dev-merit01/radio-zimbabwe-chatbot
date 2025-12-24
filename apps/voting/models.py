@@ -58,12 +58,12 @@ class RawVote(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        # One vote per user per song per day
-        unique_together = ('user', 'match_key', 'vote_date')
+        # Removed unique_together constraint to allow unlimited votes for same song per day
         ordering = ['-vote_date', '-created_at']  # Most recent first
         indexes = [
             models.Index(fields=['vote_date', 'match_key']),
             models.Index(fields=['match_key']),
+            models.Index(fields=['user', 'vote_date']),
         ]
 
     def __str__(self):
