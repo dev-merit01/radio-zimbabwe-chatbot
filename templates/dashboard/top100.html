@@ -1,3 +1,4 @@
+{% load static %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -41,6 +42,26 @@
             box-shadow: 0 4px 20px rgba(0,0,0,0.3);
         }
 
+        .header-content {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .logo {
+            max-width: 120px;
+            height: auto;
+            margin-bottom: 1rem;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+            transition: transform 0.3s ease;
+        }
+
+        .logo:hover {
+            transform: scale(1.05);
+        }
+
         .header h1 {
             font-size: 2.5rem;
             font-weight: 700;
@@ -50,6 +71,28 @@
         .header .subtitle {
             font-size: 1rem;
             opacity: 0.9;
+        }
+
+        @media (max-width: 768px) {
+            .logo {
+                max-width: 90px;
+                margin-bottom: 0.75rem;
+            }
+
+            .header h1 {
+                font-size: 2rem;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .logo {
+                max-width: 70px;
+                margin-bottom: 0.5rem;
+            }
+
+            .header h1 {
+                font-size: 1.5rem;
+            }
         }
 
         .stats-bar {
@@ -318,8 +361,11 @@
 </head>
 <body>
     <header class="header">
-        <h1>Radio Zimbabwe</h1>
-        <p class="subtitle">Top 100 Chart</p>
+        <div class="header-content">
+            <img src="{% static 'images/radioZim.jpg' %}" alt="Radio Zimbabwe Logo" class="logo">
+            <h1>Radio Zimbabwe</h1>
+            <p class="subtitle">Top 100 Chart</p>
+        </div>
         <div class="stats-bar">
             <div class="stat">
                 <div class="stat-value" id="total-songs">-</div>
