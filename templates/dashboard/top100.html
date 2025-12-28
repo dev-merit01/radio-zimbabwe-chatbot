@@ -159,6 +159,31 @@
             50% { opacity: 0.5; }
         }
 
+        .search-container {
+            margin-bottom: 1.5rem;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            background: var(--bg-card);
+            color: var(--text-primary);
+            border: 2px solid var(--bg-hover);
+            border-radius: 8px;
+            font-size: 0.95rem;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        .search-input::placeholder {
+            color: var(--text-secondary);
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(29, 185, 84, 0.1);
+        }
+
         .chart-list {
             list-style: none;
         }
@@ -397,6 +422,15 @@
             Live updates every 15 seconds · Last updated: <span id="last-update">-</span>
         </div>
 
+        <div class="search-container" style="display: none;" id="search-container">
+            <input 
+                type="text" 
+                id="search-input" 
+                class="search-input" 
+                placeholder="Search by song title or artist..."
+            >
+        </div>
+
         <div id="loading" class="loading">
             <div class="spinner"></div>
             <p>Loading chart...</p>
@@ -416,6 +450,8 @@
         const API_URL = '/api/chart/today';
         const REFRESH_INTERVAL = 15000; // 15 seconds
 
+        // Global state for search
+        let allChartData = [];
 
         const loadingEl = document.getElementById('loading');
         const errorEl = document.getElementById('error');
@@ -424,6 +460,8 @@
         const lastUpdateEl = document.getElementById('last-update');
         const totalSongsEl = document.getElementById('total-songs');
         const chartDateEl = document.getElementById('chart-date');
+        const searchContainerEl = document.getElementById('search-container');
+        const searchInputEl = document.getElementById('search-input');
 
         function formatTime(isoString) {
             const date = new Date(isoString);
@@ -482,6 +520,27 @@
             return div.innerHTML;
         }
 
+        function filterSongs(searchTerm) {
+            if (!searchTerm.trim()) {
+                // Show all songs
+                chartListEl.innerHTML = allChartData.map(createChartItem).join('');
+                return;
+            }
+
+            const term = searchTerm.toLowerCase();
+            const filtered = allChartData.filter(song => 
+                song.title.toLowerCase().includes(term) || 
+                song.artists.toLowerCase().includes(term)
+            );
+
+            // Update display
+            if (filtered.length === 0) {
+                chartListEl.innerHTML = '<li class="chart-item" style="text-align: center; padding: 2rem;"><span style="color: var(--text-secondary);">No songs found</span></li>';
+            } else {
+                chartListEl.innerHTML = filtered.map(createChartItem).join('');
+            }
+        }
+
         async function fetchChart() {
             try {
                 const response = await fetch(API_URL);
@@ -494,11 +553,23 @@
                 
                 if (data.top100.length === 0) {
                     chartListEl.style.display = 'none';
+                    searchContainerEl.style.display = 'none';
                     emptyEl.style.display = 'block';
                 } else {
                     emptyEl.style.display = 'none';
                     chartListEl.style.display = 'block';
-                    chartListEl.innerHTML = data.top100.map(createChartItem).join('');
+                    searchContainerEl.style.display = 'block';
+                    
+                    // Store original data for search
+                    allChartData = data.top100;
+                    
+                    // Render songs (apply search if active)
+                    const currentSearchTerm = searchInputEl.value;
+                    if (currentSearchTerm.trim()) {
+                        filterSongs(currentSearchTerm);
+                    } else {
+                        chartListEl.innerHTML = allChartData.map(createChartItem).join('');
+                    }
                 }
                 
                 // Update stats
@@ -513,6 +584,11 @@
                 errorEl.textContent = `Failed to load chart: ${err.message}. Retrying...`;
             }
         }
+
+        // Search event listener
+        searchInputEl.addEventListener('input', (e) => {
+            filterSongs(e.target.value);
+        });
 
         // Initial load
         fetchChart();
