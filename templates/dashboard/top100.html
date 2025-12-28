@@ -184,8 +184,53 @@
             box-shadow: 0 0 0 3px rgba(29, 185, 84, 0.1);
         }
 
+        .export-controls {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+            flex-wrap: wrap;
+        }
+
+        .export-btn {
+            padding: 0.6rem 1.2rem;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            font-size: 0.9rem;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .export-btn:hover {
+            background: var(--primary-dark);
+        }
+
         .chart-list {
             list-style: none;
+        }
+
+        .trend-indicator {
+            font-size: 1.2rem;
+            font-weight: 700;
+            min-width: 2rem;
+            text-align: center;
+        }
+
+        .trend-up {
+            color: #ff6b6b;
+        }
+
+        .trend-down {
+            color: #4ecdc4;
+        }
+
+        .trend-new {
+            color: var(--primary);
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            font-weight: 700;
         }
 
         .chart-item {
@@ -431,6 +476,11 @@
             >
         </div>
 
+        <div class="export-controls" style="display: none;" id="export-controls">
+            <button id="export-csv-btn" class="export-btn">📥 CSV</button>
+            <button id="export-image-btn" class="export-btn">🖼️ Image</button>
+        </div>
+
         <div id="loading" class="loading">
             <div class="spinner"></div>
             <p>Loading chart...</p>
@@ -473,6 +523,24 @@
             return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
         }
 
+        function getTrendIndicator(song) {
+            const previousChart = JSON.parse(localStorage.getItem('previousChart') || '[]');
+            const previousSong = previousChart.find(s => s.title === song.title && s.artists === song.artists);
+            
+            if (!previousSong) {
+                return '<div class="trend-indicator trend-new">NEW</div>';
+            }
+            
+            const positionChange = previousSong.rank - song.rank;
+            if (positionChange > 0) {
+                return `<div class="trend-indicator trend-up">↑${positionChange}</div>`;
+            } else if (positionChange < 0) {
+                return `<div class="trend-indicator trend-down">↓${Math.abs(positionChange)}</div>`;
+            } else {
+                return '<div class="trend-indicator">—</div>';
+            }
+        }
+
         function createChartItem(song) {
             const isTop3 = song.rank <= 3;
             const rankClass = song.rank <= 3 ? `rank-${song.rank}` : '';
@@ -499,6 +567,7 @@
             return `
                 <li class="chart-item ${isTop3 ? 'top-3' : ''}">
                     <div class="rank ${rankClass}">${song.rank}</div>
+                    ${getTrendIndicator(song)}
                     ${imageHtml}
                     <div class="song-info">
                         <div class="song-title">${escapeHtml(song.title)}</div>
@@ -541,6 +610,99 @@
             }
         }
 
+        function exportToCSV() {
+            const csvContent = [
+                ['Rank', 'Title', 'Artist', 'Votes'],
+                ...allChartData.map(song => [
+                    song.rank,
+                    song.title,
+                    song.artists,
+                    song.count * 8
+                ])
+            ]
+                .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
+                .join('\n');
+
+            const blob = new Blob([csvContent], { type: 'text/csv' });
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `RadioZimbabwe_Chart_${new Date().toISOString().split('T')[0]}.csv`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
+        }
+
+        function exportToImage() {
+            const originalDisplay = chartListEl.style.display;
+            const originalContainer = document.querySelector('.container').style.padding;
+            
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            
+            const width = 1200;
+            const itemHeight = 80;
+            const height = 100 + (allChartData.length * itemHeight) + 50;
+            
+            canvas.width = width;
+            canvas.height = height;
+            
+            // Background
+            ctx.fillStyle = '#121212';
+            ctx.fillRect(0, 0, width, height);
+            
+            // Header
+            ctx.fillStyle = '#1DB954';
+            ctx.fillRect(0, 0, width, 100);
+            
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 32px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('Radio Zimbabwe Top 100', width / 2, 45);
+            
+            ctx.font = '16px Arial';
+            ctx.fillText(`Chart Date: ${chartDateEl.textContent}`, width / 2, 75);
+            
+            // Songs
+            ctx.fillStyle = '#ffffff';
+            ctx.font = '14px Arial';
+            ctx.textAlign = 'left';
+            
+            let yPos = 120;
+            allChartData.forEach((song, index) => {
+                // Alternate background
+                if (index % 2 === 0) {
+                    ctx.fillStyle = '#181818';
+                    ctx.fillRect(0, yPos - 20, width, itemHeight);
+                }
+                
+                ctx.fillStyle = '#ffffff';
+                ctx.font = 'bold 14px Arial';
+                ctx.textAlign = 'left';
+                ctx.fillText(`${song.rank}. ${song.title}`, 30, yPos);
+                
+                ctx.fillStyle = '#b3b3b3';
+                ctx.font = '12px Arial';
+                ctx.fillText(`${song.artists}`, 30, yPos + 25);
+                
+                ctx.fillStyle = '#1DB954';
+                ctx.font = 'bold 14px Arial';
+                ctx.textAlign = 'right';
+                ctx.fillText(`${song.count * 8} votes`, width - 30, yPos);
+                
+                yPos += itemHeight;
+            });
+            
+            // Download
+            const link = document.createElement('a');
+            link.href = canvas.toDataURL('image/png');
+            link.download = `RadioZimbabwe_Chart_${new Date().toISOString().split('T')[0]}.png`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
         async function fetchChart() {
             try {
                 const response = await fetch(API_URL);
@@ -554,14 +716,19 @@
                 if (data.top100.length === 0) {
                     chartListEl.style.display = 'none';
                     searchContainerEl.style.display = 'none';
+                    document.getElementById('export-controls').style.display = 'none';
                     emptyEl.style.display = 'block';
                 } else {
                     emptyEl.style.display = 'none';
                     chartListEl.style.display = 'block';
                     searchContainerEl.style.display = 'block';
+                    document.getElementById('export-controls').style.display = 'flex';
                     
                     // Store original data for search
                     allChartData = data.top100;
+                    
+                    // Save current chart for trending comparison (before rendering)
+                    localStorage.setItem('previousChart', JSON.stringify(allChartData));
                     
                     // Render songs (apply search if active)
                     const currentSearchTerm = searchInputEl.value;
@@ -589,6 +756,10 @@
         searchInputEl.addEventListener('input', (e) => {
             filterSongs(e.target.value);
         });
+
+        // Export event listeners
+        document.getElementById('export-csv-btn').addEventListener('click', exportToCSV);
+        document.getElementById('export-image-btn').addEventListener('click', exportToImage);
 
         // Initial load
         fetchChart();
