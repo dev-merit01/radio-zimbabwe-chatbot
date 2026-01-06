@@ -163,3 +163,6 @@ BIRD_CHANNEL_ID = env('BIRD_CHANNEL_ID')
 # WhatsApp BSP (Business Solution Provider)
 # Options: 'bird', 'onemsg', 'twilio'
 WHATSAPP_BSP = env('WHATSAPP_BSP')
+
+# Increase field limit for bulk delete operations in admin
+DATA_UPLOAD_MAX_NUMBER_FIELDS = 100000
