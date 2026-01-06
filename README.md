@@ -2,6 +2,8 @@
 
 Multi-channel chatbot to collect up to 5 votes per user per day, verified via Spotify, and generate a daily Top 100 chart. Supports both Telegram and WhatsApp (via OneMsg.io).
 
+> **Deployment Test:** Last updated January 7, 2026 - Testing render.com auto-deploy pipeline.
+
 ## Setup
 
 1. Create `.env` from `.env.example` and fill secrets.
