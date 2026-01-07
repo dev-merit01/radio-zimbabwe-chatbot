@@ -366,3 +366,103 @@ class VerifiedArtist(models.Model):
                 if alias:
                     names.add(normalize_text(alias))
         return names
+
+
+# ============================================================
+# Weekly Chart Archive
+# ============================================================
+
+class WeeklyChart(models.Model):
+    """
+    Stores finalized weekly Top 20/50 charts.
+    Charts are finalized every Saturday, and Dec 31st is the Top 50.
+    """
+    # Week identification
+    week_start = models.DateField(help_text="Monday of the chart week")
+    week_end = models.DateField(help_text="Sunday of the chart week (chart published on Saturday)")
+    week_number = models.IntegerField(help_text="ISO week number 1-52/53")
+    year = models.IntegerField()
+    
+    # Chart metadata
+    is_year_end = models.BooleanField(default=False, help_text="True for Dec 31st Top 50")
+    chart_size = models.IntegerField(default=20, help_text="20 for regular, 50 for year-end")
+    total_votes = models.IntegerField(default=0, help_text="Total votes for this week")
+    unique_songs = models.IntegerField(default=0, help_text="Unique songs voted for")
+    
+    # Status
+    is_finalized = models.BooleanField(default=False, help_text="Chart has been locked/published")
+    finalized_at = models.DateTimeField(null=True, blank=True)
+    
+    # Timestamps
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        unique_together = ('year', 'week_number')
+        ordering = ['-year', '-week_number']
+        verbose_name = 'Weekly Chart'
+        verbose_name_plural = 'Weekly Charts'
+        indexes = [
+            models.Index(fields=['-year', '-week_number']),
+            models.Index(fields=['week_end']),
+        ]
+    
+    def __str__(self):
+        if self.is_year_end:
+            return f"🏆 Year-End Top 50 - {self.year}"
+        return f"Week {self.week_number}, {self.year} (Top {self.chart_size})"
+
+
+class WeeklyChartEntry(models.Model):
+    """
+    Individual entries in a weekly chart.
+    """
+    chart = models.ForeignKey(WeeklyChart, on_delete=models.CASCADE, related_name='entries')
+    rank = models.IntegerField()
+    
+    # Song details (denormalized for historical accuracy)
+    cleaned_song = models.ForeignKey(
+        CleanedSong, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        related_name='chart_entries'
+    )
+    title = models.CharField(max_length=256)
+    artist = models.CharField(max_length=256)
+    canonical_name = models.CharField(max_length=512)
+    
+    # Vote data
+    vote_count = models.IntegerField(default=0)
+    
+    # Movement tracking
+    previous_rank = models.IntegerField(null=True, blank=True, help_text="Rank from previous week")
+    weeks_on_chart = models.IntegerField(default=1, help_text="Consecutive weeks on chart")
+    peak_rank = models.IntegerField(default=1, help_text="Highest position reached")
+    
+    # Spotify data (snapshot)
+    spotify_track_id = models.CharField(max_length=64, blank=True)
+    image_url = models.URLField(blank=True)
+    album = models.CharField(max_length=256, blank=True)
+    
+    class Meta:
+        unique_together = ('chart', 'rank')
+        ordering = ['chart', 'rank']
+        indexes = [
+            models.Index(fields=['chart', 'rank']),
+        ]
+    
+    def __str__(self):
+        return f"#{self.rank} {self.canonical_name} ({self.chart})"
+    
+    @property
+    def movement(self):
+        """Calculate movement from previous week."""
+        if self.previous_rank is None:
+            return 'new'
+        diff = self.previous_rank - self.rank
+        if diff > 0:
+            return f'+{diff}'
+        elif diff < 0:
+            return str(diff)
+        return '='
+

@@ -2,696 +2,1516 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ page_title }}</title>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Radio Zimbabwe Weekend Charts</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+
     <style>
         :root {
-            --primary: #1DB954;
-            --primary-dark: #1aa34a;
-            --bg-dark: #121212;
-            --bg-card: #181818;
-            --bg-hover: #282828;
-            --text-primary: #ffffff;
-            --text-secondary: #b3b3b3;
-            --gold: #FFD700;
-            --silver: #C0C0C0;
-            --bronze: #CD7F32;
+            --primary: #fbbf24;
+            --primary-soft: #facc15;
+            --accent: #22c55e;
+            --bg-body: #020617;
+            --bg-sidebar: #020617;
+            --bg-main: #020617;
+            --bg-panel: #020817;
+            --bg-card: #020817;
+            --border-subtle: #1f2937;
+            --text-primary: #f9fafb;
+            --text-secondary: #9ca3af;
+            --text-muted: #6b7280;
+            --danger: #f97373;
+            --success: #4ade80;
+            --shadow-soft: 0 24px 60px rgba(0, 0, 0, 0.85);
         }
 
         * {
+            box-sizing: border-box;
             margin: 0;
             padding: 0;
-            box-sizing: border-box;
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-            background: var(--bg-dark);
+            font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            background: radial-gradient(circle at top left, #020617 0, #020617 55%, #020617 100%);
             color: var(--text-primary);
             min-height: 100vh;
         }
 
-        .header {
-            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
-            padding: 1rem 2rem;
-            text-align: center;
-            position: sticky;
-            top: 0;
-            z-index: 100;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        a {
+            color: inherit;
+            text-decoration: none;
         }
 
-        .header-content {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            gap: 0.3rem;
+        .app-shell {
+            display: grid;
+            grid-template-columns: 260px minmax(0, 1fr);
+            min-height: 100vh;
         }
 
-        .logo {
-            max-width: 80px;
-            height: auto;
-            margin-bottom: 0.5rem;
-            border-radius: 8px;
-            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-            transition: transform 0.3s ease;
-        }
-
-        .logo:hover {
-            transform: scale(1.05);
-        }
-
-        .header h1 {
-            font-size: 1.8rem;
-            font-weight: 700;
-            margin-bottom: 0.25rem;
-        }
-
-        .header .subtitle {
-            font-size: 0.9rem;
-            opacity: 0.9;
+        @media (max-width: 900px) {
+            .app-shell {
+                grid-template-columns: 220px minmax(0, 1fr);
+            }
         }
 
         @media (max-width: 768px) {
-            .logo {
-                max-width: 70px;
-                margin-bottom: 0.4rem;
-            }
-
-            .header h1 {
-                font-size: 1.5rem;
-            }
-
-            .header .subtitle {
-                font-size: 0.85rem;
+            .app-shell {
+                display: block;
             }
         }
 
-        @media (max-width: 480px) {
-            .header {
-                padding: 0.75rem 2rem;
-            }
-
-            .logo {
-                max-width: 60px;
-                margin-bottom: 0.3rem;
-            }
-
-            .header h1 {
-                font-size: 1.3rem;
-            }
-
-            .header .subtitle {
-                font-size: 0.8rem;
-            }
-        }
-
-        .stats-bar {
+        .sidebar {
+            background: radial-gradient(circle at top left, #0b1120 0, #020617 55%, #020617 100%);
+            border-right: 1px solid rgba(148, 163, 184, 0.25);
+            padding: 1.1rem 1.4rem 1.4rem;
             display: flex;
-            justify-content: center;
+            flex-direction: column;
             gap: 1.5rem;
-            margin-top: 0.5rem;
-            flex-wrap: wrap;
         }
 
-        .stat {
-            text-align: center;
+        .sidebar-header {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
         }
 
-        .stat-value {
-            font-size: 1.2rem;
+        .sidebar-logo {
+            width: 40px;
+            height: 40px;
+            border-radius: 14px;
+            object-fit: cover;
+            box-shadow: 0 0 0 1px rgba(248, 250, 252, 0.06), 0 12px 30px rgba(0, 0, 0, 0.9);
+        }
+
+        .sidebar-title {
+            display: flex;
+            flex-direction: column;
+            gap: 0.1rem;
+        }
+
+        .sidebar-brand {
+            font-size: 1rem;
             font-weight: 700;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+        }
+
+        .sidebar-season {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+        }
+
+        .sidebar-section-title {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.14em;
+            color: var(--text-muted);
+            margin-bottom: 0.5rem;
+        }
+
+        .sidebar-section {
+            margin-top: 0.5rem;
+        }
+
+        .live-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+            cursor: pointer;
+        }
+
+        .live-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 999px;
+            background: #ef4444;
+            box-shadow: 0 0 16px rgba(248, 113, 113, 0.9);
+            animation: pulse 1.8s infinite;
+        }
+
+        .sidebar-archive-list {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 0.15rem;
+        }
+
+        .sidebar-month {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 0.85rem;
+            padding: 0.4rem 0.3rem;
+            color: var(--text-secondary);
+            border-radius: 0.5rem;
+            cursor: pointer;
+        }
+
+        .sidebar-month:hover {
+            background: rgba(15, 23, 42, 0.85);
+            color: var(--text-primary);
+        }
+
+        .sidebar-month.active {
+            background: linear-gradient(135deg, #fbbf24, #facc15);
+            color: #020617;
+            font-weight: 600;
+        }
+
+        .sidebar-month-label {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+        }
+
+        .sidebar-month-label span.icon {
+            font-size: 0.9rem;
+        }
+
+        .sidebar-month-arrow {
+            font-size: 0.8rem;
+        }
+
+        .sidebar-date {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-size: 0.82rem;
+            padding: 0.4rem 0.3rem;
+            color: var(--text-secondary);
+            border-radius: 0.5rem;
+            cursor: pointer;
+        }
+
+        .sidebar-date:hover {
+            background: rgba(15, 23, 42, 0.85);
+            color: var(--text-primary);
+        }
+
+        .sidebar-date.active {
+            background: rgba(15, 23, 42, 1);
+            color: var(--text-primary);
+            font-weight: 500;
+        }
+
+        .sidebar-date-placeholder {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            padding: 0.4rem 0.3rem;
+        }
+
+        .main {
+            background: var(--bg-main);
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+        }
+
+        .topbar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 1rem 1.8rem 0.5rem;
+            border-bottom: 1px solid rgba(15, 23, 42, 0.85);
+        }
+
+        .topbar-left {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            color: var(--text-secondary);
+            font-size: 0.9rem;
+        }
+
+        .topbar-menu {
+            width: 32px;
+            height: 32px;
+            border-radius: 999px;
+            border: 1px solid rgba(148, 163, 184, 0.3);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            cursor: default;
+        }
+
+        .topbar-title {
+            font-weight: 500;
+        }
+
+        .topbar-right {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .pill {
+            border-radius: 999px;
+            padding: 0.4rem 0.9rem;
+            border: 1px solid rgba(148, 163, 184, 0.4);
+            background: #020617;
+            font-size: 0.8rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--text-secondary);
+        }
+
+        .pill span.icon {
+            font-size: 0.9rem;
+        }
+
+        .pill-button {
+            border-radius: 999px;
+            padding: 0.4rem 0.9rem;
+            border: 1px solid rgba(251, 191, 36, 0.4);
+            background: #020617;
+            font-size: 0.8rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            color: var(--text-primary);
+            cursor: pointer;
+        }
+
+        .pill-button span.icon {
+            font-size: 0.9rem;
+        }
+
+        .pill-button:hover {
+            background: rgba(251, 191, 36, 0.1);
+        }
+
+        .content-inner {
+            padding: 1rem 1.8rem 2.2rem;
+        }
+
+        .hero-main {
+            margin-top: 0.3rem;
+        }
+
+        .hero-title-row {
+            display: flex;
+            align-items: flex-end;
+            justify-content: space-between;
+            gap: 1rem;
+        }
+
+        .hero-title {
+            font-size: 2.8rem;
+            font-weight: 800;
+            letter-spacing: 0.08em;
+            color: var(--primary);
+        }
+
+        .hero-date {
+            font-size: 0.95rem;
+            color: var(--text-secondary);
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            margin-top: 0.6rem;
+        }
+
+        .hero-date span.icon {
+            font-size: 1rem;
+        }
+
+        .hero-divider {
+            margin-top: 1rem;
+            height: 2px;
+            background: linear-gradient(to right, var(--primary), transparent 60%);
+        }
+
+        .stats-row {
+            margin-top: 1.2rem;
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 0.8rem;
+        }
+
+        @media (max-width: 900px) {
+            .stats-row {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+
+        .stat-card {
+            background: radial-gradient(circle at top left, rgba(250, 204, 21, 0.08), transparent 60%), #020617;
+            border-radius: 0.9rem;
+            padding: 0.9rem 1rem;
+            border: 1px solid rgba(148, 163, 184, 0.25);
+            box-shadow: var(--shadow-soft);
         }
 
         .stat-label {
-            font-size: 0.65rem;
+            font-size: 0.75rem;
             text-transform: uppercase;
-            opacity: 0.8;
+            letter-spacing: 0.12em;
+            color: var(--text-muted);
+            margin-bottom: 0.3rem;
         }
 
-        .container {
-            max-width: 900px;
-            margin: 0 auto;
-            padding: 1rem;
+        .stat-value {
+            font-size: 1.4rem;
+            font-weight: 700;
         }
 
-        .update-info {
-            text-align: center;
-            padding: 1rem;
+        .stat-caption {
+            margin-top: 0.2rem;
+            font-size: 0.75rem;
             color: var(--text-secondary);
-            font-size: 0.875rem;
         }
 
-        .update-info .live-dot {
-            display: inline-block;
-            width: 8px;
-            height: 8px;
-            background: var(--primary);
-            border-radius: 50%;
-            margin-right: 0.5rem;
-            animation: pulse 2s infinite;
+        .panel {
+            margin-top: 1.5rem;
+            background: #020617;
+            border-radius: 1rem;
+            border: 1px solid rgba(31, 41, 55, 0.9);
+            box-shadow: var(--shadow-soft);
+            overflow: hidden;
         }
 
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
+        .panel-header {
+            padding: 0.75rem 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.75rem;
+            border-bottom: 1px solid rgba(31, 41, 55, 1);
         }
 
-        .search-container {
-            margin-bottom: 1.5rem;
+        .panel-header-left {
+            display: flex;
+            flex-direction: column;
+            gap: 0.15rem;
+        }
+
+        .panel-title {
+            font-size: 0.9rem;
+            text-transform: uppercase;
+            letter-spacing: 0.18em;
+            color: var(--text-secondary);
+        }
+
+        .panel-subtitle {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        .panel-header-right {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .btn-small {
+            border-radius: 999px;
+            border: 1px solid rgba(148, 163, 184, 0.4);
+            padding: 0.35rem 0.8rem;
+            font-size: 0.8rem;
+            background: #020617;
+            color: var(--text-secondary);
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            cursor: pointer;
+        }
+
+        .btn-small span.icon {
+            font-size: 0.9rem;
+        }
+
+        .btn-small.primary {
+            border-color: rgba(250, 204, 21, 0.7);
+            color: var(--text-primary);
+        }
+
+        .btn-small.primary:hover {
+            background: rgba(250, 204, 21, 0.08);
+        }
+
+        .btn-small:hover {
+            background: rgba(15, 23, 42, 0.9);
+        }
+
+        .panel-controls {
+            padding: 0.65rem 1rem;
+            border-bottom: 1px solid rgba(31, 41, 55, 1);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.75rem;
+        }
+
+        .search-box {
+            position: relative;
+            flex: 1 1 220px;
+            max-width: 360px;
         }
 
         .search-input {
             width: 100%;
-            padding: 0.75rem 1rem;
-            background: var(--bg-card);
+            border-radius: 999px;
+            border: 1px solid rgba(148, 163, 184, 0.6);
+            background: #020617;
+            padding: 0.4rem 0.85rem 0.4rem 2rem;
             color: var(--text-primary);
-            border: 2px solid var(--bg-hover);
-            border-radius: 8px;
-            font-size: 0.95rem;
-            transition: border-color 0.2s, box-shadow 0.2s;
+            font-size: 0.8rem;
         }
 
         .search-input::placeholder {
-            color: var(--text-secondary);
+            color: var(--text-muted);
         }
 
         .search-input:focus {
             outline: none;
-            border-color: var(--primary);
-            box-shadow: 0 0 0 3px rgba(29, 185, 84, 0.1);
+            border-color: rgba(250, 204, 21, 0.8);
+            box-shadow: 0 0 0 1px rgba(250, 204, 21, 0.6);
         }
 
-        .export-btn {
-            padding: 0.5rem 1rem;
-            background: rgba(255, 255, 255, 0.2);
-            color: white;
-            border: 2px solid rgba(255, 255, 255, 0.3);
-            border-radius: 6px;
-            font-weight: 600;
-            font-size: 0.85rem;
-            cursor: pointer;
-            transition: all 0.2s;
+        .search-icon {
+            position: absolute;
+            left: 0.7rem;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 0.9rem;
+            color: var(--text-muted);
         }
 
-        .export-btn:hover {
-            background: rgba(255, 255, 255, 0.3);
-            border-color: rgba(255, 255, 255, 0.5);
-            transform: scale(1.05);
+        .panel-controls-right {
+            display: flex;
+            align-items: center;
+            gap: 0.7rem;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .panel-controls-right strong {
+            color: var(--text-secondary);
+        }
+
+        .chart-header {
+            display: grid;
+            grid-template-columns: 60px minmax(0, 1.6fr) 120px 110px 90px;
+            gap: 0.5rem;
+            padding: 0.55rem 1rem;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            color: var(--text-muted);
+            border-bottom: 1px solid rgba(31, 41, 55, 1);
+        }
+
+        .chart-body {
+            max-height: 480px;
+            overflow-y: auto;
         }
 
         .chart-list {
             list-style: none;
         }
 
-        .trend-indicator {
-            font-size: 1.2rem;
-            font-weight: 700;
-            min-width: 2rem;
-            text-align: center;
+        .chart-row {
+            display: grid;
+            grid-template-columns: 60px minmax(0, 1.6fr) 120px 110px 90px;
+            gap: 0.5rem;
+            padding: 0.55rem 1rem;
+            align-items: center;
+            border-bottom: 1px solid rgba(15, 23, 42, 0.85);
+            transition: background 0.1s ease-out;
         }
 
-        .trend-up {
-            color: #ff6b6b;
+        .chart-row.top-3 {
+            background: radial-gradient(circle at top left, rgba(251, 191, 36, 0.05), transparent 55%);
         }
 
-        .trend-down {
-            color: #4ecdc4;
+        .chart-row:hover {
+            background: rgba(15, 23, 42, 0.9);
         }
 
-        .trend-new {
-            color: var(--primary);
-            font-size: 0.8rem;
-            text-transform: uppercase;
-            font-weight: 700;
-        }
-
-        .chart-item {
+        .chart-rank {
             display: flex;
             align-items: center;
-            padding: 0.75rem 1rem;
-            background: var(--bg-card);
-            margin-bottom: 2px;
-            border-radius: 8px;
-            transition: background 0.2s, transform 0.2s;
-            gap: 1rem;
+            gap: 0.45rem;
         }
 
-        .chart-item:hover {
-            background: var(--bg-hover);
-            transform: translateX(4px);
+        .rank-badge {
+            width: 32px;
+            height: 32px;
+            border-radius: 0.9rem;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.9rem;
+            font-weight: 600;
+            background: #020617;
+            border: 1px solid rgba(148, 163, 184, 0.5);
         }
 
-        .chart-item.top-3 {
-            padding: 1rem;
-            margin-bottom: 4px;
+        .rank-badge.rank-1 {
+            background: linear-gradient(145deg, #fbbf24, #facc15);
+            color: #020617;
+            border-color: transparent;
         }
 
-        .rank {
-            font-size: 1.25rem;
-            font-weight: 700;
-            width: 3rem;
-            text-align: center;
+        .rank-badge.rank-2 {
+            background: linear-gradient(145deg, #e5e7eb, #9ca3af);
+            color: #020617;
+            border-color: transparent;
+        }
+
+        .rank-badge.rank-3 {
+            background: linear-gradient(145deg, #f97316, #fbbf24);
+            color: #020617;
+            border-color: transparent;
+        }
+
+        .song-main {
+            display: flex;
+            align-items: center;
+            gap: 0.7rem;
+            min-width: 0;
+        }
+
+        .song-cover {
+            width: 40px;
+            height: 40px;
+            border-radius: 0.7rem;
+            background: radial-gradient(circle at top, #1f2937, #020617);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
             flex-shrink: 0;
         }
 
-        .rank-1 { color: var(--gold); font-size: 1.5rem; }
-        .rank-2 { color: var(--silver); font-size: 1.4rem; }
-        .rank-3 { color: var(--bronze); font-size: 1.3rem; }
-
-        .album-art {
-            width: 56px;
-            height: 56px;
-            border-radius: 4px;
-            background: var(--bg-hover);
-            flex-shrink: 0;
+        .song-cover img {
+            width: 100%;
+            height: 100%;
             object-fit: cover;
         }
 
-        .top-3 .album-art {
-            width: 72px;
-            height: 72px;
-        }
-
-        .song-info {
-            flex-grow: 1;
+        .song-text {
             min-width: 0;
         }
 
         .song-title {
+            font-size: 0.9rem;
             font-weight: 600;
-            font-size: 1rem;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-        }
-
-        .top-3 .song-title {
-            font-size: 1.125rem;
         }
 
         .song-artist {
+            font-size: 0.8rem;
             color: var(--text-secondary);
-            font-size: 0.875rem;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
         }
 
-        .song-album {
-            color: var(--text-secondary);
+        .song-meta {
             font-size: 0.75rem;
-            opacity: 0.7;
+            color: var(--text-muted);
+            margin-top: 0.1rem;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
         }
 
-        .vote-count {
-            text-align: right;
-            flex-shrink: 0;
+        .trend-pill {
+            font-size: 0.8rem;
+            border-radius: 999px;
+            padding: 0.2rem 0.6rem;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.25rem;
         }
 
-        .vote-number {
-            font-size: 1.25rem;
-            font-weight: 700;
+        .trend-pill.up {
+            color: var(--success);
+            background: rgba(34, 197, 94, 0.16);
+        }
+
+        .trend-pill.down {
+            color: var(--danger);
+            background: rgba(248, 113, 113, 0.16);
+        }
+
+        .trend-pill.new {
             color: var(--primary);
-        }
-
-        .vote-label {
-            font-size: 0.625rem;
+            background: rgba(250, 204, 21, 0.16);
             text-transform: uppercase;
-            color: var(--text-secondary);
+            font-size: 0.7rem;
         }
 
-        .empty-state {
+        .trend-pill.same {
+            color: var(--text-muted);
+            background: rgba(15, 23, 42, 0.9);
+        }
+
+        .votes {
+            text-align: right;
+        }
+
+        .votes-main {
+            font-size: 1rem;
+            font-weight: 700;
+        }
+
+        .votes-label {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+
+        .stats-col {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            text-align: right;
+        }
+
+        .stats-col strong {
+            display: block;
+            color: var(--text-primary);
+        }
+
+        .state-block {
+            padding: 2.2rem 1.4rem;
             text-align: center;
-            padding: 4rem 2rem;
             color: var(--text-secondary);
+            font-size: 0.9rem;
         }
 
-        .empty-state h2 {
-            margin-bottom: 1rem;
-        }
-
-        .loading {
-            text-align: center;
-            padding: 4rem 2rem;
-            color: var(--text-secondary);
+        .state-icon {
+            font-size: 2rem;
+            margin-bottom: 0.6rem;
         }
 
         .spinner {
             width: 40px;
             height: 40px;
-            border: 4px solid var(--bg-hover);
+            border-radius: 999px;
+            border: 3px solid rgba(148, 163, 184, 0.3);
             border-top-color: var(--primary);
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 1rem;
+            margin: 0 auto 0.8rem;
+            animation: spin 0.7s linear infinite;
+        }
+
+        .panel-footer {
+            padding: 0.6rem 1rem;
+            border-top: 1px solid rgba(31, 41, 55, 1);
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .archive-section {
+            margin-top: 1.6rem;
+        }
+
+        .archive-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 0.5rem;
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+        }
+
+        .archive-title {
+            font-weight: 500;
+        }
+
+        .archive-month-label {
+            color: var(--primary);
+        }
+
+        .archive-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 0.7rem;
+        }
+
+        @media (max-width: 1024px) {
+            .archive-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+
+        @media (max-width: 640px) {
+            .archive-grid {
+                grid-template-columns: minmax(0, 1fr);
+            }
+        }
+
+        .archive-card {
+            border-radius: 0.9rem;
+            border: 1px solid rgba(31, 41, 55, 1);
+            background: radial-gradient(circle at top left, rgba(148, 163, 184, 0.16), transparent 65%), #020617;
+            padding: 0.7rem 0.8rem;
+            cursor: pointer;
+            font-size: 0.8rem;
+        }
+
+        .archive-card.year-end {
+            border-color: rgba(250, 204, 21, 0.9);
+            background: radial-gradient(circle at top left, rgba(250, 204, 21, 0.25), transparent 65%), #020617;
+        }
+
+        .archive-card-title {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 0.15rem;
+        }
+
+        .archive-card-title strong {
+            font-size: 0.82rem;
+        }
+
+        .archive-pill {
+            border-radius: 999px;
+            padding: 0.1rem 0.45rem;
+            border: 1px solid rgba(250, 204, 21, 0.7);
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+
+        .archive-card-range {
+            font-size: 0.78rem;
+            color: var(--text-secondary);
+        }
+
+        .archive-card-meta {
+            margin-top: 0.15rem;
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.88);
+            backdrop-filter: blur(10px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 1rem;
+            z-index: 40;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal {
+            background: #020617;
+            border-radius: 1.2rem;
+            border: 1px solid rgba(148, 163, 184, 0.5);
+            max-width: 720px;
+            width: 100%;
+            max-height: 85vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: 0 24px 70px rgba(0, 0, 0, 1);
+        }
+
+        .modal-header {
+            padding: 0.8rem 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid rgba(31, 41, 55, 1);
+        }
+
+        .modal-header-main {
+            display: flex;
+            flex-direction: column;
+            gap: 0.15rem;
+        }
+
+        .modal-title {
+            font-size: 0.95rem;
+            font-weight: 600;
+        }
+
+        .modal-subtitle {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+        }
+
+        .modal-close {
+            width: 30px;
+            height: 30px;
+            border-radius: 999px;
+            border: 1px solid rgba(148, 163, 184, 0.7);
+            background: #020617;
+            color: var(--text-primary);
+            font-size: 1rem;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+        }
+
+        .modal-body {
+            overflow-y: auto;
+        }
+
+        .modal-chart-list {
+            list-style: none;
+        }
+
+        .modal-row {
+            display: grid;
+            grid-template-columns: 40px minmax(0, 1.6fr) 120px 110px;
+            gap: 0.5rem;
+            padding: 0.6rem 1rem;
+            align-items: center;
+            border-bottom: 1px solid rgba(15, 23, 42, 0.8);
+            font-size: 0.85rem;
+        }
+
+        .modal-row .song-main {
+            gap: 0.6rem;
+        }
+
+        .modal-row .song-cover {
+            width: 34px;
+            height: 34px;
+            border-radius: 0.6rem;
+        }
+
+        .modal-state {
+            padding: 1.6rem 1.2rem;
+            text-align: center;
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+        }
+
+        @keyframes pulse {
+            0%,
+            100% {
+                opacity: 1;
+            }
+            50% {
+                opacity: 0.4;
+            }
         }
 
         @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-
-        .error {
-            text-align: center;
-            padding: 2rem;
-            background: #ff4444;
-            color: white;
-            border-radius: 8px;
-            margin: 1rem;
-        }
-
-        .spotify-link {
-            color: var(--primary);
-            text-decoration: none;
-            opacity: 0;
-            transition: opacity 0.2s;
-            font-size: 0.75rem;
-        }
-
-        .chart-item:hover .spotify-link {
-            opacity: 1;
-        }
-
-        .no-spotify {
-            font-size: 0.65rem;
-            color: var(--text-secondary);
-            opacity: 0.6;
-            text-transform: uppercase;
-        }
-
-        .album-art-placeholder {
-            width: 56px;
-            height: 56px;
-            border-radius: 4px;
-            background: linear-gradient(135deg, #282828 0%, #383838 100%);
-            flex-shrink: 0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.5rem;
-        }
-
-        .top-3 .album-art-placeholder {
-            width: 72px;
-            height: 72px;
-            font-size: 2rem;
-        }
-
-        @media (max-width: 600px) {
-            .header h1 {
-                font-size: 1.75rem;
-            }
-
-            .stats-bar {
-                gap: 1rem;
-            }
-
-            .album-art {
-                width: 48px;
-                height: 48px;
-            }
-
-            .album-art-placeholder {
-                width: 48px;
-                height: 48px;
-                font-size: 1.25rem;
-            }
-
-            .rank {
-                width: 2.5rem;
-                font-size: 1rem;
-            }
-
-            .song-title {
-                font-size: 0.9rem;
-            }
-
-            .vote-number {
-                font-size: 1rem;
+            to {
+                transform: rotate(360deg);
             }
         }
     </style>
 </head>
 <body>
-    <header class="header">
-        <div class="header-content">
-            <img src="{% static 'images/radioZim.jpg' %}" alt="Radio Zimbabwe Logo" class="logo">
-            <h1>Radio Zimbabwe</h1>
-            <p class="subtitle">Top 20 Chart</p>
-        </div>
-        <div class="stats-bar">
-            <div class="stat">
-                <div class="stat-value" id="total-songs">-</div>
-                <div class="stat-label">Songs</div>
+    <div class="app-shell">
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <img src="{% static 'images/radioZim.jpg' %}" alt="Radio Zimbabwe" class="sidebar-logo" />
+                <div class="sidebar-title">
+                    <div class="sidebar-brand">Radio Charts</div>
+                    <div class="sidebar-season" id="sidebar-season">2026 Season</div>
+                </div>
             </div>
-            <div class="stat">
-                <div class="stat-value" id="chart-date">-</div>
-                <div class="stat-label">Date</div>
+
+            <div class="sidebar-section">
+                <div class="sidebar-section-title">Current Week</div>
+                <div class="live-pill" id="current-week-link">
+                    <span class="live-dot"></span>
+                    Live Voting
+                </div>
             </div>
-            <button id="export-csv-btn" class="export-btn" style="display: none;">📥 CSV</button>
-        </div>
-    </header>
 
-    <div class="container">
-        <div class="update-info">
-            <span class="live-dot"></span>
-            Live updates every 15 seconds · Last updated: <span id="last-update">-</span>
-        </div>
+            <div class="sidebar-section">
+                <div class="sidebar-section-title">Archive</div>
+                <ul class="sidebar-archive-list" id="month-list">
+                    <li class="sidebar-month active" data-month="0">
+                        <span class="sidebar-month-label"><span class="icon">📅</span> January</span>
+                        <span class="sidebar-month-arrow">›</span>
+                    </li>
+                    <li class="sidebar-month" data-month="1">
+                        <span class="sidebar-month-label"><span class="icon">📅</span> February</span>
+                        <span class="sidebar-month-arrow">›</span>
+                    </li>
+                    <li class="sidebar-month" data-month="2">
+                        <span class="sidebar-month-label"><span class="icon">📅</span> March</span>
+                        <span class="sidebar-month-arrow">›</span>
+                    </li>
+                    <li class="sidebar-month" data-month="3">
+                        <span class="sidebar-month-label"><span class="icon">📅</span> April</span>
+                        <span class="sidebar-month-arrow">›</span>
+                    </li>
+                    <li class="sidebar-month" data-month="4">
+                        <span class="sidebar-month-label"><span class="icon">📅</span> May</span>
+                        <span class="sidebar-month-arrow">›</span>
+                    </li>
+                    <li class="sidebar-month" data-month="5">
+                        <span class="sidebar-month-label"><span class="icon">📅</span> June</span>
+                        <span class="sidebar-month-arrow">›</span>
+                    </li>
+                    <li class="sidebar-month" data-month="6">
+                        <span class="sidebar-month-label"><span class="icon">📅</span> July</span>
+                        <span class="sidebar-month-arrow">›</span>
+                    </li>
+                    <li class="sidebar-month" data-month="7">
+                        <span class="sidebar-month-label"><span class="icon">📅</span> August</span>
+                        <span class="sidebar-month-arrow">›</span>
+                    </li>
+                    <li class="sidebar-month" data-month="8">
+                        <span class="sidebar-month-label"><span class="icon">📅</span> September</span>
+                        <span class="sidebar-month-arrow">›</span>
+                    </li>
+                    <li class="sidebar-month" data-month="9">
+                        <span class="sidebar-month-label"><span class="icon">📅</span> October</span>
+                        <span class="sidebar-month-arrow">›</span>
+                    </li>
+                    <li class="sidebar-month" data-month="10">
+                        <span class="sidebar-month-label"><span class="icon">📅</span> November</span>
+                        <span class="sidebar-month-arrow">›</span>
+                    </li>
+                    <li class="sidebar-month" data-month="11">
+                        <span class="sidebar-month-label"><span class="icon">📅</span> December</span>
+                        <span class="sidebar-month-arrow">›</span>
+                    </li>
+                </ul>
+            </div>
 
-        <div class="search-container" style="display: none;" id="search-container">
-            <input 
-                type="text" 
-                id="search-input" 
-                class="search-input" 
-                placeholder="Search by song title or artist..."
-            >
-        </div>
+            <div class="sidebar-section">
+                <div class="sidebar-section-title">Dates</div>
+                <ul class="sidebar-archive-list" id="date-list">
+                    <li class="sidebar-date-placeholder">Select a month to see Saturdays</li>
+                </ul>
+            </div>
+        </aside>
 
-        <div id="loading" class="loading">
-            <div class="spinner"></div>
-            <p>Loading chart...</p>
-        </div>
+        <main class="main">
+            <header class="topbar">
+                <div class="topbar-left">
+                    <div class="topbar-menu">☰</div>
+                    <div class="topbar-title">Weekend Charts Dashboard</div>
+                </div>
+                <div class="topbar-right">
+                    <div class="pill">
+                        <span class="icon">📡</span>
+                        Weekend Charts
+                    </div>
+                    <button id="btn-expand" class="pill-button">
+                        <span class="icon">⇵</span>
+                        Expand to 50
+                    </button>
+                    <button id="btn-export" class="pill-button" style="display: none;">
+                        <span class="icon">⬇</span>
+                        Export CSV
+                    </button>
+                </div>
+            </header>
 
-        <div id="error" class="error" style="display: none;"></div>
+            <div class="content-inner">
+                        <div class="stat-caption">This week</div>
+                    </article>
+                    <article class="stat-card">
 
-        <ul id="chart-list" class="chart-list" style="display: none;"></ul>
+                <section class="panel" aria-label="Current chart">
+                    <header class="panel-header">
+                        <div class="panel-header-left">
+                            <div class="panel-title">This Week</div>
+                            <div class="panel-subtitle" id="panel-subtitle">Live Top 20 based on listener voting</div>
+                        </div>
+                        <div class="panel-header-right">
+                            <button id="btn-refresh" class="btn-small">
+                                <span class="icon">⟳</span>
+                                Refresh
+                            </button>
+                        </div>
+                    </header>
 
-        <div id="empty" class="empty-state" style="display: none;">
-            <h2>📊 No votes yet today</h2>
-            <p>Be the first to vote! Send a message to our Telegram bot.</p>
+                    <div class="panel-controls">
+                        <div class="search-box">
+                            <span class="search-icon">🔍</span>
+                            <input id="search" class="search-input" type="text" placeholder="Search by song title or artist" />
+                        </div>
+                        <div class="panel-controls-right">
+                            <span>
+                                Showing <strong id="visible-count">0</strong> of
+                                <strong id="total-count">0</strong>
+                            </span>
+                        </div>
+                    </div>
+
+                    <div id="state-loading" class="state-block">
+                        <div class="spinner"></div>
+                        Loading live chart…
+                    </div>
+                    <div id="state-empty" class="state-block" style="display:none;">
+                        <div class="state-icon">📻</div>
+                        <p>No votes yet this week.</p>
+                        <p style="margin-top:0.2rem; font-size:0.8rem;">Votes will appear here as listeners send their favourite songs.</p>
+                    </div>
+                    <div id="state-error" class="state-block" style="display:none;"></div>
+
+                    <div id="chart-container" style="display:none;">
+                        <div class="chart-header">
+                            <div>Rank</div>
+                            <div>Song</div>
+                            <div>Trend</div>
+                            <div>Votes</div>
+                            <div>Stats</div>
+                        </div>
+                        <div class="chart-body">
+                            <ul id="chart-list" class="chart-list"></ul>
+                        </div>
+                        <div class="panel-footer">
+                            Last updated: <span id="last-updated-label">–</span> · auto-refresh every 15 seconds
+                        </div>
+                    </div>
+                </section>
+
+                <section class="archive-section">
+                    <div class="archive-header">
+                        <div class="archive-title">Archive · <span id="archive-month-label" class="archive-month-label">January</span> 2026</div>
+                        <div style="font-size:0.8rem; color:var(--text-muted);">
+                            Click a week to open full chart
+                        </div>
+                    </div>
+                    <div id="archives-loading" class="state-block">
+                        <div class="spinner"></div>
+                        Loading archived charts…
+                    </div>
+                    <div id="archives-empty" class="state-block" style="display:none;">
+                        <div class="state-icon">📁</div>
+                        <p>No archived charts yet for this period.</p>
+                    </div>
+                    <div id="archives-grid" class="archive-grid" style="display:none;"></div>
+                </section>
+            </div>
+        </main>
+    </div>
+
+    <div id="modal-overlay" class="modal-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <div class="modal-header-main">
+                    <div class="modal-title" id="modal-title">Week –</div>
+                    <div class="modal-subtitle" id="modal-subtitle">–</div>
+                </div>
+                <button id="modal-close" class="modal-close" aria-label="Close">×</button>
+            </div>
+            <div class="modal-body">
+                <ul id="modal-chart-list" class="modal-chart-list"></ul>
+            </div>
         </div>
     </div>
 
     <script>
-        const API_URL = '/api/chart/today';
-        const REFRESH_INTERVAL = 15000; // 15 seconds
+        const API_BASE = '/api';
+        const REFRESH_MS = 15000;
 
-        // Global state for search
-        let allChartData = [];
+        const els = {
+            heroTopSize: document.getElementById('hero-top-size'),
+            heroDate: document.getElementById('hero-date'),
+            sidebarSeason: document.getElementById('sidebar-season'),
+            currentWeekLink: document.getElementById('current-week-link'),
+            statVotes: document.getElementById('stat-votes'),
+            statAvg: document.getElementById('stat-avg'),
+            statNew: document.getElementById('stat-new'),
+            statSize: document.getElementById('stat-size'),
+            panelSubtitle: document.getElementById('panel-subtitle'),
+            btnExpand: document.getElementById('btn-expand'),
+            btnExport: document.getElementById('btn-export'),
+            btnRefresh: document.getElementById('btn-refresh'),
+            search: document.getElementById('search'),
+            visibleCount: document.getElementById('visible-count'),
+            totalCount: document.getElementById('total-count'),
+            stateLoading: document.getElementById('state-loading'),
+            stateEmpty: document.getElementById('state-empty'),
+            stateError: document.getElementById('state-error'),
+            chartContainer: document.getElementById('chart-container'),
+            chartList: document.getElementById('chart-list'),
+            lastUpdatedLabel: document.getElementById('last-updated-label'),
+            monthList: document.getElementById('month-list'),
+            dateList: document.getElementById('date-list'),
+        };
 
-        const loadingEl = document.getElementById('loading');
-        const errorEl = document.getElementById('error');
-        const chartListEl = document.getElementById('chart-list');
-        const emptyEl = document.getElementById('empty');
-        const lastUpdateEl = document.getElementById('last-update');
-        const totalSongsEl = document.getElementById('total-songs');
-        const chartDateEl = document.getElementById('chart-date');
-        const searchContainerEl = document.getElementById('search-container');
-        const searchInputEl = document.getElementById('search-input');
+        let currentLimit = 20;
+        let chartData = [];
+        let archivesByMonth = {};
+        let currentYear = 2026;
+        let archivesLoaded = false;
+        let currentMode = 'live'; // 'live' or 'archive'
+        let currentArchiveId = null;
 
-        function formatTime(isoString) {
-            const date = new Date(isoString);
-            return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        function esc(text) {
+            const div = document.createElement('div');
+            div.textContent = text ?? '';
+            return div.innerHTML;
         }
 
-        function formatDate(dateString) {
-            const date = new Date(dateString + 'T00:00:00');
-            return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        function formatDate(isoDate) {
+            if (!isoDate) return '–';
+            const d = new Date(isoDate + 'T00:00:00');
+            return d.toLocaleDateString('en-ZA', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
         }
 
-        function getTrendIndicator(song) {
-            const previousChart = JSON.parse(localStorage.getItem('previousChart') || '[]');
-            const previousSong = previousChart.find(s => s.title === song.title && s.artists === song.artists);
-            
-            if (!previousSong) {
-                return '<div class="trend-indicator trend-new">NEW</div>';
+        function formatDateRange(start, end) {
+            if (!start || !end) return '–';
+            const s = new Date(start + 'T00:00:00');
+            const e = new Date(end + 'T00:00:00');
+            const optsShort = { month: 'short', day: 'numeric' };
+            return `${s.toLocaleDateString('en-ZA', optsShort)} – ${e.toLocaleDateString('en-ZA', optsShort)}`;
+        }
+
+        function formatTime(iso) {
+            if (!iso) return '–';
+            const d = new Date(iso);
+            return d.toLocaleTimeString('en-ZA', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        }
+
+        function movementPill(song) {
+            if (song.movement === 'new' || song.previous_rank == null) {
+                return '<span class="trend-pill new">NEW</span>';
             }
-            
-            const positionChange = previousSong.rank - song.rank;
-            if (positionChange > 0) {
-                return `<div class="trend-indicator trend-up">↑${positionChange}</div>`;
-            } else if (positionChange < 0) {
-                return `<div class="trend-indicator trend-down">↓${Math.abs(positionChange)}</div>`;
-            } else {
-                return '<div class="trend-indicator"></div>';
+            if (song.movement && song.movement.startsWith('+')) {
+                return `<span class="trend-pill up">↑${esc(song.movement.slice(1))}</span>`;
             }
+            if (song.movement && song.movement.startsWith('-')) {
+                return `<span class="trend-pill down">↓${esc(song.movement.slice(1))}</span>`;
+            }
+            return '<span class="trend-pill same">–</span>';
         }
 
-        function createChartItem(song) {
-            const isTop3 = song.rank <= 3;
+        function renderChartRow(song) {
+            const votes = (song.count * 8) || song.count || 0;
             const rankClass = song.rank <= 3 ? `rank-${song.rank}` : '';
-            const hasSpotify = song.spotify_track_id && song.spotify_track_id.length > 0;
-            const displayVotes = song.count * 8;
-            
-            // Image or placeholder
-            let imageHtml;
-            if (song.image_url && song.image_url.length > 0) {
-                imageHtml = `<img class="album-art" src="${song.image_url}" alt="${escapeHtml(song.title)}" loading="lazy" onerror="this.outerHTML='<div class=\\'album-art-placeholder\\'>🎵</div>'">`;
+            const topClass = song.rank <= 3 ? 'top-3' : '';
+
+            let coverHtml;
+            if (song.image_url) {
+                coverHtml = `<div class="song-cover"><img src="${esc(song.image_url)}" alt="${esc(song.title)}" onerror="this.parentElement.innerHTML='🎵'" /></div>`;
             } else {
-                imageHtml = `<div class="album-art-placeholder">🎵</div>`;
+                coverHtml = '<div class="song-cover">🎵</div>';
             }
-            
-            // Spotify link or "No Spotify" label
-            let spotifyHtml;
-            if (hasSpotify) {
-                const spotifyUrl = `https://open.spotify.com/track/${song.spotify_track_id}`;
-                spotifyHtml = `<a href="${spotifyUrl}" target="_blank" rel="noopener" class="spotify-link">Open ↗</a>`;
-            } else {
-                spotifyHtml = `<span class="no-spotify">Local</span>`;
-            }
-            
+
             return `
-                <li class="chart-item ${isTop3 ? 'top-3' : ''}">
-                    <div class="rank ${rankClass}">${song.rank}</div>
-                    ${getTrendIndicator(song)}
-                    ${imageHtml}
-                    <div class="song-info">
-                        <div class="song-title">${escapeHtml(song.title)}</div>
-                        <div class="song-artist">${escapeHtml(song.artists)}</div>
-                        ${song.album ? `<div class="song-album">${escapeHtml(song.album)}</div>` : ''}
+                <li class="chart-row ${topClass}">
+                    <div class="chart-rank">
+                        <div class="rank-badge ${rankClass}">${song.rank}</div>
                     </div>
-                    <div class="vote-count">
-                        <div class="vote-number">${displayVotes}</div>
-                        <div class="vote-label">votes</div>
+                    <div class="song-main">
+                        ${coverHtml}
+                        <div class="song-text">
+                            <div class="song-title">${esc(song.title)}</div>
+                            <div class="song-artist">${esc(song.artists)}</div>
+                            ${song.album ? `<div class="song-meta">${esc(song.album)}</div>` : ''}
+                        </div>
                     </div>
-                    ${spotifyHtml}
+                    <div>${movementPill(song)}</div>
+                    <div class="votes">
+                        <div class="votes-main">${votes.toLocaleString()}</div>
+                        <div class="votes-label">votes</div>
+                    </div>
+                    <div class="stats-col">
+                        ${song.previous_rank ? `<strong>#${song.previous_rank}</strong> last week` : '<strong>–</strong> debut'}
+                    </div>
                 </li>
             `;
         }
 
-        function escapeHtml(text) {
-            const div = document.createElement('div');
-            div.textContent = text;
-            return div.innerHTML;
-        }
+        function renderChartList(data, searchTerm = '') {
+            let base = data;
+            if (currentLimit && base.length > currentLimit) {
+                base = base.slice(0, currentLimit);
+            }
 
-        function filterSongs(searchTerm) {
-            if (!searchTerm.trim()) {
-                // Show all songs
-                chartListEl.innerHTML = allChartData.map(createChartItem).join('');
+            let items = base;
+            const term = searchTerm.trim().toLowerCase();
+            if (term) {
+                items = base.filter(s =>
+                    (s.title || '').toLowerCase().includes(term) ||
+                    (s.artists || '').toLowerCase().includes(term)
+                );
+            }
+
+            els.visibleCount.textContent = items.length.toString();
+            els.totalCount.textContent = base.length.toString();
+
+            if (!items.length) {
+                els.chartList.innerHTML = `
+                    <li class="chart-row" style="justify-content:center; padding:1.6rem 1rem;">
+                        <span style="color:var(--text-muted); font-size:0.85rem;">No songs match this search.</span>
+                    </li>
+                `;
                 return;
             }
 
-            const term = searchTerm.toLowerCase();
-            const filtered = allChartData.filter(song => 
-                song.title.toLowerCase().includes(term) || 
-                song.artists.toLowerCase().includes(term)
-            );
-
-            // Update display
-            if (filtered.length === 0) {
-                chartListEl.innerHTML = '<li class="chart-item" style="text-align: center; padding: 2rem;"><span style="color: var(--text-secondary);">No songs found</span></li>';
-            } else {
-                chartListEl.innerHTML = filtered.map(createChartItem).join('');
-            }
+            els.chartList.innerHTML = items.map(renderChartRow).join('');
         }
 
-        function exportToCSV() {
-            const csvContent = [
-                ['Rank', 'Title', 'Artist', 'Votes'],
-                ...allChartData.map(song => [
-                    song.rank,
-                    song.title,
-                    song.artists,
-                    song.count * 8
-                ])
-            ]
-                .map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(','))
-                .join('\n');
-
-            const blob = new Blob([csvContent], { type: 'text/csv' });
-            const url = window.URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = `RadioZimbabwe_Chart_${new Date().toISOString().split('T')[0]}.csv`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            window.URL.revokeObjectURL(url);
+        async function fetchJson(url) {
+            const res = await fetch(url);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            return res.json();
         }
 
-        async function fetchChart() {
+        async function loadCurrentChart() {
             try {
-                const response = await fetch(API_URL);
-                if (!response.ok) throw new Error(`HTTP ${response.status}`);
-                
-                const data = await response.json();
-                
-                loadingEl.style.display = 'none';
-                errorEl.style.display = 'none';
-                
-                if (data.top100.length === 0) {
-                    chartListEl.style.display = 'none';
-                    searchContainerEl.style.display = 'none';
-                    document.getElementById('export-csv-btn').style.display = 'none';
-                    emptyEl.style.display = 'block';
-                } else {
-                    emptyEl.style.display = 'none';
-                    chartListEl.style.display = 'block';
-                    searchContainerEl.style.display = 'block';
-                    document.getElementById('export-csv-btn').style.display = 'block';
-                    
-                    // Store original data for search
-                    allChartData = data.top100;
-                    
-                    // Save current chart for trending comparison (before rendering)
-                    localStorage.setItem('previousChart', JSON.stringify(allChartData));
-                    
-                    // Render songs (apply search if active)
-                    const currentSearchTerm = searchInputEl.value;
-                    if (currentSearchTerm.trim()) {
-                        filterSongs(currentSearchTerm);
-                    } else {
-                        chartListEl.innerHTML = allChartData.map(createChartItem).join('');
-                    }
+                currentMode = 'live';
+                currentArchiveId = null;
+                els.stateError.style.display = 'none';
+                els.stateEmpty.style.display = 'none';
+                els.chartContainer.style.display = 'none';
+                els.stateLoading.style.display = 'block';
+
+                const data = await fetchJson(`${API_BASE}/chart/today?limit=${currentLimit}`);
+
+                els.stateLoading.style.display = 'none';
+
+                if (!data.top100 || !data.top100.length) {
+                    els.stateEmpty.style.display = 'block';
+                    els.btnExport.style.display = 'none';
+                    return;
                 }
-                
-                // Update stats
-                totalSongsEl.textContent = data.total_songs;
-                chartDateEl.textContent = formatDate(data.date);
-                lastUpdateEl.textContent = formatTime(data.updated_at);
-                
+
+                chartData = data.top100;
+                els.btnExport.style.display = 'inline-flex';
+                els.chartContainer.style.display = 'block';
+
+                const totalVotes = chartData.reduce((acc, s) => acc + ((s.count * 8) || s.count || 0), 0);
+                const newEntries = chartData.filter(s => s.movement === 'new' || s.previous_rank == null).length;
+                const avg = chartData.length ? Math.round(totalVotes / chartData.length) : 0;
+
+                els.statVotes.textContent = totalVotes.toLocaleString();
+                els.statAvg.textContent = avg.toLocaleString();
+                els.statNew.textContent = newEntries.toString();
+                els.statSize.textContent = chartData.length.toString();
+
+                els.heroTopSize.textContent = String(currentLimit);
+                els.heroDate.textContent = formatDate(data.week_end || data.date);
+                els.lastUpdatedLabel.textContent = formatTime(data.updated_at);
+
+                currentYear = data.year || currentYear;
+                els.sidebarSeason.textContent = `${currentYear} Season`;
+
+                const suffix = currentLimit === 20 ? 'Top 20' : 'Top 50';
+                els.panelSubtitle.textContent = `${suffix} · weighted listener voting`;
+
+                renderChartList(chartData, els.search.value);
+
+                if (!archivesLoaded) {
+                    loadArchives();
+                }
             } catch (err) {
-                console.error('Failed to fetch chart:', err);
-                loadingEl.style.display = 'none';
-                errorEl.style.display = 'block';
-                errorEl.textContent = `Failed to load chart: ${err.message}. Retrying...`;
+                console.error('chart error', err);
+                els.stateLoading.style.display = 'none';
+                els.stateError.style.display = 'block';
+                els.stateError.textContent = 'Failed to load chart. Will retry automatically.';
             }
         }
 
-        // Search event listener
-        searchInputEl.addEventListener('input', (e) => {
-            filterSongs(e.target.value);
+        async function loadArchives() {
+            archivesLoaded = true;
+            els.archivesLoading.style.display = 'block';
+            els.archivesEmpty.style.display = 'none';
+            els.archivesGrid.style.display = 'none';
+
+            try {
+                const data = await fetchJson(`${API_BASE}/chart/archives?year=${encodeURIComponent(currentYear)}`);
+                const charts = data.charts || [];
+                archivesByMonth = {};
+
+                charts.forEach(chart => {
+                    const d = new Date(chart.week_start + 'T00:00:00');
+                    const m = d.getMonth();
+                    if (!archivesByMonth[m]) archivesByMonth[m] = [];
+                    archivesByMonth[m].push(chart);
+                });
+
+                els.archivesLoading.style.display = 'none';
+
+                const now = new Date();
+                els.archivesLoading.style.display = 'none';
+                els.archivesEmpty.style.display = 'block';
+                els.archivesEmpty.textContent = 'Unable to load archives.';
+            }
+        }
+
+        function setActiveMonth(monthIndex) {
+            const monthItems = els.monthList.querySelectorAll('.sidebar-month');
+            monthItems.forEach(item => {
+                item.classList.toggle('active', Number(item.dataset.month) === monthIndex);
+            });
+                                // sort charts in each month by week_end (Saturday) ascending
+                                Object.keys(archivesByMonth).forEach(m => {
+                                    archivesByMonth[m].sort((a, b) => {
+                                        const da = new Date((a.week_end || a.week_start) + 'T00:00:00');
+                                        const db = new Date((b.week_end || b.week_start) + 'T00:00:00');
+                                        return da - db;
+                                    });
+                                });
+                'January', 'February', 'March', 'April', 'May', 'June',
+                'July', 'August', 'September', 'October', 'November', 'December',
+            ];
+            els.archiveMonthLabel.textContent = monthNames[monthIndex];
+
+            const charts = archivesByMonth[monthIndex] || [];
+                els.archivesEmpty.style.display = 'block';
+                els.archivesEmpty.innerHTML = '<div class="state-icon">📁</div><p>No charts for this month yet.</p>';
+                return;
+            }
+
+            els.archivesEmpty.style.display = 'none';
+            els.archivesGrid.style.display = 'grid';
+
+                                ${chart.is_year_end ? '<span class="archive-pill">Year end</span>' : ''}
+            const blob = new Blob([csv], { type: 'text/csv' });
+
+                        async function loadArchiveChart(id) {
+                            try {
+                                currentMode = 'archive';
+                                currentArchiveId = id;
+
+                                els.stateError.style.display = 'none';
+                                els.stateEmpty.style.display = 'none';
+                                els.chartContainer.style.display = 'none';
+                                els.stateLoading.style.display = 'block';
+
+                                const data = await fetchJson(`${API_BASE}/chart/${id}`);
+
+                                els.stateLoading.style.display = 'none';
+
+                                const entries = data.entries || [];
+                                const c = data.chart || {};
+
+                                if (!entries.length) {
+                                    chartData = [];
+                                    els.btnExport.style.display = 'none';
+                                    els.stateEmpty.style.display = 'block';
+                                    return;
+                                }
+
+                                chartData = entries;
+                                els.btnExport.style.display = 'inline-flex';
+                                els.chartContainer.style.display = 'block';
+
+                                const totalVotes = entries.reduce((acc, s) => acc + (((s.count * 8) || s.count || 0)), 0);
+                                const newEntries = entries.filter(s => s.movement === 'new' || s.previous_rank == null).length;
+                                const baseLength = Math.min(currentLimit || entries.length, entries.length);
+                                const avg = baseLength ? Math.round(totalVotes / baseLength) : 0;
+
+                                els.statVotes.textContent = totalVotes.toLocaleString();
+                                els.statAvg.textContent = avg.toLocaleString();
+                                els.statNew.textContent = newEntries.toString();
+                                els.statSize.textContent = String(baseLength);
+
+                                currentYear = c.year || currentYear;
+                                els.sidebarSeason.textContent = `${currentYear} Season`;
+
+                                els.heroTopSize.textContent = String(baseLength);
+                                els.heroDate.textContent = formatDate(c.week_end || c.week_start);
+                                els.lastUpdatedLabel.textContent = 'archive chart';
+
+                                const suffix = currentLimit === 20 ? 'Top 20' : 'Top 50';
+                                els.panelSubtitle.textContent = `${suffix} · archive chart for week ${c.week_number}, ${c.year}`;
+
+                                renderChartList(chartData, els.search.value);
+                            } catch (err) {
+                                console.error('archive chart error', err);
+                                els.stateLoading.style.display = 'none';
+                                els.stateError.style.display = 'block';
+                                els.stateError.textContent = 'Failed to load archived chart.';
+                            }
+                        }
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Radio_Zimbabwe_Chart_${new Date().toISOString().slice(0, 10)}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        }
+
+        els.btnExpand.addEventListener('click', () => {
+            if (currentLimit === 20) {
+                currentLimit = 50;
+                els.btnExpand.textContent = 'Collapse to 20';
+            } else {
+                currentLimit = 20;
+                els.btnExpand.textContent = 'Expand to 50';
+            }
+            if (currentMode === 'archive' && currentArchiveId) {
+                loadArchiveChart(currentArchiveId);
+            } else {
+                loadCurrentChart();
+            }
         });
 
-        // Export event listener
-        document.getElementById('export-csv-btn').addEventListener('click', exportToCSV);
+        els.btnRefresh.addEventListener('click', () => {
+            if (currentMode === 'archive' && currentArchiveId) {
+                loadArchiveChart(currentArchiveId);
+            } else {
+                loadCurrentChart();
+            }
+        });
 
-        // Initial load
-        fetchChart();
+        els.btnExport.addEventListener('click', exportCsv);
 
-        // Auto-refresh
-        setInterval(fetchChart, REFRESH_INTERVAL);
+        els.search.addEventListener('input', () => {
+            renderChartList(chartData, els.search.value);
+        });
 
-        // Visibility API - refresh when tab becomes visible
+        els.monthList.addEventListener('click', (e) => {
+            const item = e.target.closest('.sidebar-month');
+            if (!item) return;
+            const month = Number(item.dataset.month);
+            setActiveMonth(month);
+        });
+
+        els.currentWeekLink.addEventListener('click', () => {
+            currentMode = 'live';
+            currentArchiveId = null;
+            loadCurrentChart();
+        });
+
+        els.dateList.addEventListener('click', (e) => {
+            const item = e.target.closest('.sidebar-date');
+            if (!item) return;
+            const id = item.dataset.chartId;
+            if (!id) return;
+
+            els.dateList.querySelectorAll('.sidebar-date').forEach(li => {
+                li.classList.toggle('active', li === item);
+            });
+
+            loadArchiveChart(id);
+        });
+
+        loadCurrentChart();
+        setInterval(() => {
+            if (currentMode === 'live') {
+                loadCurrentChart();
+            }
+        }, REFRESH_MS);
         document.addEventListener('visibilitychange', () => {
             if (!document.hidden) {
-                fetchChart();
+                if (currentMode === 'archive' && currentArchiveId) {
+                    loadArchiveChart(currentArchiveId);
+                } else {
+                    loadCurrentChart();
+                }
             }
         });
     </script>
