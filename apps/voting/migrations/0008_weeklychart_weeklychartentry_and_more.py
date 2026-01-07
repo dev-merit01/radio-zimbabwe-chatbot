@@ -54,11 +54,7 @@ class Migration(migrations.Migration):
                 'ordering': ['chart', 'rank'],
             },
         ),
-        migrations.RenameIndex(
-            model_name='rawvote',
-            new_name='voting_rawv_user_id_70590c_idx',
-            old_name='voting_rawv_user_id_vote_date_idx',
-        ),
+
         migrations.AddField(
             model_name='weeklychartentry',
             name='chart',
