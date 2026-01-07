@@ -15,6 +15,8 @@ from .models import (
     CleanedSongTally,
     VerifiedArtist,
     LLMDecisionLog,
+    WeeklyChart,
+    WeeklyChartEntry,
 )
 from .cleaning import CleaningService
 
@@ -1031,3 +1033,54 @@ class LLMDecisionLogAdmin(admin.ModelAdmin):
     
     def has_change_permission(self, request, obj=None):
         return False  # Read-only
+
+
+class WeeklyChartEntryInline(admin.TabularInline):
+    model = WeeklyChartEntry
+    extra = 0
+    readonly_fields = ('rank', 'title', 'artist', 'vote_count', 'previous_rank', 'weeks_on_chart', 'peak_rank')
+    can_delete = False
+    max_num = 0  # Prevent adding new entries inline
+    
+    def has_add_permission(self, request, obj=None):
+        return False
+
+
+@admin.register(WeeklyChart)
+class WeeklyChartAdmin(admin.ModelAdmin):
+    list_display = ('id', 'week_display', 'year', 'week_number', 'chart_size', 'total_votes', 'unique_songs', 'is_finalized', 'created_at')
+    list_filter = ('year', 'is_finalized', 'is_year_end', 'chart_size')
+    search_fields = ('year', 'week_number')
+    readonly_fields = ('week_start', 'week_end', 'week_number', 'year', 'total_votes', 'unique_songs', 'created_at', 'updated_at', 'finalized_at')
+    ordering = ['-year', '-week_number']
+    inlines = [WeeklyChartEntryInline]
+    
+    def week_display(self, obj):
+        return f"{obj.week_start.strftime('%b %d')} - {obj.week_end.strftime('%b %d, %Y')}"
+    week_display.short_description = 'Week'
+    
+    def has_add_permission(self, request):
+        return False  # Charts are auto-generated
+    
+
+@admin.register(WeeklyChartEntry)
+class WeeklyChartEntryAdmin(admin.ModelAdmin):
+    list_display = ('id', 'chart', 'rank', 'title', 'artist', 'vote_count', 'previous_rank', 'movement_display')
+    list_filter = ('chart__year', 'chart__week_number')
+    search_fields = ('title', 'artist', 'canonical_name')
+    readonly_fields = ('chart', 'rank', 'title', 'artist', 'vote_count', 'previous_rank', 'weeks_on_chart', 'peak_rank')
+    ordering = ['chart', 'rank']
+    
+    def movement_display(self, obj):
+        if obj.previous_rank is None:
+            return format_html('<span style="color: #22c55e;">NEW</span>')
+        diff = obj.previous_rank - obj.rank
+        if diff > 0:
+            return format_html('<span style="color: #22c55e;">▲ {}</span>', diff)
+        elif diff < 0:
+            return format_html('<span style="color: #ef4444;">▼ {}</span>', abs(diff))
+        return format_html('<span style="color: #8b94a1;">—</span>')
+    movement_display.short_description = 'Movement'
+    
+    def has_add_permission(self, request):
+        return False  # Entries are auto-generated

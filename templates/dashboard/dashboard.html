@@ -933,7 +933,7 @@
             <div class="sidebar-header">
                 <img src="{% static 'images/radioZim.jpg' %}" alt="Radio Zimbabwe" class="logo">
                 <div class="logo-text">
-                    <h1>RADIO CHARTS</h1>
+                    <h1>RADIO ZIMBABWE</h1>
                     <p id="season-year">2026 Season</p>
                 </div>
             </div>
@@ -1274,9 +1274,29 @@
             if (autoRefreshTimer) clearInterval(autoRefreshTimer);
             autoRefreshTimer = setInterval(() => {
                 if (currentMode === 'live' && !document.hidden) {
-                    loadCurrentChart();
+                    silentRefresh();
                 }
             }, REFRESH_INTERVAL);
+        }
+
+        // Silent refresh - updates data without showing loading spinner
+        async function silentRefresh() {
+            try {
+                const response = await fetch(`${API_BASE}/chart/today?limit=${currentLimit}`);
+                const data = await response.json();
+                
+                if (data.top100 && data.top100.length > 0) {
+                    chartData = data.top100;
+                    updateStats(chartData);
+                    renderChart(chartData);
+                    
+                    document.getElementById('chart-date').textContent = formatDate(data.week_end || data.date);
+                    document.getElementById('panel-footer').textContent = `Last updated: ${formatTime(data.updated_at)} • auto-refresh every 15s`;
+                }
+            } catch (error) {
+                console.error('Silent refresh error:', error);
+                // Silently fail - don't show error to user
+            }
         }
 
         async function loadCurrentChart() {
