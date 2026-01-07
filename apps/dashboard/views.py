@@ -94,9 +94,6 @@ def chart_today(request):
     
     # No fallback to raw data - only verified songs appear on dashboard
     # If no verified songs, data will be empty and dashboard shows "No votes yet"
-                'movement': 'new',
-                'is_verified': False,
-            })
     
     # Calculate total votes for the week
     total_week_votes = CleanedSongTally.objects.filter(
