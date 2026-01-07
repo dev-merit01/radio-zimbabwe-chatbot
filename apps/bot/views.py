@@ -24,7 +24,13 @@ from .bird_client import (
 logger = logging.getLogger(__name__)
 
 
-def _extract_message(payload: dict):
+def _extract_telegram_message(payload: dict) -> tuple[str | None, str, str | None]:
+    """
+    Extract chat_id, text, and media type from Telegram webhook payload.
+    
+    Returns:
+        (chat_id, text, media_type) - media_type is None for text messages
+    """
     message = (
         payload.get('message')
         or payload.get('edited_message')
@@ -32,11 +38,35 @@ def _extract_message(payload: dict):
         or payload.get('callback_query', {}).get('message')
     )
     if not message:
-        return None, ''
+        return None, '', None
+    
     chat = message.get('chat') or {}
     chat_id = chat.get('id')
+    
+    # Check for media types
+    media_type = None
+    if 'photo' in message:
+        media_type = 'photo'
+    elif 'video' in message:
+        media_type = 'video'
+    elif 'audio' in message:
+        media_type = 'audio'
+    elif 'voice' in message:
+        media_type = 'voice'
+    elif 'video_note' in message:
+        media_type = 'video_note'
+    elif 'document' in message:
+        media_type = 'document'
+    elif 'sticker' in message:
+        media_type = 'sticker'
+    elif 'location' in message:
+        media_type = 'location'
+    elif 'contact' in message:
+        media_type = 'contact'
+    
     text = message.get('text') or message.get('caption') or ''
-    return chat_id, text
+    return chat_id, text, media_type
+
 
 @csrf_exempt
 def telegram_webhook(request):
@@ -47,19 +77,31 @@ def telegram_webhook(request):
     except Exception:
         return HttpResponseBadRequest('Invalid JSON')
 
-    chat_id_raw, text = _extract_message(payload)
+    chat_id_raw, text, media_type = _extract_telegram_message(payload)
     if chat_id_raw is None:
         logger.warning("Webhook payload missing chat information: %s", payload)
         return HttpResponseBadRequest('No chat id')
 
     chat_id = str(chat_id_raw)
-    logger.info("Webhook: chat_id=%s, text=%s", chat_id, text[:50])
+    logger.info("Webhook: chat_id=%s, text=%s, media=%s", chat_id, text[:50] if text else '', media_type)
 
     try:
         get_telegram_client()
     except TelegramConfigurationError as exc:
         logger.error('Telegram configuration error: %s', exc)
         return JsonResponse({'ok': False, 'error': 'telegram_not_configured'}, status=500)
+
+    # Reject media messages with a helpful response
+    if media_type:
+        logger.info("Telegram webhook: Media message (%s) from %s, rejecting", media_type, chat_id)
+        rejection_msg = (
+            "❌ Sorry, I can only accept text votes.\n\n"
+            "Please send your vote as:\n"
+            "Artist - Song\n\n"
+            "Example: Winky D - Ijipita"
+        )
+        telegram_send_text_async(chat_id, rejection_msg)
+        return JsonResponse({'ok': True, 'message': 'Media rejected'})
 
     vs = VotingService(channel='telegram', user_ref=chat_id)
     response_text = vs.handle_incoming_text(text)
@@ -72,9 +114,9 @@ def telegram_webhook(request):
     return JsonResponse({'ok': True, 'message': response_text})
 
 
-def _extract_whatsapp_message(payload: dict) -> tuple[str | None, str]:
+def _extract_whatsapp_message(payload: dict) -> tuple[str | None, str, str | None]:
     """
-    Extract sender phone and message text from OneMsg webhook payload.
+    Extract sender phone, message text, and media type from OneMsg webhook payload.
     
     OneMsg webhook format:
     {
@@ -87,10 +129,13 @@ def _extract_whatsapp_message(payload: dict) -> tuple[str | None, str]:
             # OR other message types...
         }
     }
+    
+    Returns:
+        (sender, text, media_type) - media_type is None for text messages
     """
     sender = payload.get('sender')
     if not sender:
-        return None, ''
+        return None, '', None
     
     # Clean sender - remove @s.whatsapp.net suffix if present
     if '@' in sender:
@@ -100,6 +145,7 @@ def _extract_whatsapp_message(payload: dict) -> tuple[str | None, str]:
     
     # Try different message types in order of likelihood
     text = ''
+    media_type = None
     
     # Simple text message
     if 'conversation' in message_payload:
@@ -109,18 +155,34 @@ def _extract_whatsapp_message(payload: dict) -> tuple[str | None, str]:
     elif 'extendedTextMessage' in message_payload:
         text = message_payload['extendedTextMessage'].get('text', '')
     
-    # Image with caption
+    # Media messages - reject these
     elif 'imageMessage' in message_payload:
+        media_type = 'image'
         text = message_payload['imageMessage'].get('caption', '')
     
-    # Video with caption
     elif 'videoMessage' in message_payload:
+        media_type = 'video'
         text = message_payload['videoMessage'].get('caption', '')
     
-    # Document - we could extract filename but probably not useful for voting
-    # Reactions, protocol messages, audio - ignore for voting purposes
+    elif 'audioMessage' in message_payload:
+        media_type = 'audio'
     
-    return sender, text.strip()
+    elif 'documentMessage' in message_payload:
+        media_type = 'document'
+    
+    elif 'stickerMessage' in message_payload:
+        media_type = 'sticker'
+    
+    elif 'locationMessage' in message_payload:
+        media_type = 'location'
+    
+    elif 'contactMessage' in message_payload:
+        media_type = 'contact'
+    
+    elif 'ptvMessage' in message_payload:  # Voice/video note
+        media_type = 'voice'
+    
+    return sender, text.strip(), media_type
 
 
 @csrf_exempt
@@ -142,16 +204,32 @@ def whatsapp_webhook(request):
     
     logger.debug("WhatsApp webhook payload: %s", payload)
     
-    sender, text = _extract_whatsapp_message(payload)
+    sender, text, media_type = _extract_whatsapp_message(payload)
     
     if not sender:
         logger.warning("WhatsApp webhook: No sender in payload: %s", payload)
         return JsonResponse({'ok': True, 'message': 'No sender'})
     
+    # Reject media messages with a helpful response
+    if media_type:
+        logger.info("WhatsApp webhook: Media message (%s) from %s, rejecting", media_type, sender)
+        try:
+            get_whatsapp_client()
+            rejection_msg = (
+                "❌ Sorry, I can only accept text votes.\n\n"
+                "Please send your vote as:\n"
+                "Artist - Song\n\n"
+                "Example: Winky D - Ijipita"
+            )
+            whatsapp_send_text_async(sender, rejection_msg)
+        except WhatsAppConfigurationError:
+            pass
+        return JsonResponse({'ok': True, 'message': 'Media rejected'})
+    
     if not text:
-        # Ignore non-text messages (reactions, read receipts, etc.)
-        logger.debug("WhatsApp webhook: Non-text message from %s, ignoring", sender)
-        return JsonResponse({'ok': True, 'message': 'Non-text message ignored'})
+        # Ignore empty messages (reactions, read receipts, etc.)
+        logger.debug("WhatsApp webhook: Empty message from %s, ignoring", sender)
+        return JsonResponse({'ok': True, 'message': 'Empty message ignored'})
     
     logger.info("WhatsApp webhook: sender=%s, text=%s", sender, text[:50] if len(text) > 50 else text)
     

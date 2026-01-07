@@ -46,6 +46,19 @@ EMOJI_PATTERN = re.compile(
 # Maximum allowed emojis in a vote
 MAX_EMOJIS = 2
 
+# Words/phrases that should be rejected (greetings, spam, etc.)
+REJECTED_WORDS = {
+    'link', 'hie', 'hi', 'hello', 'hey', 'helo', 'hallo',
+    'good morning', 'good afternoon', 'good evening', 'good night',
+    'how are you', 'how r u', 'whats up', 'wassup', 'watsup',
+    'please', 'thanks', 'thank you', 'thanx',
+    'send', 'give', 'share', 'forward',
+    'join', 'subscribe', 'follow',
+    'click', 'tap', 'open', 'visit',
+    'free', 'win', 'winner', 'prize', 'money', 'cash',
+    'call', 'contact', 'number', 'phone',
+}
+
 
 def validate_vote_content(text: str) -> tuple[bool, str | None]:
     """
@@ -54,6 +67,8 @@ def validate_vote_content(text: str) -> tuple[bool, str | None]:
     Returns:
         (is_valid, error_message) - error_message is None if valid
     """
+    text_lower = text.lower().strip()
+    
     # Check for URLs/links
     if URL_PATTERN.search(text):
         return False, (
@@ -62,6 +77,17 @@ def validate_vote_content(text: str) -> tuple[bool, str | None]:
             "Artist - Song\n\n"
             "Example: Winky D - Ijipita"
         )
+    
+    # Check for rejected words/phrases (greetings, spam, etc.)
+    for word in REJECTED_WORDS:
+        # Check if the message IS just the word, or starts/ends with it
+        if text_lower == word or text_lower.startswith(word + ' ') or text_lower.startswith(word + ','):
+            return False, (
+                "👋 This is a voting platform.\n\n"
+                "To vote, send:\n"
+                "Artist - Song\n\n"
+                "Example: Winky D - Ijipita"
+            )
     
     # Check for excessive emojis
     emojis = EMOJI_PATTERN.findall(text)
@@ -95,6 +121,15 @@ def validate_vote_content(text: str) -> tuple[bool, str | None]:
     if sentence_enders > 2:
         return False, (
             "❌ Please send just the song vote.\n\n"
+            "Format: Artist - Song\n\n"
+            "Example: Winky D - Ijipita"
+        )
+    
+    # Check for only emojis (no actual text)
+    text_without_emojis = EMOJI_PATTERN.sub('', text).strip()
+    if len(text_without_emojis) < 3:
+        return False, (
+            "❌ Please send a valid vote.\n\n"
             "Format: Artist - Song\n\n"
             "Example: Winky D - Ijipita"
         )

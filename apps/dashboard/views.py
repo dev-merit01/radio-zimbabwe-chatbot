@@ -63,61 +63,37 @@ def chart_today(request):
         .order_by('-week_votes')[:limit]
     )
     
-    if cleaned_songs.exists():
-        data = []
-        for rank, song in enumerate(cleaned_songs, start=1):
-            prev_rank = prev_rankings.get(song.id)
-            if prev_rank:
-                diff = prev_rank - rank
-                if diff > 0:
-                    movement = f'+{diff}'
-                elif diff < 0:
-                    movement = str(diff)
-                else:
-                    movement = '='
+    # Only show verified/cleaned songs on the dashboard
+    data = []
+    for rank, song in enumerate(cleaned_songs, start=1):
+        prev_rank = prev_rankings.get(song.id)
+        if prev_rank:
+            diff = prev_rank - rank
+            if diff > 0:
+                movement = f'+{diff}'
+            elif diff < 0:
+                movement = str(diff)
             else:
-                movement = 'new'
-            
-            data.append({
-                'rank': rank,
-                'title': song.title,
-                'artists': song.artist,
-                'display_name': song.canonical_name,
-                'album': song.album or '',
-                'image_url': song.image_url or '',
-                'spotify_track_id': song.spotify_track_id or '',
-                'count': song.week_votes or 0,
-                'previous_rank': prev_rank,
-                'movement': movement,
-                'is_verified': True,
-            })
-    else:
-        # Fallback to raw data for current week
-        raw_tallies = (
-            RawSongTally.objects
-            .filter(date__gte=week_start, date__lte=week_end)
-            .values('match_key', 'display_name')
-            .annotate(total_votes=Sum('count'))
-            .order_by('-total_votes')[:limit]
-        )
+                movement = '='
+        else:
+            movement = 'new'
         
-        data = []
-        for rank, tally in enumerate(raw_tallies, start=1):
-            parts = tally['display_name'].split(' - ', 1)
-            if len(parts) == 2:
-                artist, song = parts
-            else:
-                artist = "Unknown"
-                song = tally['display_name']
-            
-            data.append({
-                'rank': rank,
-                'title': song,
-                'artists': artist,
-                'display_name': tally['display_name'],
-                'match_key': tally['match_key'],
-                'count': tally['total_votes'],
-                'previous_rank': None,
+        data.append({
+            'rank': rank,
+            'title': song.title,
+            'artists': song.artist,
+            'display_name': song.canonical_name,
+            'album': song.album or '',
+            'image_url': song.image_url or '',
+            'spotify_track_id': song.spotify_track_id or '',
+            'count': song.week_votes or 0,
+            'previous_rank': prev_rank,
+            'movement': movement,
+            'is_verified': True,
+        })
+    
+    # No fallback to raw data - only verified songs appear on dashboard
+    # If no verified songs, data will be empty and dashboard shows "No votes yet"
                 'movement': 'new',
                 'is_verified': False,
             })
