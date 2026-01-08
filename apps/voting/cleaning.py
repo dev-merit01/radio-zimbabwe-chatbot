@@ -1,18 +1,17 @@
 """
 Data Cleaning Service for Radio Zimbabwe Voting Bot.
 
-Enhanced Cleaning Flow with LLM Integration (Anthropic Claude):
+HYBRID APPROACH - Strong Fuzzy First, LLM Only on Button Press:
+
 1️⃣ Receive raw vote - stored in RawVote/RawSongTally
 2️⃣ Normalize text - lowercase, trim spaces, remove unwanted characters
-3️⃣ Local fuzzy matching - compare to existing VERIFIED CleanedSongs
-   - If highly similar (≥90%) → auto-merge & correct vote to match verified
-   - If unsure (75-90%) → use LLM for smart matching
-   - If low match (<75%) → use LLM to decide: match/reject/new
-4️⃣ LLM Matching (Anthropic Claude) - for uncertain cases
-   - Analyze vote against verified songs database
-   - If LLM finds high-confidence match → auto-link & correct vote
-   - If LLM unsure → leave as pending for manual review
-5️⃣ Vote Correction - when matched, update vote to use verified song's canonical name
+3️⃣ Strong fuzzy matching - compare to VERIFIED CleanedSongs
+   - If highly similar (≥92%) AND confidence gap (≥10%) → auto-merge
+   - Otherwise → create PENDING entry for manual review
+4️⃣ LLM Matching (GPT-4o-mini) - ONLY via admin button press
+   - Admin clicks "LLM Match" button for pending items
+   - Reviews and approves/rejects LLM suggestions
+5️⃣ New unique songs stay PENDING until manually verified
 """
 import logging
 import re
@@ -33,19 +32,21 @@ from .models import (
     LLMDecisionLog,
     normalize_text,
 )
+from .matching import (
+    combined_similarity, 
+    token_overlap_ratio, 
+    AUTO_MERGE_THRESHOLD, 
+    CONFIDENCE_GAP,
+    MIN_TOKEN_OVERLAP,
+)
 
 logger = logging.getLogger(__name__)
 
-# Similarity thresholds for local matching
-AUTO_MERGE_THRESHOLD = 0.90      # Auto-merge to existing CleanedSong
-LLM_CHECK_THRESHOLD = 0.75       # Use LLM if between 75-90%
-NEW_SONG_THRESHOLD = 0.75        # Below this, treat as new song (send to LLM)
+# Similarity thresholds (imported from matching.py for consistency)
+# AUTO_MERGE_THRESHOLD = 0.92  # From matching.py
+# CONFIDENCE_GAP = 0.10        # From matching.py
 
-# LLM matching thresholds
-LLM_HIGH_CONFIDENCE = 'high'     # Auto-link LLM matches with high confidence
-LLM_MEDIUM_CONFIDENCE = 'medium' # Auto-link LLM matches with medium confidence
-
-# Spotify matching thresholds (legacy, keeping for enrichment)
+# Spotify matching thresholds (for enrichment only)
 SPOTIFY_CONFIRM_THRESHOLD = 0.80  # Accept Spotify match if ≥80%
 SPOTIFY_ARTIST_WEIGHT = 0.4       # Weight for artist similarity
 SPOTIFY_TITLE_WEIGHT = 0.6        # Weight for title similarity
@@ -75,9 +76,12 @@ def find_best_local_match(
     title: str, 
     cleaned_songs: List[CleanedSong],
     verified_only: bool = True
-) -> Optional[Tuple[CleanedSong, float]]:
+) -> Optional[Tuple[CleanedSong, float, float]]:
     """
-    Find the best matching CleanedSong using fuzzy matching.
+    Find the best matching CleanedSong using improved fuzzy matching.
+    
+    Uses combined similarity (character + token based) and returns
+    both best and second-best scores for confidence gap check.
     
     Args:
         artist: Artist name to match
@@ -86,13 +90,12 @@ def find_best_local_match(
         verified_only: If True, only match against verified songs
     
     Returns:
-        Tuple of (CleanedSong, similarity_score) or None if no good match.
+        Tuple of (CleanedSong, best_score, second_best_score) or None if no match.
     """
     if not cleaned_songs:
         return None
     
-    best_match = None
-    best_score = 0
+    scores: List[Tuple[CleanedSong, float]] = []
     
     clean_artist = clean_text(artist)
     clean_title = clean_text(title)
@@ -105,44 +108,48 @@ def find_best_local_match(
         song_artist = clean_text(song.artist)
         song_title = clean_text(song.title)
         
-        # Calculate weighted similarity
-        artist_score = string_similarity(clean_artist, song_artist)
-        title_score = string_similarity(clean_title, song_title)
-        combined_score = (artist_score * SPOTIFY_ARTIST_WEIGHT) + (title_score * SPOTIFY_TITLE_WEIGHT)
+        # Use combined similarity (character + token based)
+        artist_score = combined_similarity(clean_artist, song_artist)
+        title_score = combined_similarity(clean_title, song_title)
         
-        if combined_score > best_score:
-            best_score = combined_score
-            best_match = song
+        # Check token overlap for additional safety
+        artist_tokens = token_overlap_ratio(clean_artist, song_artist)
+        title_tokens = token_overlap_ratio(clean_title, song_title)
+        
+        # Weighted score: title matters more
+        score = (artist_score * SPOTIFY_ARTIST_WEIGHT) + (title_score * SPOTIFY_TITLE_WEIGHT)
+        
+        # Boost if good token overlap on both
+        if artist_tokens >= MIN_TOKEN_OVERLAP and title_tokens >= MIN_TOKEN_OVERLAP:
+            score = max(score, (artist_score + title_score) / 2)
+        
+        scores.append((song, score))
     
-    if best_match and best_score >= NEW_SONG_THRESHOLD:
-        return (best_match, best_score)
-    return None
+    if not scores:
+        return None
+    
+    # Sort by score descending
+    scores.sort(key=lambda x: x[1], reverse=True)
+    
+    best_song, best_score = scores[0]
+    second_best_score = scores[1][1] if len(scores) > 1 else 0.0
+    
+    return (best_song, best_score, second_best_score)
 
 
 class CleaningService:
     """
-    Service for cleaning and grouping raw votes with LLM and Spotify integration.
+    Service for cleaning and grouping raw votes.
     
-    Primary matching flow:
-    1. Local fuzzy match against VERIFIED songs (≥90% = auto-merge)
-    2. LLM matching for uncertain cases (Anthropic Claude)
-    3. Spotify enrichment for verified matches
-    4. Create pending entries for truly new songs
+    HYBRID APPROACH:
+    1. Strong fuzzy match against VERIFIED songs (≥92% + gap = auto-merge)
+    2. Everything else → PENDING for manual review
+    3. LLM (GPT-4o-mini) only called via admin button, not automatic
     """
     
     def __init__(self):
         self._spotify_enabled = True
-        self._llm_enabled = True
         self._spotify_client = None
-    
-    def _get_llm_matcher(self):
-        """Lazy load LLM matcher module."""
-        try:
-            from . import llm_matcher
-            return llm_matcher
-        except ImportError:
-            logger.warning("LLM matcher module not available")
-            return None
     
     def _get_spotify_search(self):
         """Lazy load Spotify search module."""
@@ -179,45 +186,6 @@ class CleaningService:
             logger.warning(f"Spotify search failed: {e}")
             return None
     
-    def _match_with_llm(self, display_name: str, match_key: str, verified_songs: List[Dict]) -> Optional[Dict]:
-        """
-        Use LLM to match a vote against verified songs.
-        
-        Returns:
-            Dict with match result or None if LLM is not available/fails
-        """
-        if not self._llm_enabled:
-            return None
-        
-        llm = self._get_llm_matcher()
-        if not llm:
-            return None
-        
-        try:
-            # Use single vote matching
-            vote_data = [{
-                'display_name': display_name,
-                'match_key': match_key,
-                'vote_count': 1,
-            }]
-            
-            results = llm.match_votes_with_llm(vote_data, verified_songs)
-            
-            if results and len(results) > 0:
-                result = results[0]
-                return {
-                    'matched_song_id': result.matched_song_id,
-                    'matched_song_name': result.matched_song_name,
-                    'confidence': result.confidence,
-                    'reasoning': result.reasoning,
-                    'should_auto_link': result.should_auto_link,
-                }
-            return None
-            
-        except Exception as e:
-            logger.warning(f"LLM matching failed: {e}")
-            return None
-    
     def _find_by_spotify_id(self, spotify_id: str) -> Optional[CleanedSong]:
         """Find CleanedSong by Spotify track ID."""
         try:
@@ -225,36 +193,32 @@ class CleaningService:
         except CleanedSong.DoesNotExist:
             return None
     
-    def process_new_votes(self, date=None, use_spotify=True, use_llm=True):
+    def process_new_votes(self, date=None, use_spotify=True):
         """
         Process raw votes and create/update cleaned entries.
         
-        Enhanced Flow with LLM:
+        HYBRID Flow (Strong Fuzzy, Manual LLM):
         1. Get all match_keys from raw tallies for the date
         2. For each unmapped match_key:
-           a. Try local fuzzy match against existing VERIFIED CleanedSongs
-           b. If ≥90% → auto-merge & correct vote to match verified song
-           c. If 75-90% → use LLM for smart matching
-           d. If <75% or no local match → use LLM to decide
-           e. If LLM finds high/medium confidence match → auto-link & correct
-           f. If LLM unsure → create pending CleanedSong for manual review
+           a. Try strong fuzzy match against VERIFIED CleanedSongs
+           b. If ≥92% AND confidence gap ≥10% → auto-merge
+           c. Otherwise → create PENDING entry for manual review
         3. Update CleanedSongTally counts for verified songs
+        4. LLM matching is done separately via admin button
         
         Args:
             date: Date to process (default: today)
             use_spotify: Whether to use Spotify for enrichment
-            use_llm: Whether to use LLM for matching
         
         Returns:
-            Dict with stats: {'matched': N, 'pending': N, 'llm_matched': N}
+            Dict with stats: {'auto_merged': N, 'new': N, 'pending_review': N}
         """
         if date is None:
             date = timezone.localdate()
         
         self._spotify_enabled = use_spotify
-        self._llm_enabled = use_llm
         
-        logger.info(f"Processing votes for {date} (LLM: {'enabled' if use_llm else 'disabled'}, Spotify: {'enabled' if use_spotify else 'disabled'})")
+        logger.info(f"Processing votes for {date} (Spotify: {'enabled' if use_spotify else 'disabled'})")
         
         # Get all match_keys from today's raw tallies
         raw_tallies = RawSongTally.objects.filter(date=date)
@@ -264,26 +228,12 @@ class CleaningService:
             MatchKeyMapping.objects.values_list('match_key', flat=True)
         )
         
-        # Get VERIFIED CleanedSongs for similarity matching (only match against verified!)
+        # Get VERIFIED CleanedSongs for similarity matching
         verified_songs = list(CleanedSong.objects.filter(status='verified'))
-        
-        # Prepare verified songs list for LLM
-        verified_songs_data = [
-            {
-                'id': song.id,
-                'artist': song.artist,
-                'title': song.title,
-                'canonical_name': song.canonical_name,
-                'spotify_id': song.spotify_track_id or '',
-            }
-            for song in verified_songs
-        ]
         
         stats = {
             'new': 0,
             'auto_merged': 0,
-            'llm_matched': 0,
-            'spotify_enriched': 0,
             'pending_review': 0,
         }
         
@@ -291,20 +241,12 @@ class CleaningService:
             if tally.match_key in existing_mappings:
                 continue  # Already mapped
             
-            result = self._process_single_tally(tally, verified_songs, verified_songs_data)
+            result = self._process_single_tally(tally, verified_songs)
             
             if result['action'] == 'auto_merged':
                 stats['auto_merged'] += 1
-            elif result['action'] == 'llm_matched':
-                stats['llm_matched'] += 1
-            elif result['action'] == 'spotify_matched':
-                stats['spotify_enriched'] += 1
-                if result.get('cleaned_song'):
-                    verified_songs.append(result['cleaned_song'])
             elif result['action'] == 'new':
                 stats['new'] += 1
-                if result.get('cleaned_song'):
-                    verified_songs.append(result['cleaned_song'])
             
             if result.get('pending'):
                 stats['pending_review'] += 1
@@ -315,14 +257,16 @@ class CleaningService:
         logger.info(f"Processing complete: {stats}")
         return stats
     
-    def _process_single_tally(self, tally: RawSongTally, verified_songs: List[CleanedSong], verified_songs_data: List[Dict]) -> Dict:
+    def _process_single_tally(self, tally: RawSongTally, verified_songs: List[CleanedSong]) -> Dict:
         """
-        Process a single raw tally and return the result.
+        Process a single raw tally using STRONG FUZZY matching only.
         
-        LLM-only matching flow (no fuzzy matching to avoid false positives):
-        1. Use LLM (Anthropic Claude) for smart matching against VERIFIED songs
-        2. If LLM high/medium confidence → auto-link to verified song
-        3. If LLM unsure → create pending entry for manual review
+        NO automatic LLM - LLM is only called via admin button.
+        
+        Flow:
+        1. Try strong fuzzy match against VERIFIED songs
+        2. If match ≥92% AND confidence gap ≥10% → auto-merge
+        3. Otherwise → create PENDING entry for manual review
         
         Returns:
             Dict with 'action', 'cleaned_song', 'pending' keys
@@ -338,43 +282,36 @@ class CleaningService:
         artist = artist.strip()
         title = title.strip()
         
-        # Step 1: Use LLM matching ONLY (no fuzzy matching to avoid false positives)
-        if self._llm_enabled and verified_songs_data:
-            llm_result = self._match_with_llm(tally.display_name, tally.match_key, verified_songs_data)
-            
-            if llm_result and llm_result.get('matched_song_id'):
-                confidence = llm_result.get('confidence', 'low')
-                
-                # Auto-link high and medium confidence LLM matches
-                if confidence in (LLM_HIGH_CONFIDENCE, LLM_MEDIUM_CONFIDENCE):
-                    matched_song_id = llm_result['matched_song_id']
-                    matched_song = next((s for s in verified_songs if s.id == matched_song_id), None)
-                    
-                    if matched_song:
-                        self._create_mapping(tally, matched_song, is_auto=True)
-                        self._log_llm_decision(
-                            tally.display_name, 'raw_vote', 'auto_merge', confidence,
-                            llm_result.get('reasoning', 'LLM matched'), matched_song
-                        )
-                        logger.info(f"LLM matched '{tally.display_name}' → '{matched_song.canonical_name}' ({confidence})")
-                        return {'action': 'llm_matched', 'cleaned_song': matched_song, 'pending': False}
-            
-            # LLM didn't find a confident match - leave as pending
-            logger.info(f"LLM no confident match for '{tally.display_name}' - creating pending")
+        # Step 1: Try strong fuzzy match against verified songs
+        match_result = find_best_local_match(artist, title, verified_songs, verified_only=True)
         
-        # Step 2: No LLM match - create pending song for manual review
+        if match_result:
+            matched_song, best_score, second_best_score = match_result
+            confidence_gap = best_score - second_best_score
+            
+            # SAFE AUTO-MERGE: Only if high score AND clear winner
+            if best_score >= AUTO_MERGE_THRESHOLD and confidence_gap >= CONFIDENCE_GAP:
+                self._create_mapping(tally, matched_song, is_auto=True)
+                self._log_decision(
+                    tally.display_name, 'raw_vote', 'auto_merge', 'high',
+                    f'Fuzzy match: {best_score:.2f} (gap: {confidence_gap:.2f})', matched_song
+                )
+                logger.info(f"Auto-merged '{tally.display_name}' → '{matched_song.canonical_name}' (score: {best_score:.2f})")
+                return {'action': 'auto_merged', 'cleaned_song': matched_song, 'pending': False}
+        
+        # Step 2: No confident match - create PENDING song for manual review
         cleaned_song = self._create_cleaned_song_from_tally(tally)
         self._create_mapping(tally, cleaned_song, is_auto=True)
-        self._log_llm_decision(
+        self._log_decision(
             tally.display_name, 'raw_vote', 'new', 'low',
-            'No confident LLM match - pending manual review', None
+            'No confident fuzzy match - pending manual review', None
         )
-        logger.info(f"Created new pending song: '{cleaned_song.canonical_name}'")
+        logger.info(f"Created pending song: '{cleaned_song.canonical_name}'")
         return {'action': 'new', 'cleaned_song': cleaned_song, 'pending': True}
     
-    def _log_llm_decision(self, input_text: str, input_type: str, action: str, 
-                          confidence: str, reasoning: str, matched_song: Optional[CleanedSong]):
-        """Log an LLM/auto decision for auditing."""
+    def _log_decision(self, input_text: str, input_type: str, action: str, 
+                      confidence: str, reasoning: str, matched_song: Optional[CleanedSong]):
+        """Log a matching decision for auditing."""
         try:
             LLMDecisionLog.objects.create(
                 input_text=input_text[:512],

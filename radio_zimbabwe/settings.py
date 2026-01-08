@@ -17,6 +17,7 @@ env = environ.Env(
     GEMINI_API_KEY=(str, ''),
     COHERE_API_KEY=(str, ''),
     ANTHROPIC_API_KEY=(str, ''),
+    OPENAI_API_KEY=(str, ''),
     # OneMsg.io WhatsApp API credentials (legacy)
     ONEMSG_APP_KEY=(str, ''),
     ONEMSG_AUTH_KEY=(str, ''),
@@ -148,8 +149,11 @@ GEMINI_API_KEY = env('GEMINI_API_KEY')
 # Cohere API (for LLM vote matching - legacy)
 COHERE_API_KEY = env('COHERE_API_KEY')
 
-# Anthropic API (for LLM vote matching)
+# Anthropic API (for LLM vote matching - legacy)
 ANTHROPIC_API_KEY = env('ANTHROPIC_API_KEY')
+
+# OpenAI API (for LLM vote matching)
+OPENAI_API_KEY = env('OPENAI_API_KEY')
 
 # OneMsg.io WhatsApp API (legacy)
 ONEMSG_APP_KEY = env('ONEMSG_APP_KEY')

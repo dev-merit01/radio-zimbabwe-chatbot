@@ -1,5 +1,5 @@
 """
-LLM-powered vote matching using Anthropic Claude.
+LLM-powered vote matching using OpenAI GPT-4o-mini.
 
 This module handles messy votes that don't follow the "artist - song" format:
 - Just a song name: "Ibotso"
@@ -8,6 +8,7 @@ This module handles messy votes that don't follow the "artist - song" format:
 - Typos: "winkyd ijipitha"
 
 The LLM matches these against your verified CleanedSong database.
+Only called manually via admin button - not automatic.
 """
 import json
 import logging
@@ -34,18 +35,18 @@ logger = logging.getLogger(__name__)
 # Maximum songs to include in prompt (to stay within token limits)
 MAX_SONGS_IN_PROMPT = 500  # Claude can handle larger contexts
 # Batch size for processing
-BATCH_SIZE = 20  # Claude handles larger batches well
+BATCH_SIZE = 20  # GPT-4o-mini handles larger batches well
 
-# Anthropic API settings
-ANTHROPIC_API_URL = "https://api.anthropic.com/v1/messages"
-ANTHROPIC_MODEL = "claude-3-haiku-20240307"  # Fast and cost-effective model
+# OpenAI API settings
+OPENAI_API_URL = "https://api.openai.com/v1/chat/completions"
+OPENAI_MODEL = "gpt-4o-mini"  # Fast and cost-effective model
 
 
-def get_anthropic_api_key() -> str:
-    """Get Anthropic API key from settings."""
-    api_key = getattr(settings, 'ANTHROPIC_API_KEY', '')
+def get_openai_api_key() -> str:
+    """Get OpenAI API key from settings."""
+    api_key = getattr(settings, 'OPENAI_API_KEY', '')
     if not api_key:
-        raise RuntimeError('ANTHROPIC_API_KEY is not configured in .env')
+        raise RuntimeError('OPENAI_API_KEY is not configured in .env')
     return api_key
 
 
@@ -79,34 +80,39 @@ RULES:
 IMPORTANT: You must match to songs in the provided list ONLY. Do not invent matches."""
 
 
-def call_anthropic_api(prompt: str) -> str:
-    """Call Anthropic Claude API and return the response text."""
-    api_key = get_anthropic_api_key()
+def call_openai_api(prompt: str) -> str:
+    """Call OpenAI GPT-4o-mini API and return the response text."""
+    api_key = get_openai_api_key()
     
     headers = {
-        "x-api-key": api_key,
-        "anthropic-version": "2023-06-01",
+        "Authorization": f"Bearer {api_key}",
         "Content-Type": "application/json",
     }
     
     payload = {
-        "model": ANTHROPIC_MODEL,
+        "model": OPENAI_MODEL,
         "max_tokens": 4096,
-        "system": SYSTEM_PROMPT,
         "messages": [
+            {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": prompt}
         ],
         "temperature": 0.1,
     }
     
-    response = requests.post(ANTHROPIC_API_URL, headers=headers, json=payload, timeout=120)
+    response = requests.post(OPENAI_API_URL, headers=headers, json=payload, timeout=120)
     response.raise_for_status()
     
     data = response.json()
-    content = data.get("content", [])
-    if content and len(content) > 0:
-        return content[0].get("text", "")
+    choices = data.get("choices", [])
+    if choices and len(choices) > 0:
+        return choices[0].get("message", {}).get("content", "")
     return ""
+
+
+# Backward compatibility alias
+def call_anthropic_api(prompt: str) -> str:
+    """Legacy alias - now calls OpenAI."""
+    return call_openai_api(prompt)
 
 
 def get_verified_songs_list() -> List[Dict]:

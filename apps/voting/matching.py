@@ -3,21 +3,36 @@ Fuzzy matching and verified artist integration for vote normalization.
 
 This module provides intelligent matching to group similar votes together,
 even with typos or spelling variations.
+
+HYBRID APPROACH:
+- Strong fuzzy matching handles obvious cases automatically
+- Uncertain cases stay "pending" for manual review
+- LLM (GPT-4o-mini) only called via admin button for pending items
 """
 import re
 from functools import lru_cache
 from difflib import SequenceMatcher
-from typing import Optional
+from typing import Optional, Tuple, List
 from django.db.models import Q
 
 from .models import VerifiedArtist, RawSongTally, normalize_text
 from .text_cleaning import clean_vote_text, correct_artist_typo
 
 
-# Similarity threshold for fuzzy matching (0.0 to 1.0)
-# 0.85 = 85% similar (allows minor typos)
-ARTIST_SIMILARITY_THRESHOLD = 0.85
-SONG_SIMILARITY_THRESHOLD = 0.80
+# =============================================================================
+# SIMILARITY THRESHOLDS (tuned for safety - prefer false negatives over false positives)
+# =============================================================================
+
+# For fuzzy matching against existing tallies
+ARTIST_SIMILARITY_THRESHOLD = 0.88  # Stricter for artist names
+SONG_SIMILARITY_THRESHOLD = 0.82    # Slightly more lenient for song titles
+
+# For auto-merge to verified songs (must be very confident)
+AUTO_MERGE_THRESHOLD = 0.92         # Only auto-merge if 92%+ similar
+CONFIDENCE_GAP = 0.10               # Best match must beat 2nd best by 10%
+
+# For token-based matching
+MIN_TOKEN_OVERLAP = 0.6             # At least 60% of tokens must match
 
 
 def similarity_ratio(a: str, b: str) -> float:
@@ -26,6 +41,42 @@ def similarity_ratio(a: str, b: str) -> float:
     Returns a value between 0.0 (completely different) and 1.0 (identical).
     """
     return SequenceMatcher(None, a.lower(), b.lower()).ratio()
+
+
+def tokenize(text: str) -> set:
+    """Split text into lowercase tokens (words)."""
+    return set(re.findall(r'\w+', text.lower()))
+
+
+def token_overlap_ratio(a: str, b: str) -> float:
+    """
+    Calculate token overlap ratio between two strings.
+    More robust to word reordering than character-based similarity.
+    """
+    tokens_a = tokenize(a)
+    tokens_b = tokenize(b)
+    
+    if not tokens_a or not tokens_b:
+        return 0.0
+    
+    intersection = tokens_a & tokens_b
+    union = tokens_a | tokens_b
+    
+    # Jaccard similarity
+    return len(intersection) / len(union) if union else 0.0
+
+
+def combined_similarity(a: str, b: str) -> float:
+    """
+    Calculate combined similarity score using multiple methods.
+    Returns a weighted average favoring stricter matching.
+    """
+    char_sim = similarity_ratio(a, b)
+    token_sim = token_overlap_ratio(a, b)
+    
+    # Weight character similarity more (catches typos)
+    # but require decent token overlap too
+    return (char_sim * 0.7) + (token_sim * 0.3)
 
 
 def levenshtein_distance(s1: str, s2: str) -> int:
@@ -296,62 +347,84 @@ def find_song_by_title_only(song_raw: str) -> Optional[tuple[str, str, str, str]
 
 
 # ============================================================
-# Match against pre-loaded CleanedSong database
+# Match against pre-loaded CleanedSong database (IMPROVED)
 # ============================================================
 
-def match_against_known_songs(artist_input: str, song_input: str, threshold: float = 0.75) -> Optional[tuple[str, str, str, str]]:
+def match_against_known_songs(
+    artist_input: str, 
+    song_input: str, 
+    threshold: float = AUTO_MERGE_THRESHOLD
+) -> Optional[tuple[str, str, str, str]]:
     """
-    Match user input against pre-loaded CleanedSong database.
+    Match user input against verified CleanedSong database.
     
-    This provides much better matching accuracy when songs are pre-loaded.
+    Uses SAFE matching with confidence gap to prevent false positives:
+    - Only returns a match if best score >= threshold
+    - AND best score beats second-best by CONFIDENCE_GAP
     
     Args:
         artist_input: Raw artist name from user
         song_input: Raw song title from user
-        threshold: Minimum similarity score (0.0 to 1.0)
+        threshold: Minimum similarity score (default: AUTO_MERGE_THRESHOLD)
         
     Returns:
-        Tuple of (artist, title, match_key, display_name) or None if no match
+        Tuple of (artist, title, match_key, display_name) or None if no confident match
     """
     from .models import CleanedSong
     
     artist_norm = normalize_text(artist_input)
     song_norm = normalize_text(song_input)
     
-    best_match = None
-    best_score = 0.0
+    # Collect all scores for confidence gap check
+    scores: List[Tuple[CleanedSong, float]] = []
     
-    # Get verified songs for better matching
+    # Get verified songs only
     verified_songs = CleanedSong.objects.filter(status='verified')
     
     for song in verified_songs:
         artist_db = normalize_text(song.artist)
         title_db = normalize_text(song.title)
         
-        # Calculate combined score (weighted: song title matters more)
-        artist_score = similarity_ratio(artist_norm, artist_db)
-        title_score = similarity_ratio(song_norm, title_db)
+        # Use combined similarity (character + token based)
+        artist_score = combined_similarity(artist_norm, artist_db)
+        title_score = combined_similarity(song_norm, title_db)
         
-        # Combined score: 40% artist, 60% title
+        # Also check token overlap specifically
+        artist_token_overlap = token_overlap_ratio(artist_norm, artist_db)
+        title_token_overlap = token_overlap_ratio(song_norm, title_db)
+        
+        # Combined score: 40% artist, 60% title (title is more unique)
         combined_score = (artist_score * 0.4) + (title_score * 0.6)
         
-        # Also check if either matches very well
-        if artist_score >= 0.9 and title_score >= 0.7:
-            combined_score = max(combined_score, 0.85)
-        if title_score >= 0.9 and artist_score >= 0.6:
-            combined_score = max(combined_score, 0.80)
+        # Boost if both artist and title have good token overlap
+        if artist_token_overlap >= MIN_TOKEN_OVERLAP and title_token_overlap >= MIN_TOKEN_OVERLAP:
+            combined_score = max(combined_score, (artist_score + title_score) / 2)
         
-        if combined_score > best_score and combined_score >= threshold:
-            best_score = combined_score
-            best_match = song
+        # Strong boost for near-exact matches
+        if artist_score >= 0.95 and title_score >= 0.85:
+            combined_score = max(combined_score, 0.95)
+        if title_score >= 0.95 and artist_score >= 0.75:
+            combined_score = max(combined_score, 0.90)
+        
+        scores.append((song, combined_score))
     
-    if best_match:
-        match_key = f"{normalize_text(best_match.artist)}::{normalize_text(best_match.title)}"
+    if not scores:
+        return None
+    
+    # Sort by score descending
+    scores.sort(key=lambda x: x[1], reverse=True)
+    
+    best_song, best_score = scores[0]
+    second_best_score = scores[1][1] if len(scores) > 1 else 0.0
+    
+    # SAFETY CHECK: Require both threshold AND confidence gap
+    if best_score >= threshold and (best_score - second_best_score) >= CONFIDENCE_GAP:
+        match_key = f"{normalize_text(best_song.artist)}::{normalize_text(best_song.title)}"
         return (
-            best_match.artist,
-            best_match.title,
+            best_song.artist,
+            best_song.title,
             match_key,
-            best_match.canonical_name
+            best_song.canonical_name
         )
     
     return None
