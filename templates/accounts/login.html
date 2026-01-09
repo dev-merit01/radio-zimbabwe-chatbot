@@ -1,0 +1,70 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Login</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #0f1419;
+            --bg-secondary: #1a1f26;
+            --border-color: #30363d;
+            --text-primary: #ffffff;
+            --text-secondary: #8b949e;
+            --accent-gold: #f59e0b;
+        }
+        body { font-family: 'Inter', sans-serif; background: var(--bg-primary); color: var(--text-primary); margin: 0; }
+        .wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
+        .card { width: 100%; max-width: 420px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 14px; padding: 22px; }
+        h1 { margin: 0 0 8px; font-size: 20px; }
+        p { margin: 0 0 18px; color: var(--text-secondary); font-size: 13px; }
+        label { display:block; margin: 12px 0 6px; font-size: 13px; color: var(--text-secondary); }
+        input { width:100%; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border-color); background: transparent; color: var(--text-primary); }
+        .btn { margin-top: 16px; width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid rgba(245, 158, 11, 0.4); background: rgba(245, 158, 11, 0.08); color: var(--text-primary); font-weight: 600; cursor: pointer; }
+        .btn:hover { border-color: var(--accent-gold); }
+        .err { margin-top: 10px; color: #ef4444; font-size: 13px; }
+        .links { margin-top: 14px; font-size: 13px; color: var(--text-secondary); }
+        a { color: var(--accent-gold); text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        ul.messages { list-style: none; padding: 0; margin: 0 0 10px; }
+        ul.messages li { margin: 0 0 8px; color: #ef4444; font-size: 13px; }
+    </style>
+</head>
+<body>
+    <div class="wrap">
+        <div class="card">
+            <h1>Login</h1>
+            <p>Use your username and password to view the dashboard.</p>
+
+            {% if messages %}
+                <ul class="messages">
+                    {% for message in messages %}
+                        <li>{{ message }}</li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
+
+            <form method="post">
+                {% csrf_token %}
+                {% if next %}<input type="hidden" name="next" value="{{ next }}" />{% endif %}
+
+                <label for="id_username">Username</label>
+                <input id="id_username" name="username" type="text" autocomplete="username" required />
+
+                <label for="id_password">Password</label>
+                <input id="id_password" name="password" type="password" autocomplete="current-password" required />
+
+                <button class="btn" type="submit">Login</button>
+            </form>
+
+            <div class="links">
+                Don’t have an account? <a href="{% url 'accounts:register' %}{% if next %}?next={{ next|urlencode }}{% endif %}">Create one</a>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

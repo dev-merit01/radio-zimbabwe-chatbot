@@ -115,9 +115,12 @@ def call_anthropic_api(prompt: str) -> str:
     return call_openai_api(prompt)
 
 
-def get_verified_songs_list() -> List[Dict]:
+def get_verified_songs_list(station: str = None) -> List[Dict]:
     """Get list of verified songs for the prompt with enriched data."""
-    songs = CleanedSong.objects.filter(status='verified').order_by('artist', 'title')[:MAX_SONGS_IN_PROMPT]
+    queryset = CleanedSong.objects.filter(status='verified')
+    if station:
+        queryset = queryset.filter(station=station)
+    songs = queryset.order_by('artist', 'title')[:MAX_SONGS_IN_PROMPT]
     return [
         {
             'id': song.id,
@@ -130,24 +133,32 @@ def get_verified_songs_list() -> List[Dict]:
     ]
 
 
-def get_pending_songs(limit: int = 100) -> List[CleanedSong]:
+def get_pending_songs(limit: int = 100, station: str = None) -> List[CleanedSong]:
     """
     Get CleanedSong entries with 'pending' status.
     These need to be reviewed and matched to verified songs.
     """
-    return list(CleanedSong.objects.filter(status='pending').order_by('-created_at')[:limit])
+    queryset = CleanedSong.objects.filter(status='pending')
+    if station:
+        queryset = queryset.filter(station=station)
+    return list(queryset.order_by('-created_at')[:limit])
 
 
-def get_unmatched_tallies(date=None, limit: int = 100) -> List[RawSongTally]:
+def get_unmatched_tallies(date=None, limit: int = 100, station: str = None) -> List[RawSongTally]:
     """
     Get RawSongTally entries that don't have a MatchKeyMapping.
     These are the "pending" votes that need manual review or LLM matching.
     """
-    # Get all match_keys that already have mappings
-    mapped_keys = set(MatchKeyMapping.objects.values_list('match_key', flat=True))
+    # Get all match_keys that already have mappings (for this station if specified)
+    mapped_keys_qs = MatchKeyMapping.objects.all()
+    if station:
+        mapped_keys_qs = mapped_keys_qs.filter(station=station)
+    mapped_keys = set(mapped_keys_qs.values_list('match_key', flat=True))
     
     # Get tallies without mappings
     queryset = RawSongTally.objects.exclude(match_key__in=mapped_keys)
+    if station:
+        queryset = queryset.filter(station=station)
     
     if date:
         queryset = queryset.filter(date=date)
@@ -337,9 +348,14 @@ def create_match_mapping(
     sample_display_name: str,
     vote_count: int = 0,
     is_auto_mapped: bool = True,
+    station: str = None,
 ) -> MatchKeyMapping:
     """Create a MatchKeyMapping linking a raw match_key to a CleanedSong."""
+    from apps.accounts.models import Station
+    station = station or Station.RADIO_ZIMBABWE
+    
     mapping, created = MatchKeyMapping.objects.get_or_create(
+        station=station,
         match_key=match_key,
         defaults={
             'cleaned_song_id': cleaned_song_id,
@@ -364,23 +380,34 @@ VOTE_MULTIPLIER = 3
 
 
 @transaction.atomic
-def update_cleaned_song_tallies(date=None):
+def update_cleaned_song_tallies(date=None, station: str = None):
     """
     Recalculate CleanedSongTally based on MatchKeyMappings.
     This aggregates votes from RawSongTally through the mappings.
     Note: x3 multiplier is applied in admin view, not here.
+    
+    Args:
+        date: Filter by date (None for all dates)
+        station: Station to filter by (optional)
     """
     from django.db.models import F
+    from apps.accounts.models import Station
     
     if date is None:
         date = timezone.localdate()
     
-    # Get all mappings
-    mappings = MatchKeyMapping.objects.select_related('cleaned_song').all()
+    # Get all mappings (optionally filtered by station)
+    mappings_qs = MatchKeyMapping.objects.select_related('cleaned_song')
+    if station:
+        mappings_qs = mappings_qs.filter(station=station)
+    mappings = mappings_qs.all()
     mapping_dict = {m.match_key: m.cleaned_song for m in mappings}
     
-    # Get raw tallies for the date
-    raw_tallies = RawSongTally.objects.filter(date=date)
+    # Get raw tallies for the date (optionally filtered by station)
+    raw_tallies_qs = RawSongTally.objects.filter(date=date)
+    if station:
+        raw_tallies_qs = raw_tallies_qs.filter(station=station)
+    raw_tallies = raw_tallies_qs.all()
     
     # Aggregate by cleaned song (no multiplier here - applied in admin)
     song_counts = {}
@@ -393,7 +420,10 @@ def update_cleaned_song_tallies(date=None):
     
     # Update CleanedSongTally
     for song_id, count in song_counts.items():
+        # Get the station from the cleaned song
+        song_station = station or Station.RADIO_ZIMBABWE
         CleanedSongTally.objects.update_or_create(
+            station=song_station,
             date=date,
             cleaned_song_id=song_id,
             defaults={'count': count}
@@ -814,7 +844,7 @@ def process_raw_votes_with_llm(
 
 
 @transaction.atomic
-def apply_raw_vote_result(result: Dict) -> bool:
+def apply_raw_vote_result(result: Dict, station: str = None) -> bool:
     """
     Apply the LLM decision for a raw vote.
     
@@ -824,26 +854,34 @@ def apply_raw_vote_result(result: Dict) -> bool:
     - match: Create MatchKeyMapping to existing verified song
     - reject: Create a rejected CleanedSong entry (for tracking) - but NEVER change existing verified
     - new: Create a new verified CleanedSong and mapping - but NEVER change existing
+    
+    Args:
+        result: Dict with match_key, display_name, vote_count, action, etc.
+        station: Station code (defaults to 'radio_zimbabwe')
     """
+    from apps.accounts.models import Station
+    station = station or Station.RADIO_ZIMBABWE
+    
     try:
         match_key = result['match_key']
         display_name = result['display_name']
         vote_count = result['vote_count']
         action = result['action']
         
-        # SAFETY CHECK: If mapping already exists, skip
-        if MatchKeyMapping.objects.filter(match_key=match_key).exists():
-            logger.info(f"Mapping already exists for {match_key}, skipping")
+        # SAFETY CHECK: If mapping already exists for this station, skip
+        if MatchKeyMapping.objects.filter(station=station, match_key=match_key).exists():
+            logger.info(f"Mapping already exists for {match_key} at station {station}, skipping")
             return False
         
         if action == 'match' and result['matched_song_id']:
-            # Verify the target song exists and is verified
+            # Verify the target song exists and is verified for this station
             target_song = CleanedSong.objects.filter(
+                station=station,
                 id=result['matched_song_id'], 
                 status='verified'
             ).first()
             if not target_song:
-                logger.warning(f"Target song {result['matched_song_id']} not found or not verified")
+                logger.warning(f"Target song {result['matched_song_id']} not found or not verified for station {station}")
                 return False
             
             # Create mapping to existing verified song (safe - doesn't modify the song)
@@ -853,6 +891,7 @@ def apply_raw_vote_result(result: Dict) -> bool:
                 sample_display_name=display_name,
                 vote_count=vote_count,
                 is_auto_mapped=True,
+                station=station,
             )
             return True
             
@@ -867,8 +906,8 @@ def apply_raw_vote_result(result: Dict) -> bool:
             
             canonical = f"{artist.strip()} - {title.strip()}"
             
-            # Check if already exists
-            existing = CleanedSong.objects.filter(canonical_name=canonical).first()
+            # Check if already exists for this station
+            existing = CleanedSong.objects.filter(station=station, canonical_name=canonical).first()
             if existing:
                 # SAFETY: Never change existing verified songs!
                 if existing.status == 'verified':
@@ -879,6 +918,7 @@ def apply_raw_vote_result(result: Dict) -> bool:
                         sample_display_name=display_name,
                         vote_count=vote_count,
                         is_auto_mapped=True,
+                        station=station,
                     )
                     return True
                 else:
@@ -887,6 +927,7 @@ def apply_raw_vote_result(result: Dict) -> bool:
             else:
                 # Create new rejected entry
                 cleaned_song = CleanedSong.objects.create(
+                    station=station,
                     artist=artist.strip(),
                     title=title.strip(),
                     canonical_name=canonical,
@@ -900,6 +941,7 @@ def apply_raw_vote_result(result: Dict) -> bool:
                 sample_display_name=display_name,
                 vote_count=vote_count,
                 is_auto_mapped=True,
+                station=station,
             )
             return True
             
@@ -920,21 +962,22 @@ def apply_raw_vote_result(result: Dict) -> bool:
             
             canonical = f"{artist} - {title}"
             
-            # Check if already exists
-            existing = CleanedSong.objects.filter(canonical_name=canonical).first()
+            # Check if already exists for this station
+            existing = CleanedSong.objects.filter(station=station, canonical_name=canonical).first()
             if existing:
                 # Use existing song (don't change its status!)
                 cleaned_song = existing
-                logger.info(f"Song '{canonical}' already exists with status={existing.status}, using it")
+                logger.info(f"Song '{canonical}' already exists for station {station} with status={existing.status}, using it")
             else:
-                # Create brand new song
+                # Create brand new song for this station
                 cleaned_song = CleanedSong.objects.create(
+                    station=station,
                     artist=artist,
                     title=title,
                     canonical_name=canonical,
                     status='verified',
                 )
-                logger.info(f"Created new song: '{canonical}'")
+                logger.info(f"Created new song: '{canonical}' for station {station}")
             
             # Create mapping
             create_match_mapping(
@@ -943,6 +986,7 @@ def apply_raw_vote_result(result: Dict) -> bool:
                 sample_display_name=display_name,
                 vote_count=vote_count,
                 is_auto_mapped=True,
+                station=station,
             )
             return True
             
@@ -957,6 +1001,7 @@ def process_all_raw_votes(
     limit: int = 500,
     batch_size: int = 20,
     dry_run: bool = False,
+    station: str = None,
 ) -> Dict:
     """
     Process ALL unmapped raw votes directly using LLM.
@@ -968,15 +1013,16 @@ def process_all_raw_votes(
         limit: Max total votes to process
         batch_size: Votes per LLM call
         dry_run: If True, don't save anything
+        station: Station to filter by (optional)
         
     Returns:
         Dict with statistics and results
     """
     # Get verified songs for matching
-    verified_songs = get_verified_songs_list()
+    verified_songs = get_verified_songs_list(station=station)
     
     # Get unmapped raw tallies (votes without mappings)
-    unmapped = get_unmatched_tallies(limit=limit)
+    unmapped = get_unmatched_tallies(limit=limit, station=station)
     
     if not unmapped:
         return {
@@ -986,8 +1032,15 @@ def process_all_raw_votes(
         }
     
     # Count total unmapped for progress reporting
-    all_mapped_keys = set(MatchKeyMapping.objects.values_list('match_key', flat=True))
-    total_unmapped = RawSongTally.objects.exclude(match_key__in=all_mapped_keys).count()
+    mapped_keys_qs = MatchKeyMapping.objects.all()
+    if station:
+        mapped_keys_qs = mapped_keys_qs.filter(station=station)
+    all_mapped_keys = set(mapped_keys_qs.values_list('match_key', flat=True))
+    
+    total_unmapped_qs = RawSongTally.objects.exclude(match_key__in=all_mapped_keys)
+    if station:
+        total_unmapped_qs = total_unmapped_qs.filter(station=station)
+    total_unmapped = total_unmapped_qs.count()
     
     # Convert to dicts
     votes_data = [
@@ -1033,7 +1086,7 @@ def process_all_raw_votes(
                 
                 # Apply the result
                 if not dry_run:
-                    if apply_raw_vote_result(result):
+                    if apply_raw_vote_result(result, station=station):
                         stats['applied'] += 1
                         was_applied = True
                     else:
@@ -1049,6 +1102,7 @@ def process_all_raw_votes(
                             action_for_log = 'auto_reject'
                         
                         LLMDecisionLog.objects.create(
+                            station=station,
                             input_text=result['display_name'],
                             input_type='raw_vote',
                             action=action_for_log,
@@ -1082,6 +1136,7 @@ def process_pending_songs(
     auto_merge: bool = True,
     auto_reject: bool = True,
     dry_run: bool = False,
+    station: str = None,
 ) -> Dict:
     """
     Main function to process pending songs using LLM.
@@ -1091,18 +1146,19 @@ def process_pending_songs(
         auto_merge: If True, auto-merge high confidence matches
         auto_reject: If True, auto-reject spam/invalid entries
         dry_run: If True, don't save anything
+        station: Station to filter by (optional)
         
     Returns:
         Dict with statistics and results
     """
-    verified_songs = get_verified_songs_list()
+    verified_songs = get_verified_songs_list(station=station)
     if not verified_songs:
         return {
             'error': 'No verified songs in database.',
             'processed': 0,
         }
     
-    pending = get_pending_songs(limit=limit)
+    pending = get_pending_songs(limit=limit, station=station)
     if not pending:
         return {
             'message': 'No pending songs to review.',

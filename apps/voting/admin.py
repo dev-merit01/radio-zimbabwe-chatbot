@@ -17,8 +17,32 @@ from .models import (
     LLMDecisionLog,
     WeeklyChart,
     WeeklyChartEntry,
+    SongCatalog,
+    StationSong,
 )
 from .cleaning import CleaningService
+from apps.accounts.context_processors import get_active_station
+
+
+class StationFilteredAdminMixin:
+    """
+    Mixin to filter admin querysets by the active station.
+    Superusers can switch stations via session.
+    """
+    
+    def get_queryset(self, request):
+        """Filter queryset by active station if model has station field."""
+        qs = super().get_queryset(request)
+        if hasattr(qs.model, 'station'):
+            station = get_active_station(request)
+            qs = qs.filter(station=station)
+        return qs
+    
+    def save_model(self, request, obj, form, change):
+        """Set station on new objects if model has station field."""
+        if hasattr(obj, 'station') and not change:
+            obj.station = get_active_station(request)
+        super().save_model(request, obj, form, change)
 
 
 class CleanedSongForm(forms.ModelForm):
@@ -37,16 +61,16 @@ class CleanedSongForm(forms.ModelForm):
 
 
 @admin.register(User)
-class UserAdmin(admin.ModelAdmin):
-    list_display = ('id', 'channel', 'user_ref', 'created_at')
-    list_filter = ('channel', 'created_at')
+class UserAdmin(StationFilteredAdminMixin, admin.ModelAdmin):
+    list_display = ('id', 'channel', 'user_ref', 'station', 'created_at')
+    list_filter = ('channel', 'station', 'created_at')
     search_fields = ('user_ref',)
 
 
 @admin.register(RawVote)
-class RawVoteAdmin(admin.ModelAdmin):
-    list_display = ('id', 'user', 'display_name', 'vote_date', 'created_at')
-    list_filter = ('vote_date', 'created_at')
+class RawVoteAdmin(StationFilteredAdminMixin, admin.ModelAdmin):
+    list_display = ('id', 'user', 'display_name', 'station', 'vote_date', 'created_at')
+    list_filter = ('vote_date', 'station', 'created_at')
     search_fields = ('raw_input', 'display_name', 'match_key')
     date_hierarchy = 'vote_date'
     
@@ -180,9 +204,9 @@ class RawVoteAdmin(admin.ModelAdmin):
 
 
 @admin.register(RawSongTally)
-class RawSongTallyAdmin(admin.ModelAdmin):
-    list_display = ('id', 'display_name', 'count', 'date', 'match_key', 'is_matched')
-    list_filter = ('date',)
+class RawSongTallyAdmin(StationFilteredAdminMixin, admin.ModelAdmin):
+    list_display = ('id', 'display_name', 'count', 'date', 'station', 'match_key', 'is_matched')
+    list_filter = ('date', 'station')
     search_fields = ('display_name', 'match_key')
     ordering = ('-date', '-count')
     change_list_template = 'admin/voting/rawsongtally/change_list.html'
@@ -312,7 +336,8 @@ class RawSongTallyAdmin(admin.ModelAdmin):
     
     def process_votes_view(self, request):
         """Admin view to process votes for today."""
-        service = CleaningService()
+        station = get_active_station(request)
+        service = CleaningService(station=station)
         date = timezone.localdate()
         
         try:
@@ -320,8 +345,7 @@ class RawSongTallyAdmin(admin.ModelAdmin):
             messages.success(
                 request,
                 f"✅ Votes processed for {date}: "
-                f"{result['new']} new songs, {result['auto_merged']} auto-merged, "
-                f"{result.get('spotify_matched', 0)} Spotify matched"
+                f"{result.get('new_pending', 0)} new songs, {result['auto_merged']} auto-merged"
             )
             
             # Check for pending songs
@@ -345,10 +369,10 @@ class MatchKeyMappingInline(admin.TabularInline):
 
 
 @admin.register(CleanedSong)
-class CleanedSongAdmin(admin.ModelAdmin):
+class CleanedSongAdmin(StationFilteredAdminMixin, admin.ModelAdmin):
     form = CleanedSongForm  # Custom form that allows duplicate canonical_name for merging
-    list_display = ('id', 'status_badge', 'canonical_name', 'total_votes', 'has_spotify', 'created_at')
-    list_filter = ('status', 'created_at')
+    list_display = ('id', 'status_badge', 'canonical_name', 'station', 'total_votes', 'has_spotify', 'created_at')
+    list_filter = ('status', 'station', 'created_at')
     search_fields = ('artist', 'title', 'canonical_name')
     list_editable = ('status',) if False else ()  # Enable for bulk status changes
     actions = ['verify_songs', 'reject_songs', 'mark_pending', 'llm_review_selected']
@@ -392,10 +416,11 @@ class CleanedSongAdmin(admin.ModelAdmin):
         return custom_urls + urls
     
     def verify_all_pending_view(self, request):
-        """Verify all pending songs at once."""
+        """Verify all pending songs at once for the active station."""
         from .models import CleanedSong
         
-        count = CleanedSong.objects.filter(status='pending').update(status='verified')
+        station = get_active_station(request)
+        count = CleanedSong.objects.filter(station=station, status='pending').update(status='verified')
         messages.success(request, f"✅ Verified {count} pending songs! Now click 'Recalculate Tallies' to update dashboard.")
         
         return redirect('admin:voting_cleanedsong_changelist')
@@ -405,25 +430,27 @@ class CleanedSongAdmin(admin.ModelAdmin):
         from .models import RawVote, RawSongTally, CleanedSong, MatchKeyMapping, CleanedSongTally
         from django.db.models import Sum
         
-        # Raw data
-        raw_vote_count = RawVote.objects.count()
-        raw_tally_count = RawSongTally.objects.count()
-        raw_tally_votes = RawSongTally.objects.aggregate(total=Sum('count'))['total'] or 0
+        station = get_active_station(request)
         
-        # Cleaned songs by status
-        cleaned_total = CleanedSong.objects.count()
-        verified_count = CleanedSong.objects.filter(status='verified').count()
-        pending_count = CleanedSong.objects.filter(status='pending').count()
-        rejected_count = CleanedSong.objects.filter(status='rejected').count()
+        # Raw data (station-filtered)
+        raw_vote_count = RawVote.objects.filter(station=station).count()
+        raw_tally_count = RawSongTally.objects.filter(station=station).count()
+        raw_tally_votes = RawSongTally.objects.filter(station=station).aggregate(total=Sum('count'))['total'] or 0
         
-        # Mappings
-        mapping_count = MatchKeyMapping.objects.count()
+        # Cleaned songs by status (station-filtered)
+        cleaned_total = CleanedSong.objects.filter(station=station).count()
+        verified_count = CleanedSong.objects.filter(station=station, status='verified').count()
+        pending_count = CleanedSong.objects.filter(station=station, status='pending').count()
+        rejected_count = CleanedSong.objects.filter(station=station, status='rejected').count()
+        
+        # Mappings (station-filtered)
+        mapping_count = MatchKeyMapping.objects.filter(station=station).count()
         
         # Mappings to verified songs
-        verified_song_ids = set(CleanedSong.objects.filter(status='verified').values_list('id', flat=True))
-        mappings_to_verified = MatchKeyMapping.objects.filter(cleaned_song_id__in=verified_song_ids).count()
-        mappings_to_pending = MatchKeyMapping.objects.filter(cleaned_song__status='pending').count()
-        mappings_to_rejected = MatchKeyMapping.objects.filter(cleaned_song__status='rejected').count()
+        verified_song_ids = set(CleanedSong.objects.filter(station=station, status='verified').values_list('id', flat=True))
+        mappings_to_verified = MatchKeyMapping.objects.filter(station=station, cleaned_song_id__in=verified_song_ids).count()
+        mappings_to_pending = MatchKeyMapping.objects.filter(station=station, cleaned_song__status='pending').count()
+        mappings_to_rejected = MatchKeyMapping.objects.filter(station=station, cleaned_song__status='rejected').count()
         
         # Votes mapped to verified songs
         verified_mapped_votes = MatchKeyMapping.objects.filter(
@@ -457,20 +484,22 @@ class CleanedSongAdmin(admin.ModelAdmin):
         return redirect('admin:voting_cleanedsong_changelist')
     
     def recalculate_tallies_view(self, request):
-        """Recalculate CleanedSongTally from mappings."""
+        """Recalculate CleanedSongTally from mappings for active station."""
         from .models import RawSongTally, CleanedSong, MatchKeyMapping, CleanedSongTally
         from django.db.models import Sum
         from collections import defaultdict
         
-        # Get all mappings to verified songs
-        verified_song_ids = set(CleanedSong.objects.filter(status='verified').values_list('id', flat=True))
-        mappings = MatchKeyMapping.objects.filter(cleaned_song_id__in=verified_song_ids)
+        station = get_active_station(request)
+        
+        # Get all mappings to verified songs for this station
+        verified_song_ids = set(CleanedSong.objects.filter(station=station, status='verified').values_list('id', flat=True))
+        mappings = MatchKeyMapping.objects.filter(station=station, cleaned_song_id__in=verified_song_ids)
         mapping_dict = {m.match_key: m.cleaned_song_id for m in mappings}
         
         # Aggregate votes by cleaned_song and date
         song_date_counts = defaultdict(lambda: defaultdict(int))
         
-        for tally in RawSongTally.objects.all():
+        for tally in RawSongTally.objects.filter(station=station):
             cleaned_song_id = mapping_dict.get(tally.match_key)
             if cleaned_song_id:
                 song_date_counts[cleaned_song_id][tally.date] += tally.count
@@ -483,6 +512,7 @@ class CleanedSongAdmin(admin.ModelAdmin):
         for song_id, date_counts in song_date_counts.items():
             for date, count in date_counts.items():
                 obj, was_created = CleanedSongTally.objects.update_or_create(
+                    station=station,
                     cleaned_song_id=song_id,
                     date=date,
                     defaults={'count': count}
@@ -502,15 +532,17 @@ class CleanedSongAdmin(admin.ModelAdmin):
         return redirect('admin:voting_cleanedsong_changelist')
     
     def llm_process_raw_votes_view(self, request):
-        """Admin view to process raw votes with LLM and update dashboard."""
+        """Admin view to process raw votes with LLM and update dashboard for active station."""
         from .llm_matcher import process_all_raw_votes
         from .models import RawSongTally, CleanedSong, MatchKeyMapping, CleanedSongTally
         from django.db.models import Sum
         from collections import defaultdict
         
-        # Count total unmapped
-        all_raw_keys = list(RawSongTally.objects.values_list('match_key', flat=True))
-        mapped_keys = set(MatchKeyMapping.objects.values_list('match_key', flat=True))
+        station = get_active_station(request)
+        
+        # Count total unmapped for this station
+        all_raw_keys = list(RawSongTally.objects.filter(station=station).values_list('match_key', flat=True))
+        mapped_keys = set(MatchKeyMapping.objects.filter(station=station).values_list('match_key', flat=True))
         unmapped_keys = [k for k in all_raw_keys if k not in mapped_keys]
         total_unmapped = len(set(unmapped_keys))
         
@@ -521,6 +553,7 @@ class CleanedSongAdmin(admin.ModelAdmin):
                     limit=100,
                     batch_size=20,
                     dry_run=False,
+                    station=station,
                 )
                 
                 if 'error' in result:
@@ -564,8 +597,8 @@ class CleanedSongAdmin(admin.ModelAdmin):
         else:
             messages.info(request, "✅ All raw votes already mapped!")
         
-        # Auto-verify any pending songs (they were created by LLM so we trust them)
-        pending_songs = list(CleanedSong.objects.filter(status='pending'))
+        # Auto-verify any pending songs for this station (they were created by LLM so we trust them)
+        pending_songs = list(CleanedSong.objects.filter(station=station, status='pending'))
         if pending_songs:
             for song in pending_songs:
                 song.status = 'verified'
@@ -573,13 +606,13 @@ class CleanedSongAdmin(admin.ModelAdmin):
                 messages.success(request, f"✅ Verified: \"{song.artist} - {song.title}\"")
             messages.success(request, f"📋 Total: {len(pending_songs)} songs verified!")
         
-        # Always recalculate dashboard tallies
-        verified_song_ids = set(CleanedSong.objects.filter(status='verified').values_list('id', flat=True))
-        mappings = MatchKeyMapping.objects.filter(cleaned_song_id__in=verified_song_ids)
+        # Always recalculate dashboard tallies for this station
+        verified_song_ids = set(CleanedSong.objects.filter(station=station, status='verified').values_list('id', flat=True))
+        mappings = MatchKeyMapping.objects.filter(station=station, cleaned_song_id__in=verified_song_ids)
         mapping_dict = {m.match_key: m.cleaned_song_id for m in mappings}
         
         song_date_counts = defaultdict(lambda: defaultdict(int))
-        for tally in RawSongTally.objects.all():
+        for tally in RawSongTally.objects.filter(station=station):
             cleaned_song_id = mapping_dict.get(tally.match_key)
             if cleaned_song_id:
                 song_date_counts[cleaned_song_id][tally.date] += tally.count
@@ -588,6 +621,7 @@ class CleanedSongAdmin(admin.ModelAdmin):
         for song_id, date_counts in song_date_counts.items():
             for date, count in date_counts.items():
                 CleanedSongTally.objects.update_or_create(
+                    station=station,
                     cleaned_song_id=song_id,
                     date=date,
                     defaults={'count': count}
@@ -625,12 +659,14 @@ class CleanedSongAdmin(admin.ModelAdmin):
         return redirect('admin:voting_cleanedsong_changelist')
     
     def llm_review_pending_view(self, request):
-        """Admin view to process ALL pending songs with LLM."""
+        """Admin view to process ALL pending songs with LLM for active station."""
         from .llm_matcher import process_pending_songs, get_pending_songs
         from .models import CleanedSong
         
-        # Get count of ALL pending songs
-        total_pending = CleanedSong.objects.filter(status='pending').count()
+        station = get_active_station(request)
+        
+        # Get count of ALL pending songs for this station
+        total_pending = CleanedSong.objects.filter(station=station, status='pending').count()
         
         if total_pending == 0:
             messages.info(request, "✅ No pending songs to review!")
@@ -643,6 +679,7 @@ class CleanedSongAdmin(admin.ModelAdmin):
                 auto_merge=True,
                 auto_reject=False,  # Don't auto-reject, keep for manual review
                 dry_run=False,
+                station=station,
             )
             
             if 'error' in result:
@@ -875,7 +912,7 @@ class CleanedSongAdmin(admin.ModelAdmin):
 
     def _merge_into_existing(self, request, source_song, target_song):
         """
-        Merge source_song into target_song:
+        Merge source_song into target_song (must be same station):
         - Transfer all MatchKeyMappings
         - Merge CleanedSongTally counts
         - Delete source_song
@@ -883,16 +920,28 @@ class CleanedSongAdmin(admin.ModelAdmin):
         from django.db import transaction
         from django.db.models import F
         
+        # Ensure both songs are from the same station
+        if source_song.station != target_song.station:
+            messages.error(request, f"❌ Cannot merge songs from different stations!")
+            return
+        
+        station = source_song.station
+        
         with transaction.atomic():
             # Transfer MatchKeyMappings from source to target
             mappings_transferred = MatchKeyMapping.objects.filter(
+                station=station,
                 cleaned_song=source_song
             ).update(cleaned_song=target_song)
             
             # Merge CleanedSongTally - add source counts to target
-            source_tallies = CleanedSongTally.objects.filter(cleaned_song=source_song)
+            source_tallies = CleanedSongTally.objects.filter(
+                station=station,
+                cleaned_song=source_song
+            )
             for source_tally in source_tallies:
                 target_tally, created = CleanedSongTally.objects.get_or_create(
+                    station=station,
                     date=source_tally.date,
                     cleaned_song=target_song,
                     defaults={'count': 0}
@@ -920,22 +969,27 @@ class CleanedSongAdmin(admin.ModelAdmin):
         """Update CleanedSongTally based on MatchKeyMappings."""
         from django.db.models import Sum
         
-        # Get all mappings for this cleaned song
-        mappings = MatchKeyMapping.objects.filter(cleaned_song=cleaned_song)
+        # Get all mappings for this cleaned song (within same station)
+        mappings = MatchKeyMapping.objects.filter(
+            station=cleaned_song.station,
+            cleaned_song=cleaned_song
+        )
         if not mappings.exists():
             return
         
         # Get match_keys
         match_keys = list(mappings.values_list('match_key', flat=True))
         
-        # Get raw tallies by date for these match_keys
+        # Get raw tallies by date for these match_keys (within same station)
         raw_tallies = RawSongTally.objects.filter(
+            station=cleaned_song.station,
             match_key__in=match_keys
         ).values('date').annotate(total=Sum('count'))
         
         # Update or create CleanedSongTally for each date
         for tally_data in raw_tallies:
             CleanedSongTally.objects.update_or_create(
+                station=cleaned_song.station,
                 date=tally_data['date'],
                 cleaned_song=cleaned_song,
                 defaults={'count': tally_data['total']}
@@ -943,17 +997,17 @@ class CleanedSongAdmin(admin.ModelAdmin):
 
 
 @admin.register(MatchKeyMapping)
-class MatchKeyMappingAdmin(admin.ModelAdmin):
-    list_display = ('id', 'match_key', 'cleaned_song', 'vote_count', 'is_auto_mapped')
-    list_filter = ('is_auto_mapped', 'created_at')
+class MatchKeyMappingAdmin(StationFilteredAdminMixin, admin.ModelAdmin):
+    list_display = ('id', 'station', 'match_key', 'cleaned_song', 'vote_count', 'is_auto_mapped')
+    list_filter = ('station', 'is_auto_mapped', 'created_at')
     search_fields = ('match_key', 'sample_display_name', 'cleaned_song__canonical_name')
     raw_id_fields = ('cleaned_song',)
 
 
 @admin.register(CleanedSongTally)
-class CleanedSongTallyAdmin(admin.ModelAdmin):
-    list_display = ('id', 'cleaned_song', 'count', 'date')
-    list_filter = ('date',)
+class CleanedSongTallyAdmin(StationFilteredAdminMixin, admin.ModelAdmin):
+    list_display = ('id', 'station', 'cleaned_song', 'count', 'date')
+    list_filter = ('station', 'date',)
     search_fields = ('cleaned_song__canonical_name',)
     ordering = ('-date', '-count')
     date_hierarchy = 'date'
@@ -993,14 +1047,14 @@ class VerifiedArtistAdmin(admin.ModelAdmin):
 
 
 @admin.register(LLMDecisionLog)
-class LLMDecisionLogAdmin(admin.ModelAdmin):
+class LLMDecisionLogAdmin(StationFilteredAdminMixin, admin.ModelAdmin):
     """Admin for reviewing LLM matching decisions."""
-    list_display = ('id', 'action_icon', 'input_text_short', 'action', 'confidence', 'matched_to', 'was_applied', 'created_at')
-    list_filter = ('action', 'confidence', 'was_applied', 'input_type', 'created_at')
+    list_display = ('id', 'station', 'action_icon', 'input_text_short', 'action', 'confidence', 'matched_to', 'was_applied', 'created_at')
+    list_filter = ('station', 'action', 'confidence', 'was_applied', 'input_type', 'created_at')
     search_fields = ('input_text', 'matched_song_name', 'reasoning')
     ordering = ('-created_at',)
     date_hierarchy = 'created_at'
-    readonly_fields = ('input_text', 'input_type', 'action', 'confidence', 'reasoning', 'matched_song', 'matched_song_name', 'was_applied', 'created_at')
+    readonly_fields = ('station', 'input_text', 'input_type', 'action', 'confidence', 'reasoning', 'matched_song', 'matched_song_name', 'was_applied', 'created_at')
     
     list_per_page = 50
     
@@ -1047,11 +1101,11 @@ class WeeklyChartEntryInline(admin.TabularInline):
 
 
 @admin.register(WeeklyChart)
-class WeeklyChartAdmin(admin.ModelAdmin):
-    list_display = ('id', 'week_display', 'year', 'week_number', 'chart_size', 'total_votes', 'unique_songs', 'is_finalized', 'created_at')
-    list_filter = ('year', 'is_finalized', 'is_year_end', 'chart_size')
+class WeeklyChartAdmin(StationFilteredAdminMixin, admin.ModelAdmin):
+    list_display = ('id', 'station', 'week_display', 'year', 'week_number', 'chart_size', 'total_votes', 'unique_songs', 'is_finalized', 'created_at')
+    list_filter = ('station', 'year', 'is_finalized', 'is_year_end', 'chart_size')
     search_fields = ('year', 'week_number')
-    readonly_fields = ('week_start', 'week_end', 'week_number', 'year', 'total_votes', 'unique_songs', 'created_at', 'updated_at', 'finalized_at')
+    readonly_fields = ('station', 'week_start', 'week_end', 'week_number', 'year', 'total_votes', 'unique_songs', 'created_at', 'updated_at', 'finalized_at')
     ordering = ['-year', '-week_number']
     inlines = [WeeklyChartEntryInline]
     
@@ -1065,11 +1119,22 @@ class WeeklyChartAdmin(admin.ModelAdmin):
 
 @admin.register(WeeklyChartEntry)
 class WeeklyChartEntryAdmin(admin.ModelAdmin):
-    list_display = ('id', 'chart', 'rank', 'title', 'artist', 'vote_count', 'previous_rank', 'movement_display')
-    list_filter = ('chart__year', 'chart__week_number')
+    list_display = ('id', 'chart_station', 'chart', 'rank', 'title', 'artist', 'vote_count', 'previous_rank', 'movement_display')
+    list_filter = ('chart__station', 'chart__year', 'chart__week_number')
     search_fields = ('title', 'artist', 'canonical_name')
     readonly_fields = ('chart', 'rank', 'title', 'artist', 'vote_count', 'previous_rank', 'weeks_on_chart', 'peak_rank')
     ordering = ['chart', 'rank']
+    
+    def chart_station(self, obj):
+        return obj.chart.get_station_display()
+    chart_station.short_description = 'Station'
+    chart_station.admin_order_field = 'chart__station'
+    
+    def get_queryset(self, request):
+        """Filter entries by active station via chart."""
+        qs = super().get_queryset(request)
+        station = get_active_station(request)
+        return qs.filter(chart__station=station)
     
     def movement_display(self, obj):
         if obj.previous_rank is None:
@@ -1084,3 +1149,115 @@ class WeeklyChartEntryAdmin(admin.ModelAdmin):
     
     def has_add_permission(self, request):
         return False  # Entries are auto-generated
+
+
+# ============================================================
+# Global Song Catalog Admin (for superusers)
+# ============================================================
+
+@admin.register(SongCatalog)
+class SongCatalogAdmin(admin.ModelAdmin):
+    """
+    Admin for the global song catalog.
+    This is not station-filtered - shows all songs across all stations.
+    Only accessible to superusers for managing the global catalog.
+    """
+    list_display = ('id', 'canonical_name', 'artist', 'title', 'is_globally_verified', 'added_by_station', 'has_spotify', 'created_at')
+    list_filter = ('is_globally_verified', 'added_by_station', 'created_at')
+    search_fields = ('canonical_name', 'artist', 'title', 'spotify_track_id')
+    ordering = ('-created_at',)
+    readonly_fields = ('created_at', 'updated_at')
+    
+    fieldsets = (
+        ('Song Info', {
+            'fields': ('artist', 'title', 'canonical_name')
+        }),
+        ('Global Status', {
+            'fields': ('is_globally_verified', 'added_by_station')
+        }),
+        ('Spotify Data', {
+            'fields': ('spotify_track_id', 'album', 'image_url', 'preview_url'),
+            'classes': ('collapse',),
+        }),
+        ('Metadata', {
+            'fields': ('created_at', 'updated_at'),
+            'classes': ('collapse',),
+        }),
+    )
+    
+    def has_spotify(self, obj):
+        if obj.spotify_track_id:
+            return format_html('<span style="color: green;">✓</span>')
+        return format_html('<span style="color: gray;">-</span>')
+    has_spotify.short_description = 'Spotify'
+    
+    @admin.action(description='✅ Mark as Globally Verified')
+    def verify_globally(self, request, queryset):
+        count = queryset.update(is_globally_verified=True)
+        self.message_user(request, f'{count} songs marked as globally verified.')
+    
+    @admin.action(description='❌ Unmark Global Verification')
+    def unverify_globally(self, request, queryset):
+        count = queryset.update(is_globally_verified=False)
+        self.message_user(request, f'{count} songs unmarked from global verification.')
+    
+    actions = [verify_globally, unverify_globally]
+
+
+@admin.register(StationSong)
+class StationSongAdmin(StationFilteredAdminMixin, admin.ModelAdmin):
+    """
+    Admin for station-scoped songs.
+    Filtered by the active station (superusers can switch stations).
+    """
+    list_display = ('id', 'station', 'catalog_song', 'status_badge', 'catalog_verified', 'created_at')
+    list_filter = ('station', 'status', 'catalog_song__is_globally_verified')
+    search_fields = ('catalog_song__canonical_name', 'catalog_song__artist', 'catalog_song__title')
+    ordering = ('-created_at',)
+    raw_id_fields = ('catalog_song',)
+    readonly_fields = ('created_at', 'updated_at')
+    
+    def status_badge(self, obj):
+        colors = {
+            'pending': '#f0ad4e',
+            'verified': '#5cb85c',
+            'rejected': '#d9534f',
+        }
+        icons = {
+            'pending': '⏳',
+            'verified': '✅',
+            'rejected': '❌',
+        }
+        color = colors.get(obj.status, '#000')
+        icon = icons.get(obj.status, '')
+        return format_html(
+            '<span style="color: {color};">{icon} {status}</span>',
+            color=color,
+            icon=icon,
+            status=obj.get_status_display()
+        )
+    status_badge.short_description = 'Status'
+    status_badge.admin_order_field = 'status'
+    
+    def catalog_verified(self, obj):
+        if obj.catalog_song.is_globally_verified:
+            return format_html('<span style="color: green;">✓ Global</span>')
+        return format_html('<span style="color: gray;">-</span>')
+    catalog_verified.short_description = 'Catalog Verified'
+    
+    @admin.action(description='✅ Verify Selected')
+    def verify_songs(self, request, queryset):
+        count = queryset.update(status='verified')
+        self.message_user(request, f'{count} station songs verified.')
+    
+    @admin.action(description='❌ Reject Selected')
+    def reject_songs(self, request, queryset):
+        count = queryset.update(status='rejected')
+        self.message_user(request, f'{count} station songs rejected.')
+    
+    @admin.action(description='⏳ Mark as Pending')
+    def mark_pending(self, request, queryset):
+        count = queryset.update(status='pending')
+        self.message_user(request, f'{count} station songs marked as pending.')
+    
+    actions = [verify_songs, reject_songs, mark_pending]

@@ -1,0 +1,95 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Create Account</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #0f1419;
+            --bg-secondary: #1a1f26;
+            --border-color: #30363d;
+            --text-primary: #ffffff;
+            --text-secondary: #8b949e;
+            --accent-gold: #f59e0b;
+        }
+        body { font-family: 'Inter', sans-serif; background: var(--bg-primary); color: var(--text-primary); margin: 0; }
+        .wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
+        .card { width: 100%; max-width: 520px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 14px; padding: 22px; }
+        h1 { margin: 0 0 8px; font-size: 20px; }
+        p { margin: 0 0 18px; color: var(--text-secondary); font-size: 13px; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        @media (max-width: 520px) { .grid { grid-template-columns: 1fr; } }
+        label { display:block; margin: 12px 0 6px; font-size: 13px; color: var(--text-secondary); }
+        input, select { width:100%; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border-color); background: transparent; color: var(--text-primary); }
+        .btn { margin-top: 16px; width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid rgba(245, 158, 11, 0.4); background: rgba(245, 158, 11, 0.08); color: var(--text-primary); font-weight: 600; cursor: pointer; }
+        .btn:hover { border-color: var(--accent-gold); }
+        .err { margin-top: 6px; color: #ef4444; font-size: 12px; }
+        .links { margin-top: 14px; font-size: 13px; color: var(--text-secondary); }
+        a { color: var(--accent-gold); text-decoration: none; }
+        a:hover { text-decoration: underline; }
+    </style>
+</head>
+<body>
+    <div class="wrap">
+        <div class="card">
+            <h1>Create Account</h1>
+            <p>Fill in your details to access the dashboard.</p>
+
+            <form method="post">
+                {% csrf_token %}
+                {% if next %}<input type="hidden" name="next" value="{{ next }}" />{% endif %}
+
+                <div class="grid">
+                    <div>
+                        <label for="id_first_name">First name</label>
+                        <input id="id_first_name" name="first_name" type="text" required />
+                        {% if form.first_name.errors %}<div class="err">{{ form.first_name.errors|striptags }}</div>{% endif %}
+                    </div>
+                    <div>
+                        <label for="id_last_name">Last name</label>
+                        <input id="id_last_name" name="last_name" type="text" required />
+                        {% if form.last_name.errors %}<div class="err">{{ form.last_name.errors|striptags }}</div>{% endif %}
+                    </div>
+                </div>
+
+                <label for="id_username">Username</label>
+                <input id="id_username" name="username" type="text" autocomplete="username" required />
+                {% if form.username.errors %}<div class="err">{{ form.username.errors|striptags }}</div>{% endif %}
+
+                <label for="id_station">Station</label>
+                <select id="id_station" name="station" required>
+                    {% for value, label in form.fields.station.choices %}
+                        <option value="{{ value }}">{{ label }}</option>
+                    {% endfor %}
+                </select>
+
+                <div class="grid">
+                    <div>
+                        <label for="id_password">Password</label>
+                        <input id="id_password" name="password" type="password" autocomplete="new-password" required />
+                        {% if form.password.errors %}<div class="err">{{ form.password.errors|striptags }}</div>{% endif %}
+                    </div>
+                    <div>
+                        <label for="id_confirm_password">Confirm password</label>
+                        <input id="id_confirm_password" name="confirm_password" type="password" autocomplete="new-password" required />
+                        {% if form.confirm_password.errors %}<div class="err">{{ form.confirm_password.errors|striptags }}</div>{% endif %}
+                    </div>
+                </div>
+
+                {% if form.non_field_errors %}<div class="err">{{ form.non_field_errors|striptags }}</div>{% endif %}
+
+                <button class="btn" type="submit">Create account</button>
+            </form>
+
+            <div class="links">
+                Already have an account? <a href="{% url 'accounts:login' %}{% if next %}?next={{ next|urlencode }}{% endif %}">Login</a>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

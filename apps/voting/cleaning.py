@@ -30,6 +30,7 @@ from .models import (
     LLMDecisionLog,
     normalize_text,
 )
+from apps.accounts.models import Station
 
 logger = logging.getLogger(__name__)
 
@@ -120,14 +121,23 @@ RESPONSE FORMAT (JSON only, no other text):
 If matched=true, confidence MUST be "high". Otherwise we don't auto-merge."""
 
 
-def get_verified_songs_for_prompt() -> List[Dict]:
+def get_verified_songs_for_prompt(station: str = None) -> List[Dict]:
     """
     Get list of verified songs formatted for the LLM prompt.
+    
+    Args:
+        station: Station code to filter by. If None, uses Radio Zimbabwe.
     
     Returns:
         List of dicts with id, artist, title, canonical_name
     """
-    songs = CleanedSong.objects.filter(status='verified').order_by('artist', 'title')[:MAX_SONGS_IN_PROMPT]
+    if station is None:
+        station = Station.RADIO_ZIMBABWE
+    
+    songs = CleanedSong.objects.filter(
+        station=station,
+        status='verified'
+    ).order_by('artist', 'title')[:MAX_SONGS_IN_PROMPT]
     
     return [
         {
@@ -271,12 +281,19 @@ class CleaningService:
     4. Everything else → PENDING for human review
     """
     
-    def __init__(self):
+    def __init__(self, station: str = None):
+        """
+        Initialize the cleaning service.
+        
+        Args:
+            station: Station code to use. Defaults to Radio Zimbabwe.
+        """
+        self.station = station or Station.RADIO_ZIMBABWE
         self._verified_songs_cache = None
         self._cache_time = None
     
     def _get_verified_songs(self, force_refresh: bool = False) -> List[Dict]:
-        """Get verified songs with caching (5 minute cache)."""
+        """Get verified songs for the station with caching (5 minute cache)."""
         now = timezone.now()
         
         if (
@@ -285,7 +302,7 @@ class CleaningService:
             or self._cache_time is None
             or (now - self._cache_time).total_seconds() > 300
         ):
-            self._verified_songs_cache = get_verified_songs_for_prompt()
+            self._verified_songs_cache = get_verified_songs_for_prompt(self.station)
             self._cache_time = now
             
         return self._verified_songs_cache
@@ -295,7 +312,7 @@ class CleaningService:
         Process raw votes and create/update cleaned entries using LLM.
         
         Flow:
-        1. Get all unmapped match_keys from raw tallies for the date
+        1. Get all unmapped match_keys from raw tallies for the date and station
         2. For each unmapped vote:
            a. Check if format is valid "Artist - Song"
            b. If invalid format → create PENDING entry
@@ -314,14 +331,14 @@ class CleaningService:
         if date is None:
             date = timezone.localdate()
         
-        logger.info(f"Processing votes for {date} using LLM matching")
+        logger.info(f"Processing votes for {date} (station: {self.station}) using LLM matching")
         
-        # Get all match_keys from today's raw tallies
-        raw_tallies = RawSongTally.objects.filter(date=date)
+        # Get all match_keys from today's raw tallies for this station
+        raw_tallies = RawSongTally.objects.filter(date=date, station=self.station)
         
-        # Get existing mappings
+        # Get existing mappings for this station
         existing_mappings = set(
-            MatchKeyMapping.objects.values_list('match_key', flat=True)
+            MatchKeyMapping.objects.filter(station=self.station).values_list('match_key', flat=True)
         )
         
         # Get verified songs for LLM prompt
@@ -471,8 +488,9 @@ class CleaningService:
         
         canonical_name = f"{artist} - {title}"
         
-        # Check for existing song (case-insensitive)
+        # Check for existing song for this station (case-insensitive)
         existing = CleanedSong.objects.filter(
+            station=self.station,
             canonical_name__iexact=canonical_name
         ).first()
         
@@ -480,9 +498,10 @@ class CleaningService:
             logger.info(f"Found existing song: '{existing.canonical_name}'")
             return existing
         
-        # Create new pending song
+        # Create new pending song for this station
         try:
             cleaned_song = CleanedSong.objects.create(
+                station=self.station,
                 artist=artist,
                 title=title,
                 canonical_name=canonical_name,
@@ -490,8 +509,9 @@ class CleaningService:
             )
             return cleaned_song
         except IntegrityError:
-            # Race condition - fetch existing
+            # Race condition - fetch existing for this station
             existing = CleanedSong.objects.filter(
+                station=self.station,
                 canonical_name__iexact=canonical_name
             ).first()
             if existing:
@@ -499,8 +519,9 @@ class CleaningService:
             raise
     
     def _create_mapping(self, tally: RawSongTally, cleaned_song: CleanedSong, is_auto: bool):
-        """Create a mapping from match_key to CleanedSong."""
+        """Create a mapping from match_key to CleanedSong for this station."""
         MatchKeyMapping.objects.update_or_create(
+            station=self.station,
             match_key=tally.match_key,
             defaults={
                 'cleaned_song': cleaned_song,
@@ -522,6 +543,7 @@ class CleaningService:
         """Log a matching decision for auditing."""
         try:
             LLMDecisionLog.objects.create(
+                station=self.station,
                 input_text=input_text[:512],
                 input_type=input_type,
                 action=action,
@@ -536,17 +558,18 @@ class CleaningService:
     
     def _update_cleaned_tallies(self, date):
         """
-        Update CleanedSongTally counts based on mappings.
+        Update CleanedSongTally counts based on mappings for this station.
         Only counts votes that are mapped to VERIFIED songs.
         """
-        # Get all mappings to verified songs
+        # Get all mappings to verified songs for this station
         mappings = MatchKeyMapping.objects.select_related('cleaned_song').filter(
+            station=self.station,
             cleaned_song__status='verified'
         )
         mapping_dict = {m.match_key: m.cleaned_song for m in mappings}
         
-        # Get raw tallies for the date
-        raw_tallies = RawSongTally.objects.filter(date=date)
+        # Get raw tallies for the date and station
+        raw_tallies = RawSongTally.objects.filter(date=date, station=self.station)
         
         # Aggregate by cleaned_song (only verified songs)
         song_counts = defaultdict(int)
@@ -555,29 +578,33 @@ class CleaningService:
             if cleaned_song:
                 song_counts[cleaned_song.id] += tally.count
         
-        # Update CleanedSongTally
+        # Update CleanedSongTally for this station
         with transaction.atomic():
             for song_id, count in song_counts.items():
                 CleanedSongTally.objects.update_or_create(
+                    station=self.station,
                     date=date,
                     cleaned_song_id=song_id,
                     defaults={'count': count}
                 )
         
-        logger.info(f"Updated tallies for {len(song_counts)} verified songs on {date}")
+        logger.info(f"Updated tallies for {len(song_counts)} verified songs on {date} (station: {self.station})")
     
     # =========================================================================
     # Manual review helper methods
     # =========================================================================
     
     def get_pending_review(self) -> List[CleanedSong]:
-        """Get all songs pending review."""
-        return list(CleanedSong.objects.filter(status='pending').order_by('-created_at'))
+        """Get all songs pending review for this station."""
+        return list(CleanedSong.objects.filter(
+            station=self.station,
+            status='pending'
+        ).order_by('-created_at'))
     
     def verify_song(self, song_id: int) -> bool:
-        """Mark a song as verified."""
+        """Mark a song as verified (must belong to this station)."""
         try:
-            song = CleanedSong.objects.get(id=song_id)
+            song = CleanedSong.objects.get(id=song_id, station=self.station)
             song.status = 'verified'
             song.save()
             # Clear cache so new votes can match against this song
@@ -587,9 +614,9 @@ class CleaningService:
             return False
     
     def reject_song(self, song_id: int) -> bool:
-        """Mark a song as rejected."""
+        """Mark a song as rejected (must belong to this station)."""
         try:
-            song = CleanedSong.objects.get(id=song_id)
+            song = CleanedSong.objects.get(id=song_id, station=self.station)
             song.status = 'rejected'
             song.save()
             return True

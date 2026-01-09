@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Radio Zimbabwe Weekend Charts</title>
+    <title>{{ branding_station_name }} Weekend Charts</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
@@ -122,6 +122,45 @@
         .live-voting:hover {
             background: var(--accent-gold-hover);
             transform: translateY(-1px);
+        }
+
+        /* Station Switcher */
+        .station-switch-form {
+            margin-bottom: 8px;
+        }
+        
+        .station-select {
+            width: 100%;
+            padding: 10px 12px;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            color: var(--text-primary);
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='%238b949e' viewBox='0 0 24 24'%3E%3Cpath d='M7 10l5 5 5-5z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 8px center;
+            background-size: 20px;
+            padding-right: 32px;
+        }
+        
+        .station-select:hover {
+            border-color: var(--accent-gold);
+        }
+        
+        .station-select:focus {
+            outline: none;
+            border-color: var(--accent-gold);
+            box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.2);
+        }
+        
+        .station-select option {
+            background: var(--bg-secondary);
+            color: var(--text-primary);
+            padding: 8px;
         }
 
         .live-dot {
@@ -931,12 +970,27 @@
         <!-- Sidebar -->
         <aside class="sidebar" id="sidebar">
             <div class="sidebar-header">
-                <img src="{% static 'images/radioZim.jpg' %}" alt="Radio Zimbabwe" class="logo">
+                <img src="{% static branding_station_logo %}" alt="{{ branding_station_name }}" class="logo">
                 <div class="logo-text">
-                    <h1>RADIO ZIMBABWE</h1>
+                    <h1>{{ branding_station_name|upper }}</h1>
                     <p id="season-year">2026 Season</p>
                 </div>
             </div>
+
+            {% if can_switch_station %}
+            <div class="sidebar-section">
+                <h2 class="section-title">Station Switcher</h2>
+                <form action="{% url 'accounts:switch_station' %}" method="POST" class="station-switch-form">
+                    {% csrf_token %}
+                    <input type="hidden" name="next" value="{{ request.path }}">
+                    <select name="station" class="station-select" onchange="this.form.submit()">
+                        {% for value, label in station_choices %}
+                        <option value="{{ value }}" {% if value == active_station %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </form>
+            </div>
+            {% endif %}
 
             <div class="sidebar-section">
                 <h2 class="section-title">Current Week</h2>
@@ -1057,6 +1111,17 @@
                         <span>⇵</span>
                         <span id="expand-text">Expand to 50</span>
                     </button>
+                    {% if user.is_authenticated %}
+                        <a class="btn-primary" href="{% url 'accounts:logout' %}">
+                            <span>👤</span>
+                            <span>Logout</span>
+                        </a>
+                    {% else %}
+                        <a class="btn-primary" href="{% url 'accounts:login' %}">
+                            <span>👤</span>
+                            <span>Account</span>
+                        </a>
+                    {% endif %}
                 </div>
             </header>
 

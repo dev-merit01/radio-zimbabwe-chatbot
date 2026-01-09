@@ -2,8 +2,10 @@ from django.http import JsonResponse
 from django.shortcuts import render
 from django.utils import timezone
 from django.db.models import Sum, Q
+from django.contrib.auth.decorators import login_required
 from datetime import timedelta, date
 from apps.voting.models import RawSongTally, CleanedSongTally, CleanedSong, WeeklyChart, WeeklyChartEntry
+from apps.accounts.context_processors import get_active_station
 
 
 def get_current_week_dates():
@@ -22,10 +24,12 @@ def get_week_dates_for_date(target_date):
     return monday, sunday
 
 
+@login_required
 def chart_today(request):
     """API endpoint returning the current week's chart (expandable to 50)."""
     today = timezone.localdate()
     week_start, week_end = get_current_week_dates()
+    station = get_active_station(request)
     
     # Check for limit parameter (default 20, max 50)
     limit = min(int(request.GET.get('limit', 20)), 50)
@@ -34,9 +38,10 @@ def chart_today(request):
     prev_week_start = week_start - timedelta(days=7)
     prev_week_end = week_end - timedelta(days=7)
     
-    # Build previous week's rankings
+    # Build previous week's rankings (station-scoped)
     prev_rankings = {}
     prev_chart = WeeklyChart.objects.filter(
+        station=station,
         week_start=prev_week_start,
         is_finalized=True
     ).first()
@@ -46,14 +51,15 @@ def chart_today(request):
             if entry.cleaned_song_id:
                 prev_rankings[entry.cleaned_song_id] = entry.rank
     
-    # Get votes for the current week only
+    # Get votes for the current week only (station-scoped)
     cleaned_songs = (
         CleanedSong.objects
-        .filter(status='verified')
+        .filter(station=station, status='verified')
         .annotate(
             week_votes=Sum(
                 'cleanedsongtally__count',
                 filter=Q(
+                    cleanedsongtally__station=station,
                     cleanedsongtally__date__gte=week_start,
                     cleanedsongtally__date__lte=week_end
                 )
@@ -95,8 +101,9 @@ def chart_today(request):
     # No fallback to raw data - only verified songs appear on dashboard
     # If no verified songs, data will be empty and dashboard shows "No votes yet"
     
-    # Calculate total votes for the week
+    # Calculate total votes for the week (station-scoped)
     total_week_votes = CleanedSongTally.objects.filter(
+        station=station,
         date__gte=week_start, date__lte=week_end
     ).aggregate(total=Sum('count'))['total'] or 0
     
@@ -115,11 +122,14 @@ def chart_today(request):
     })
 
 
+@login_required
 def chart_archives(request):
     """API endpoint returning list of all archived weekly charts."""
     year = request.GET.get('year', timezone.localdate().year)
+    station = get_active_station(request)
     
     charts = WeeklyChart.objects.filter(
+        station=station,
         year=year,
         is_finalized=True
     ).order_by('-week_number')
@@ -139,8 +149,9 @@ def chart_archives(request):
             'finalized_at': chart.finalized_at.isoformat() if chart.finalized_at else None,
         })
     
-    # Get available years
+    # Get available years (station-scoped)
     available_years = WeeklyChart.objects.filter(
+        station=station,
         is_finalized=True
     ).values_list('year', flat=True).distinct().order_by('-year')
     
@@ -151,6 +162,7 @@ def chart_archives(request):
     })
 
 
+@login_required
 def chart_detail(request, chart_id):
     """API endpoint returning a specific archived chart's entries."""
     try:
@@ -193,29 +205,34 @@ def chart_detail(request, chart_id):
     })
 
 
+@login_required
 def stats_overview(request):
     """API endpoint returning overall statistics."""
     today = timezone.localdate()
     year = today.year
     week_start, week_end = get_current_week_dates()
+    station = get_active_station(request)
     
-    # This week stats
+    # This week stats (station-scoped)
     week_votes = CleanedSongTally.objects.filter(
+        station=station,
         date__gte=week_start, date__lte=week_end
     ).aggregate(total=Sum('count'))['total'] or 0
     
     week_songs = CleanedSongTally.objects.filter(
+        station=station,
         date__gte=week_start, date__lte=week_end
     ).values('cleaned_song').distinct().count()
     
-    # Year-to-date stats
+    # Year-to-date stats (station-scoped)
     year_start = date(year, 1, 1)
     ytd_votes = CleanedSongTally.objects.filter(
+        station=station,
         date__gte=year_start
     ).aggregate(total=Sum('count'))['total'] or 0
     
-    # Total charts finalized
-    total_charts = WeeklyChart.objects.filter(year=year, is_finalized=True).count()
+    # Total charts finalized (station-scoped)
+    total_charts = WeeklyChart.objects.filter(station=station, year=year, is_finalized=True).count()
     
     # Next Saturday (chart day)
     days_until_saturday = (5 - today.weekday()) % 7
@@ -249,6 +266,7 @@ def stats_overview(request):
     })
 
 
+@login_required
 def dashboard(request):
     """Render the Top 100 dashboard HTML page."""
     return render(request, 'dashboard/dashboard.html', {

@@ -1,5 +1,6 @@
 import re
 from django.db import models
+from apps.accounts.models import Station
 
 
 def normalize_text(text: str) -> str:
@@ -35,10 +36,11 @@ class User(models.Model):
     )
     channel = models.CharField(max_length=16, choices=CHANNEL_CHOICES)
     user_ref = models.CharField(max_length=64)
+    station = models.CharField(max_length=32, choices=Station.choices, default=Station.RADIO_ZIMBABWE)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        unique_together = ('channel', 'user_ref')
+        unique_together = ('channel', 'user_ref', 'station')
 
 
 class RawVote(models.Model):
@@ -47,6 +49,7 @@ class RawVote(models.Model):
     No Spotify verification - just stores what the user typed.
     """
     user = models.ForeignKey(User, on_delete=models.CASCADE)
+    station = models.CharField(max_length=32, choices=Station.choices, default=Station.RADIO_ZIMBABWE, db_index=True)
     raw_input = models.CharField(max_length=512)  # exactly what user typed
     artist_raw = models.CharField(max_length=256)  # artist part before normalization
     song_raw = models.CharField(max_length=256)    # song part before normalization
@@ -64,6 +67,7 @@ class RawVote(models.Model):
             models.Index(fields=['vote_date', 'match_key']),
             models.Index(fields=['match_key']),
             models.Index(fields=['user', 'vote_date']),
+            models.Index(fields=['station', 'vote_date']),
         ]
 
     def __str__(self):
@@ -76,15 +80,17 @@ class RawSongTally(models.Model):
     Updated whenever a RawVote is recorded.
     """
     date = models.DateField()
+    station = models.CharField(max_length=32, choices=Station.choices, default=Station.RADIO_ZIMBABWE, db_index=True)
     match_key = models.CharField(max_length=512)
     display_name = models.CharField(max_length=512)  # Best display name for this match_key
     count = models.IntegerField(default=0)
 
     class Meta:
-        unique_together = ('date', 'match_key')
+        unique_together = ('date', 'station', 'match_key')
         ordering = ['-date', '-count']  # Highest vote counts first
         indexes = [
             models.Index(fields=['date', '-count']),
+            models.Index(fields=['station', 'date']),
         ]
 
     def __str__(self):
@@ -92,13 +98,68 @@ class RawSongTally(models.Model):
 
 
 # ============================================================
-# Cleaned/Verified Song Models
+# Global Song Catalog & Station-Scoped Songs
 # ============================================================
 
-class CleanedSong(models.Model):
+class SongCatalog(models.Model):
     """
-    Canonical song entry after cleaning/verification.
-    Multiple raw match_keys can map to one CleanedSong.
+    Global song catalog that any station can add to.
+    Contains canonical song information and Spotify metadata.
+    Songs can be shared across stations or kept station-specific.
+    """
+    # Canonical display info
+    artist = models.CharField(max_length=256)
+    title = models.CharField(max_length=256)
+    canonical_name = models.CharField(max_length=512, unique=True)  # "Artist - Title"
+    
+    # Global verification status
+    is_globally_verified = models.BooleanField(
+        default=False, 
+        help_text="True if this song has been verified by any station and can be trusted"
+    )
+    added_by_station = models.CharField(
+        max_length=32, 
+        choices=Station.choices, 
+        default=Station.RADIO_ZIMBABWE,
+        help_text="Station that first added this song to the catalog"
+    )
+    
+    # Optional Spotify enrichment
+    spotify_track_id = models.CharField(max_length=64, blank=True, null=True)
+    album = models.CharField(max_length=256, blank=True)
+    image_url = models.URLField(blank=True)
+    preview_url = models.URLField(blank=True)
+    
+    # Metadata
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        ordering = ['artist', 'title']
+        verbose_name = 'Song Catalog Entry'
+        verbose_name_plural = 'Song Catalog'
+        indexes = [
+            models.Index(fields=['is_globally_verified']),
+            models.Index(fields=['canonical_name']),
+            models.Index(fields=['added_by_station']),
+        ]
+    
+    def __str__(self):
+        icon = '✅' if self.is_globally_verified else '📝'
+        return f"{icon} {self.canonical_name}"
+    
+    def save(self, *args, **kwargs):
+        # Auto-generate canonical_name
+        if not self.canonical_name:
+            self.canonical_name = f"{self.artist} - {self.title}"
+        super().save(*args, **kwargs)
+
+
+class StationSong(models.Model):
+    """
+    Station-scoped song entry that references the global catalog.
+    Each station has its own copy with local status.
+    When importing from a globally verified catalog song, status starts as 'verified'.
     """
     STATUS_CHOICES = (
         ('pending', 'Pending Review'),
@@ -106,10 +167,82 @@ class CleanedSong(models.Model):
         ('rejected', 'Rejected'),
     )
     
+    station = models.CharField(max_length=32, choices=Station.choices, db_index=True)
+    catalog_song = models.ForeignKey(
+        SongCatalog, 
+        on_delete=models.CASCADE, 
+        related_name='station_songs'
+    )
+    status = models.CharField(max_length=16, choices=STATUS_CHOICES, default='pending')
+    
+    # Metadata
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
+    class Meta:
+        unique_together = ('station', 'catalog_song')
+        ordering = ['catalog_song__artist', 'catalog_song__title']
+        verbose_name = 'Station Song'
+        verbose_name_plural = 'Station Songs'
+        indexes = [
+            models.Index(fields=['station', 'status']),
+        ]
+    
+    def __str__(self):
+        status_icon = {'pending': '⏳', 'verified': '✅', 'rejected': '❌'}.get(self.status, '')
+        return f"{status_icon} {self.catalog_song.canonical_name} ({self.get_station_display()})"
+    
+    # Convenience properties to access catalog song fields
+    @property
+    def artist(self):
+        return self.catalog_song.artist
+    
+    @property
+    def title(self):
+        return self.catalog_song.title
+    
+    @property
+    def canonical_name(self):
+        return self.catalog_song.canonical_name
+    
+    @property
+    def spotify_track_id(self):
+        return self.catalog_song.spotify_track_id
+    
+    @property
+    def album(self):
+        return self.catalog_song.album
+    
+    @property
+    def image_url(self):
+        return self.catalog_song.image_url
+    
+    @property
+    def preview_url(self):
+        return self.catalog_song.preview_url
+
+
+class CleanedSong(models.Model):
+    """
+    Canonical song entry after cleaning/verification.
+    Multiple raw match_keys can map to one CleanedSong.
+    
+    NOTE: This model is being deprecated in favor of SongCatalog + StationSong.
+    Kept for backward compatibility during migration.
+    """
+    STATUS_CHOICES = (
+        ('pending', 'Pending Review'),
+        ('verified', 'Verified'),
+        ('rejected', 'Rejected'),
+    )
+    
+    # Station scope
+    station = models.CharField(max_length=32, choices=Station.choices, default=Station.RADIO_ZIMBABWE, db_index=True)
+    
     # Canonical display info
     artist = models.CharField(max_length=256)
     title = models.CharField(max_length=256)
-    canonical_name = models.CharField(max_length=512, unique=True)  # "Artist - Title"
+    canonical_name = models.CharField(max_length=512)  # "Artist - Title"
     
     # Status
     status = models.CharField(max_length=16, choices=STATUS_CHOICES, default='pending')
@@ -125,9 +258,11 @@ class CleanedSong(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
+        unique_together = ('station', 'canonical_name')
         ordering = ['artist', 'title']
         indexes = [
             models.Index(fields=['status']),
+            models.Index(fields=['station', 'status']),
             models.Index(fields=['canonical_name']),
         ]
     
@@ -158,8 +293,10 @@ class MatchKeyMapping(models.Model):
     """
     Maps raw match_keys to CleanedSong entries.
     Allows multiple raw variations to point to one canonical song.
+    Station-scoped: each station has its own mappings.
     """
-    match_key = models.CharField(max_length=512, unique=True, db_index=True)
+    station = models.CharField(max_length=32, choices=Station.choices, default=Station.RADIO_ZIMBABWE, db_index=True)
+    match_key = models.CharField(max_length=512, db_index=True)
     cleaned_song = models.ForeignKey(CleanedSong, on_delete=models.CASCADE, related_name='match_keys')
     
     # For tracking which raw display_name was most common
@@ -170,6 +307,12 @@ class MatchKeyMapping(models.Model):
     is_auto_mapped = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     
+    class Meta:
+        unique_together = ('station', 'match_key')
+        indexes = [
+            models.Index(fields=['station', 'match_key']),
+        ]
+    
     def __str__(self):
         return f"{self.match_key} → {self.cleaned_song.canonical_name}"
 
@@ -178,15 +321,18 @@ class CleanedSongTally(models.Model):
     """
     Daily vote counts for cleaned/verified songs.
     This is what the dashboard displays.
+    Station-scoped: each station has its own daily tallies.
     """
     date = models.DateField()
+    station = models.CharField(max_length=32, choices=Station.choices, default=Station.RADIO_ZIMBABWE, db_index=True)
     cleaned_song = models.ForeignKey(CleanedSong, on_delete=models.CASCADE)
     count = models.IntegerField(default=0)
     
     class Meta:
-        unique_together = ('date', 'cleaned_song')
+        unique_together = ('date', 'station', 'cleaned_song')
         indexes = [
             models.Index(fields=['date', '-count']),
+            models.Index(fields=['station', 'date']),
         ]
     
     def __str__(self):
@@ -260,6 +406,7 @@ class LLMDecisionLog(models.Model):
     """
     Logs LLM decisions for auditing and review.
     Helps verify if the LLM is making correct matching/rejection decisions.
+    Station-scoped for tracking decisions per station.
     """
     ACTION_CHOICES = (
         ('match', 'Matched to Verified'),
@@ -268,6 +415,8 @@ class LLMDecisionLog(models.Model):
         ('auto_merge', 'Auto-Merged'),
         ('auto_reject', 'Auto-Rejected'),
     )
+    
+    station = models.CharField(max_length=32, choices=Station.choices, default=Station.RADIO_ZIMBABWE, db_index=True)
     
     # What was being processed
     input_text = models.CharField(max_length=512, help_text="Original song name being processed")
@@ -376,7 +525,10 @@ class WeeklyChart(models.Model):
     """
     Stores finalized weekly Top 20/50 charts.
     Charts are finalized every Saturday, and Dec 31st is the Top 50.
+    Station-scoped: each station has its own weekly charts.
     """
+    station = models.CharField(max_length=32, choices=Station.choices, default=Station.RADIO_ZIMBABWE, db_index=True)
+    
     # Week identification
     week_start = models.DateField(help_text="Monday of the chart week")
     week_end = models.DateField(help_text="Sunday of the chart week (chart published on Saturday)")
@@ -398,13 +550,14 @@ class WeeklyChart(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     
     class Meta:
-        unique_together = ('year', 'week_number')
+        unique_together = ('station', 'year', 'week_number')
         ordering = ['-year', '-week_number']
         verbose_name = 'Weekly Chart'
         verbose_name_plural = 'Weekly Charts'
         indexes = [
             models.Index(fields=['-year', '-week_number']),
             models.Index(fields=['week_end']),
+            models.Index(fields=['station', '-year', '-week_number']),
         ]
     
     def __str__(self):

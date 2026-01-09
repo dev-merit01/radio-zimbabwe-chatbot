@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Radio Zimbabwe Weekend Charts</title>
+    <title>{{ branding_station_name }} Weekend Charts</title>
 
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -921,9 +921,9 @@
     <div class="app-shell">
         <aside class="sidebar">
             <div class="sidebar-header">
-                <img src="{% static 'images/radioZim.jpg' %}" alt="Radio Zimbabwe" class="sidebar-logo" />
+                <img src="{% static branding_station_logo %}" alt="{{ branding_station_name }}" class="sidebar-logo" />
                 <div class="sidebar-title">
-                    <div class="sidebar-brand">Radio Charts</div>
+                    <div class="sidebar-brand">{{ branding_station_name|upper }}</div>
                     <div class="sidebar-season" id="sidebar-season">2026 Season</div>
                 </div>
             </div>
@@ -1013,6 +1013,17 @@
                         <span class="icon">⇵</span>
                         Expand to 50
                     </button>
+                    {% if user.is_authenticated %}
+                        <a class="pill-button" href="{% url 'accounts:logout' %}">
+                            <span class="icon">👤</span>
+                            Logout
+                        </a>
+                    {% else %}
+                        <a class="pill-button" href="{% url 'accounts:login' %}">
+                            <span class="icon">👤</span>
+                            Account
+                        </a>
+                    {% endif %}
                     <button id="btn-export" class="pill-button" style="display: none;">
                         <span class="icon">⬇</span>
                         Export CSV

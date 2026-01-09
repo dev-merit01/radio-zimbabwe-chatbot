@@ -4,6 +4,7 @@ from apps.dashboard.api_urls import dashboard_urlpatterns
 
 urlpatterns = [
     path('admin/', admin.site.urls),
+    path('accounts/', include('apps.accounts.urls')),
     path('api/', include('apps.dashboard.api_urls')),
     path('webhook/', include('apps.bot.webhook_urls')),
     path('', include(dashboard_urlpatterns)),
