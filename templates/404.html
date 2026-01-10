@@ -1,0 +1,118 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Page Not Found</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+    :root {
+      --bg-primary: #0f1419;
+      --bg-secondary: #1a1f26;
+      --border-color: #30363d;
+      --text-primary: #ffffff;
+      --text-secondary: #8b949e;
+      --accent-gold: #f59e0b;
+    }
+    body {
+      margin: 0;
+      font-family: 'Inter', sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+    .card {
+      width: 100%;
+      max-width: 520px;
+      background: var(--bg-secondary);
+      border: 1px solid var(--border-color);
+      border-radius: 14px;
+      padding: 24px;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 18px;
+    }
+    .logo {
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      object-fit: cover;
+      flex-shrink: 0;
+    }
+    h1 {
+      font-size: 18px;
+      font-weight: 800;
+      margin: 0;
+    }
+    .subtitle {
+      margin: 10px 0 18px;
+      color: var(--text-secondary);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    .code {
+      display: inline-block;
+      padding: 6px 10px;
+      border-radius: 999px;
+      border: 1px solid var(--border-color);
+      color: var(--text-secondary);
+      font-size: 12px;
+      margin-bottom: 12px;
+    }
+    .actions {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-top: 16px;
+    }
+    a.btn {
+      display: inline-block;
+      padding: 10px 14px;
+      border-radius: 10px;
+      border: 1px solid rgba(245, 158, 11, 0.4);
+      background: rgba(245, 158, 11, 0.1);
+      color: var(--text-primary);
+      text-decoration: none;
+      font-weight: 600;
+      font-size: 14px;
+    }
+    a.btn.secondary {
+      border-color: var(--border-color);
+      background: transparent;
+      color: var(--text-secondary);
+    }
+    a.btn:hover { border-color: var(--accent-gold); }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="brand">
+      <img class="logo" src="{% static branding_station_logo|default:'images/radioZim.jpg' %}" alt="{{ branding_station_name|default:'Radio Zimbabwe' }}" />
+      <div>
+        <h1>{{ branding_station_name|default:'Radio Zimbabwe' }}</h1>
+        <div class="subtitle">Weekend Charts</div>
+      </div>
+    </div>
+
+    <div class="code">Error 404</div>
+    <h1>Page not found</h1>
+    <p class="subtitle">The page you’re trying to open doesn’t exist or has moved. If you typed the address manually, double-check it and try again.</p>
+
+    <div class="actions">
+      <a class="btn" href="/">Go to dashboard</a>
+      <a class="btn secondary" href="/accounts/login/">Login</a>
+    </div>
+  </div>
+</body>
+</html>

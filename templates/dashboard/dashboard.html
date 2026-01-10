@@ -65,6 +65,11 @@
             z-index: 100;
         }
 
+        /* Desktop collapse support (hamburger) */
+        .sidebar.collapsed {
+            transform: translateX(-100%);
+        }
+
         .sidebar-header {
             display: flex;
             align-items: center;
@@ -288,6 +293,10 @@
             max-width: 100%;
         }
 
+        .main-content.expanded {
+            margin-left: 0;
+        }
+
         .topbar {
             display: flex;
             align-items: center;
@@ -313,6 +322,7 @@
             justify-content: center;
             cursor: pointer;
             transition: all 0.2s ease;
+            user-select: none;
         }
 
         .menu-icon:hover {
@@ -330,16 +340,6 @@
             display: flex;
             align-items: center;
             gap: 12px;
-        }
-        .badge {
-            padding: 6px 14px;
-            border: 1px solid var(--border-color);
-            border-radius: 20px;
-            font-size: 12px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            color: var(--text-secondary);
         }
 
         .btn-primary {
@@ -765,9 +765,6 @@
                 font-size: 12px;
             }
             
-            .badge {
-                display: none;
-            }
             
             .content {
                 padding: 20px;
@@ -1095,14 +1092,10 @@
         <main class="main-content">
             <header class="topbar">
                 <div class="topbar-left">
-                    <div class="menu-icon">☰</div>
+                    <div class="menu-icon" id="menu-toggle" role="button" aria-label="Toggle sidebar" tabindex="0">☰</div>
                     <h1 class="topbar-title">Weekend Charts Dashboard</h1>
                 </div>
                 <div class="topbar-right">
-                    <div class="badge">
-                        <span>📡</span>
-                        <span>Weekend Charts</span>
-                    </div>
                     <button class="btn-primary" id="refresh-btn">
                         <span>⟳</span>
                         <span>Refresh</span>
@@ -1260,9 +1253,18 @@
                     loadArchiveChart(currentArchiveId);
                 }
             });
-            
-            // Menu toggle for mobile/sidebar
-            document.querySelector('.menu-icon').addEventListener('click', toggleSidebar);
+
+            // Sidebar toggle (hamburger)
+            const menuToggle = document.getElementById('menu-toggle');
+            if (menuToggle) {
+                menuToggle.addEventListener('click', toggleSidebar);
+                menuToggle.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        toggleSidebar();
+                    }
+                });
+            }
             
             document.getElementById('expand-btn').addEventListener('click', toggleExpand);
             document.getElementById('export-btn').addEventListener('click', exportCSV);
@@ -1690,12 +1692,22 @@
         function toggleSidebar() {
             const sidebar = document.getElementById('sidebar');
             const overlay = document.getElementById('sidebar-overlay');
+            const main = document.querySelector('.main-content');
+            const isMobile = window.innerWidth <= 1024;
             
-            sidebar.classList.toggle('show');
-            overlay.classList.toggle('show');
-            
-            // Prevent body scroll when sidebar is open on mobile
-            document.body.style.overflow = sidebar.classList.contains('show') ? 'hidden' : '';
+            if (isMobile) {
+                sidebar.classList.toggle('show');
+                overlay.classList.toggle('show');
+                // Prevent body scroll when sidebar is open on mobile
+                document.body.style.overflow = sidebar.classList.contains('show') ? 'hidden' : '';
+                return;
+            }
+
+            // Desktop: collapse sidebar without overlay
+            sidebar.classList.toggle('collapsed');
+            main.classList.toggle('expanded');
+            overlay.classList.remove('show');
+            document.body.style.overflow = '';
         }
 
         function exportCSV() {

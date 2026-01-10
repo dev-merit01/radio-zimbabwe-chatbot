@@ -9,6 +9,12 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
+        *, *::before, *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
         :root {
             --bg-primary: #0f1419;
             --bg-secondary: #1a1f26;
@@ -17,28 +23,150 @@
             --text-secondary: #8b949e;
             --accent-gold: #f59e0b;
         }
-        body { font-family: 'Inter', sans-serif; background: var(--bg-primary); color: var(--text-primary); margin: 0; }
-        .wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; }
-        .card { width: 100%; max-width: 420px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 14px; padding: 22px; }
-        h1 { margin: 0 0 8px; font-size: 20px; }
-        p { margin: 0 0 18px; color: var(--text-secondary); font-size: 13px; }
-        label { display:block; margin: 12px 0 6px; font-size: 13px; color: var(--text-secondary); }
-        input { width:100%; padding: 10px 12px; border-radius: 10px; border: 1px solid var(--border-color); background: transparent; color: var(--text-primary); }
-        .btn { margin-top: 16px; width: 100%; padding: 10px 12px; border-radius: 10px; border: 1px solid rgba(245, 158, 11, 0.4); background: rgba(245, 158, 11, 0.08); color: var(--text-primary); font-weight: 600; cursor: pointer; }
-        .btn:hover { border-color: var(--accent-gold); }
-        .err { margin-top: 10px; color: #ef4444; font-size: 13px; }
-        .links { margin-top: 14px; font-size: 13px; color: var(--text-secondary); }
-        a { color: var(--accent-gold); text-decoration: none; }
-        a:hover { text-decoration: underline; }
-        ul.messages { list-style: none; padding: 0; margin: 0 0 10px; }
-        ul.messages li { margin: 0 0 8px; color: #ef4444; font-size: 13px; }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+        }
+
+        .wrap {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+        }
+
+        .card {
+            width: 100%;
+            max-width: 400px;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 14px;
+            padding: 24px;
+        }
+
+        @media (max-width: 480px) {
+            .card {
+                padding: 20px 16px;
+                border-radius: 12px;
+            }
+        }
+
+        h1 {
+            margin: 0 0 8px;
+            font-size: 22px;
+            font-weight: 700;
+        }
+
+        .subtitle {
+            margin: 0 0 24px;
+            color: var(--text-secondary);
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        .form-group {
+            margin-bottom: 16px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-secondary);
+        }
+
+        input {
+            display: block;
+            width: 100%;
+            padding: 12px 14px;
+            border-radius: 10px;
+            border: 1px solid var(--border-color);
+            background: transparent;
+            color: var(--text-primary);
+            font-size: 14px;
+            font-family: inherit;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+
+        input:focus {
+            outline: none;
+            border-color: var(--accent-gold);
+            box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.15);
+        }
+
+        input::placeholder {
+            color: var(--text-secondary);
+            opacity: 0.6;
+        }
+
+        .btn {
+            display: block;
+            width: 100%;
+            margin-top: 24px;
+            padding: 12px 16px;
+            border-radius: 10px;
+            border: 1px solid rgba(245, 158, 11, 0.4);
+            background: rgba(245, 158, 11, 0.1);
+            color: var(--text-primary);
+            font-size: 14px;
+            font-weight: 600;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .btn:hover {
+            border-color: var(--accent-gold);
+            background: rgba(245, 158, 11, 0.2);
+        }
+
+        .btn:active {
+            transform: scale(0.98);
+        }
+
+        .messages {
+            list-style: none;
+            margin: 0 0 16px;
+            padding: 12px;
+            background: rgba(239, 68, 68, 0.1);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 8px;
+        }
+
+        .messages li {
+            color: #ef4444;
+            font-size: 13px;
+            line-height: 1.5;
+        }
+
+        .links {
+            margin-top: 20px;
+            text-align: center;
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        a {
+            color: var(--accent-gold);
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        a:hover {
+            text-decoration: underline;
+        }
     </style>
 </head>
 <body>
     <div class="wrap">
         <div class="card">
             <h1>Login</h1>
-            <p>Use your username and password to view the dashboard.</p>
+            <p class="subtitle">Use your username and password to view the dashboard.</p>
 
             {% if messages %}
                 <ul class="messages">
@@ -48,21 +176,47 @@
                 </ul>
             {% endif %}
 
+            {% if form and form.non_field_errors %}
+                <ul class="messages" style="margin-top: 0;">
+                    {% for err in form.non_field_errors %}
+                        <li>{{ err }}</li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
+
             <form method="post">
                 {% csrf_token %}
                 {% if next %}<input type="hidden" name="next" value="{{ next }}" />{% endif %}
 
-                <label for="id_username">Username</label>
-                <input id="id_username" name="username" type="text" autocomplete="username" required />
+                <div class="form-group">
+                    <label for="id_username">Username</label>
+                    <input id="id_username" name="username" type="text" autocomplete="username" placeholder="Enter your username" required />
+                    {% if form and form.username.errors %}
+                        <div class="messages" style="margin: 10px 0 0; padding: 10px;">
+                            {% for err in form.username.errors %}
+                                <div style="color:#ef4444; font-size:13px; line-height:1.4;">{{ err }}</div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
 
-                <label for="id_password">Password</label>
-                <input id="id_password" name="password" type="password" autocomplete="current-password" required />
+                <div class="form-group">
+                    <label for="id_password">Password</label>
+                    <input id="id_password" name="password" type="password" autocomplete="current-password" placeholder="Enter your password" required />
+                    {% if form and form.password.errors %}
+                        <div class="messages" style="margin: 10px 0 0; padding: 10px;">
+                            {% for err in form.password.errors %}
+                                <div style="color:#ef4444; font-size:13px; line-height:1.4;">{{ err }}</div>
+                            {% endfor %}
+                        </div>
+                    {% endif %}
+                </div>
 
                 <button class="btn" type="submit">Login</button>
             </form>
 
             <div class="links">
-                Don’t have an account? <a href="{% url 'accounts:register' %}{% if next %}?next={{ next|urlencode }}{% endif %}">Create one</a>
+                Don't have an account? <a href="{% url 'accounts:register' %}{% if next %}?next={{ next|urlencode }}{% endif %}">Create one</a>
             </div>
         </div>
     </div>
