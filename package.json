@@ -1,0 +1,11 @@
+{
+  "name": "radio-zimbabwe-voting-studio",
+  "private": true,
+  "scripts": {
+    "test:browser": "node tests/browser/workspace.cjs"
+  },
+  "devDependencies": {
+    "playwright": "1.62.1",
+    "prettier": "3.8.1"
+  }
+}

@@ -21,53 +21,66 @@ class TelegramConfigurationError(TelegramClientError):
 class TelegramClient:
     def __init__(self, token: str, session: Optional[requests.Session] = None):
         if not token:
-            raise TelegramConfigurationError('Telegram bot token is not configured.')
+            raise TelegramConfigurationError("Telegram bot token is not configured.")
         self.token = token
         self._session = session or requests.Session()
-        self._base_url = f'https://api.telegram.org/bot{token}'
+        self._base_url = f"https://api.telegram.org/bot{token}"
 
     def _post(self, method: str, payload: dict) -> dict:
-        url = f'{self._base_url}/{method}'
+        url = f"{self._base_url}/{method}"
         try:
-            response = self._session.post(url, json=payload, timeout=10)
+            response = self._session.post(url, json=payload, timeout=(5, 10))
             response.raise_for_status()
         except requests.RequestException as exc:
-            logger.exception('Telegram request failed: %s', exc)
-            raise TelegramClientError(str(exc)) from exc
+            logger.error("Telegram request failed (%s)", type(exc).__name__)
+            raise TelegramClientError("Telegram request failed") from exc
 
         try:
             data = response.json()
         except ValueError as exc:
-            logger.exception('Telegram returned non-JSON response: %s', response.text)
-            raise TelegramClientError('Telegram returned an invalid response') from exc
+            logger.warning("Provider returned invalid JSON")
+            raise TelegramClientError("Telegram returned an invalid response") from exc
 
-        if not data.get('ok'):
-            description = data.get('description', 'Unknown Telegram error')
-            logger.error('Telegram API error: %s', description)
+        if not isinstance(data, dict):
+            raise ValueError("Invalid provider response shape")
+        if not data.get("ok"):
+            description = data.get("description", "Unknown Telegram error")
+            logger.error("Telegram API error: %s", description)
             raise TelegramClientError(description)
+        if not isinstance(data, dict):
+            raise ValueError("Invalid provider response shape")
         return data
 
-    def send_text(self, chat_id: str, text: str, parse_mode: Optional[str] = None) -> dict:
+    def send_text(
+        self, chat_id: str, text: str, parse_mode: Optional[str] = None
+    ) -> dict:
         payload = {
-            'chat_id': chat_id,
-            'text': text,
-            'disable_web_page_preview': True,
+            "chat_id": chat_id,
+            "text": text,
+            "disable_web_page_preview": True,
         }
         if parse_mode:
-            payload['parse_mode'] = parse_mode
-        logger.debug('Sending Telegram message to %s', chat_id)
-        return self._post('sendMessage', payload)
+            payload["parse_mode"] = parse_mode
+        logger.debug("Provider message submitted")
+        return self._post("sendMessage", payload)
 
     def set_webhook(self, url: str) -> dict:
-        logger.info('Setting Telegram webhook to %s', url)
-        return self._post('setWebhook', {'url': url})
+        logger.info("Setting Telegram webhook to %s", url)
+        return self._post(
+            "setWebhook",
+            {
+                "url": url,
+                "secret_token": settings.TELEGRAM_WEBHOOK_SECRET,
+                "allowed_updates": ["message"],
+            },
+        )
 
     def delete_webhook(self) -> dict:
-        logger.info('Removing Telegram webhook')
-        return self._post('deleteWebhook', {})
+        logger.info("Removing Telegram webhook")
+        return self._post("deleteWebhook", {})
 
     def get_me(self) -> dict:
-        return self._post('getMe', {})
+        return self._post("getMe", {})
 
 
 _client_lock: Lock = Lock()
@@ -76,11 +89,11 @@ _executor = ThreadPoolExecutor(max_workers=5)
 
 
 def _resolve_token() -> str:
-    token = getattr(settings, 'TELEGRAM_BOT_TOKEN', '')
+    token = getattr(settings, "TELEGRAM_BOT_TOKEN", "")
     if not token:
-        token = os.environ.get('TELEGRAM_BOT_TOKEN', '')
+        token = os.environ.get("TELEGRAM_BOT_TOKEN", "")
     if not token:
-        raise TelegramConfigurationError('Telegram bot token is not configured.')
+        raise TelegramConfigurationError("Telegram bot token is not configured.")
     return token
 
 
@@ -97,10 +110,10 @@ def send_text(chat_id: str, text: str, parse_mode: Optional[str] = None) -> bool
     try:
         client = get_client()
         client.send_text(chat_id, text, parse_mode=parse_mode)
-        logger.info('Sent message to %s', chat_id)
+        logger.debug("Provider message submitted")
         return True
     except TelegramClientError as exc:
-        logger.error('Failed to send message to %s: %s', chat_id, exc)
+        logger.error("Failed to send message to %s: %s", chat_id, exc)
         return False
 
 

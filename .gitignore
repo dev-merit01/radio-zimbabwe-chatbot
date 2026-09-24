@@ -17,3 +17,16 @@ media/
 # Editor files
 .vscode/
 .idea/
+
+.cache*
+.pytest_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.log
+desktop/config.json
+
+.venv-desktop/
+
+node_modules/
