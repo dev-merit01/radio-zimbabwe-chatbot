@@ -6,9 +6,10 @@ This module uses Gemini 1.5 Flash to:
 2. Understand Zimbabwean music context
 3. Provide better search queries for Spotify
 """
+
 import json
 import logging
-from typing import Optional, Tuple
+from typing import Tuple
 
 import google.generativeai as genai
 from django.conf import settings
@@ -59,17 +60,17 @@ def _get_model():
     """Get or create the Gemini model instance."""
     global _model
     # Always recreate to pick up prompt changes during dev
-    api_key = getattr(settings, 'GEMINI_API_KEY', '')
+    api_key = getattr(settings, "GEMINI_API_KEY", "")
     if not api_key:
-        raise GeminiNotConfiguredError('Gemini API key is not configured.')
-    
+        raise GeminiNotConfiguredError("Gemini API key is not configured.")
+
     genai.configure(api_key=api_key)
     _model = genai.GenerativeModel(
-        model_name='gemini-2.0-flash',
+        model_name="gemini-2.0-flash",
         generation_config={
-            'temperature': 0.0,  # Zero temperature for deterministic spelling fixes
-            'top_p': 0.8,
-            'max_output_tokens': 256,
+            "temperature": 0.0,  # Zero temperature for deterministic spelling fixes
+            "top_p": 0.8,
+            "max_output_tokens": 256,
         },
         system_instruction=SYSTEM_PROMPT,
     )
@@ -79,11 +80,11 @@ def _get_model():
 def correct_song_query(artist: str, title: str) -> Tuple[str, str, dict]:
     """
     Use Gemini to correct spelling and identify the actual song.
-    
+
     Args:
         artist: User-provided artist name (possibly misspelled)
         title: User-provided song title (possibly misspelled)
-    
+
     Returns:
         Tuple of (corrected_artist, corrected_title, metadata)
         metadata contains: confidence, is_zimbabwean, notes
@@ -91,49 +92,61 @@ def correct_song_query(artist: str, title: str) -> Tuple[str, str, dict]:
     try:
         model = _get_model()
     except GeminiNotConfiguredError:
-        logger.warning('Gemini not configured, returning original input')
-        return artist, title, {'confidence': 'low', 'is_zimbabwean': False, 'notes': ''}
-    
+        logger.warning("Gemini not configured, returning original input")
+        return artist, title, {"confidence": "low", "is_zimbabwean": False, "notes": ""}
+
     prompt = USER_PROMPT_TEMPLATE.format(artist=artist, title=title)
-    
+
     try:
         response = model.generate_content(prompt)
         response_text = response.text.strip()
-        
+
         # Clean up response - remove markdown code blocks if present
-        if response_text.startswith('```'):
-            lines = response_text.split('\n')
+        if response_text.startswith("```"):
+            lines = response_text.split("\n")
             # Remove first and last lines (```json and ```)
-            response_text = '\n'.join(lines[1:-1])
-        
+            response_text = "\n".join(lines[1:-1])
+
         # Parse JSON response
         result = json.loads(response_text)
-        
-        corrected_artist = result.get('corrected_artist', artist)
-        corrected_title = result.get('corrected_title', title)
+
+        corrected_artist = result.get("corrected_artist", artist)
+        corrected_title = result.get("corrected_title", title)
         metadata = {
-            'confidence': result.get('confidence', 'low'),
-            'is_zimbabwean': result.get('is_zimbabwean', False),
-            'notes': result.get('notes', ''),
+            "confidence": result.get("confidence", "low"),
+            "is_zimbabwean": result.get("is_zimbabwean", False),
+            "notes": result.get("notes", ""),
         }
-        
+
         logger.info(
             'Gemini correction: "%s - %s" -> "%s - %s" (confidence: %s, zim: %s)',
-            artist, title, corrected_artist, corrected_title,
-            metadata['confidence'], metadata['is_zimbabwean']
+            artist,
+            title,
+            corrected_artist,
+            corrected_title,
+            metadata["confidence"],
+            metadata["is_zimbabwean"],
         )
-        
+
         return corrected_artist, corrected_title, metadata
-        
+
     except json.JSONDecodeError as e:
-        logger.warning('Failed to parse Gemini response as JSON: %s', e)
-        return artist, title, {'confidence': 'low', 'is_zimbabwean': False, 'notes': 'Parse error'}
+        logger.warning("Failed to parse Gemini response as JSON: %s", e)
+        return (
+            artist,
+            title,
+            {"confidence": "low", "is_zimbabwean": False, "notes": "Parse error"},
+        )
     except Exception as e:
-        logger.exception('Gemini API error: %s', e)
-        return artist, title, {'confidence': 'low', 'is_zimbabwean': False, 'notes': str(e)}
+        logger.exception("Gemini API error: %s", e)
+        return (
+            artist,
+            title,
+            {"confidence": "low", "is_zimbabwean": False, "notes": str(e)},
+        )
 
 
 def is_gemini_configured() -> bool:
     """Check if Gemini API is configured."""
-    api_key = getattr(settings, 'GEMINI_API_KEY', '')
+    api_key = getattr(settings, "GEMINI_API_KEY", "")
     return bool(api_key)
