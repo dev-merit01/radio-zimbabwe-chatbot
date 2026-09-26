@@ -1,9 +1,10 @@
 from django.urls import path
 from .views import chart_today, dashboard, chart_archives, chart_detail, stats_overview
 
-from . import workspace
+from . import desktop, workspace
 
 urlpatterns = [
+    path("desktop/status", desktop.status),
     path("workspace/overview", workspace.overview),
     path("workspace/songs", workspace.songs),
     path("workspace/songs/add", workspace.add_song),

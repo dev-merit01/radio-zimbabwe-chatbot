@@ -1,8 +1,8 @@
 """One authoritative station-scoped review and reconciliation pipeline."""
 
-from collections import defaultdict
+from itertools import islice
 from django.db import transaction
-from django.db.models import Sum
+from django.db.models import OuterRef, Subquery, Sum
 from .models import (
     StationState,
     CleanedSong,
@@ -32,22 +32,35 @@ def rebuild_tallies(station, song_ids=None, date_range=None):
         if song_ids is not None:
             mapping_qs = mapping_qs.filter(cleaned_song_id__in=song_ids)
             cleaned = cleaned.filter(cleaned_song_id__in=song_ids)
-        mappings = dict(mapping_qs.values_list("match_key", "cleaned_song_id"))
-        raw = raw.filter(match_key__in=mappings)
+        # Resolve and aggregate in SQL: no full mapping dictionary, giant IN
+        # parameter list, or application-side per-key/date totals dictionary.
+        # Keep affected-song rebuilds selective through the existing
+        # (station, match_key, date) index, while the IN values remain in SQL.
+        raw = raw.filter(
+            match_key__in=mapping_qs.order_by().values("match_key")
+        ).annotate(
+            song_id=Subquery(
+                mapping_qs.filter(match_key=OuterRef("match_key"))
+                .order_by()
+                .values("cleaned_song_id")[:1]
+            )
+        )
         if date_range is not None:
             raw = raw.filter(date__range=date_range)
             cleaned = cleaned.filter(date__range=date_range)
-        totals = defaultdict(int)
-        for row in raw.values("date", "match_key", "count").iterator(chunk_size=2000):
-            if row["match_key"] in mappings:
-                totals[(row["date"], mappings[row["match_key"]])] += row["count"]
+        totals = raw.order_by().values("date", "song_id").annotate(total=Sum("count"))
         cleaned.delete()
-        CleanedSongTally.objects.bulk_create(
-            [
-                CleanedSongTally(station=station, date=d, cleaned_song_id=s, count=n)
-                for (d, s), n in totals.items()
-            ]
+        rows = (
+            CleanedSongTally(
+                station=station,
+                date=row["date"],
+                cleaned_song_id=row["song_id"],
+                count=row["total"],
+            )
+            for row in totals.iterator(chunk_size=500)
         )
+        while batch := list(islice(rows, 500)):
+            CleanedSongTally.objects.bulk_create(batch, batch_size=500)
 
 
 def update_song_tally(station, song_id, date):
@@ -178,7 +191,7 @@ def review_song(
             artist, title = artist.strip(), title.strip()
             if not artist or not title or len(artist) > 240 or len(title) > 240:
                 raise ValueError(
-                    "Artist and title are required (maximum 256 characters)."
+                    "Artist and title are required (maximum 240 characters)."
                 )
             canonical = f"{artist} - {title}"
             if (

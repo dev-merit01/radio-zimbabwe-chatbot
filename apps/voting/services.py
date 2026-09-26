@@ -256,7 +256,7 @@ class VotingService:
         """Record a vote and durable processing job. No external I/O on this path."""
         from django.conf import settings
         from django.db.models import F
-        from .models import VoteJob, CleanedSong, MatchKeyMapping
+        from .models import VoteJob, CleanedSong
 
         text = (text or "").strip()
         if not text or text.lower() in {"/start", "start"}:
@@ -297,15 +297,7 @@ class VotingService:
                 user=user, station=self.station, vote_date=today
             )
             if not settings.ALLOW_REPEAT_SONG:
-                keys = [match_key]
-                mapping = MatchKeyMapping.objects.filter(
-                    station=self.station, match_key=match_key
-                ).first()
-                if mapping:
-                    keys = MatchKeyMapping.objects.filter(
-                        station=self.station, cleaned_song=mapping.cleaned_song
-                    ).values_list("match_key", flat=True)
-                if votes.filter(match_key__in=keys).exists():
+                if self._already_voted(votes, match_key, artist, title):
                     return "⚠️ You already voted for this song today. Please choose another song."
             count = votes.count()
             if count >= limit:
@@ -334,6 +326,52 @@ class VotingService:
             VoteJob.objects.create(vote=vote)
         remaining = limit - count - 1
         return f"✅ Vote recorded!\n\n🎵 {display_name}\n\nYou have {remaining} vote{'s' if remaining != 1 else ''} remaining today."
+
+    def _already_voted(self, votes, match_key, artist, title):
+        """Check known aliases even when the canonical vote is still queued.
+
+        The caller holds the voter lock. Never use fuzzy/AI guesses to reject a
+        vote; reviewer mappings take precedence over exact catalogue lookup.
+        """
+        from django.db.models import Q
+        from .models import CleanedSong, MatchKeyMapping
+
+        mappings = MatchKeyMapping.objects.filter(
+            station=self.station, cleaned_song__station=self.station
+        )
+        mapping = (
+            mappings.select_related("cleaned_song").filter(match_key=match_key).first()
+        )
+        song = mapping.cleaned_song if mapping else None
+        if song is None:
+            candidates = list(
+                CleanedSong.objects.filter(
+                    station=self.station,
+                    status="verified",
+                    artist__iexact=normalize_text(artist),
+                    title__iexact=normalize_text(title),
+                )[:2]
+            )
+            if len(candidates) == 1:
+                song = candidates[0]
+        duplicates = Q(match_key=match_key)
+        if song:
+            duplicates |= Q(
+                match_key__in=mappings.filter(cleaned_song=song).values("match_key")
+            )
+            canonical_artist, canonical_title = clean_vote_text(song.artist, song.title)
+            canonical_key = create_match_key(
+                correct_artist_typo(canonical_artist), canonical_title
+            )
+            # An existing reviewer mapping must not be overridden by a renamed
+            # catalogue entry that now happens to have the same spelling.
+            if (
+                not mappings.filter(match_key=canonical_key)
+                .exclude(cleaned_song=song)
+                .exists()
+            ):
+                duplicates |= Q(match_key=canonical_key)
+        return votes.filter(duplicates).exists()
 
     @staticmethod
     def _welcome_message():

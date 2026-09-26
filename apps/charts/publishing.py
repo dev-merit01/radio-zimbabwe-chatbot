@@ -27,9 +27,22 @@ def publish_week(station, start, actor, size=20):
             raise ValueError(
                 "An unfinished legacy archive exists for this week; review it before publishing."
             )
-        unfinished = ['queued', 'running', 'failed']
-        if InboundEvent.objects.filter(station=station, received_at__date__range=(start,end), state__in=unfinished).exists() or VoteJob.objects.filter(vote__station=station, vote__vote_date__range=(start,end), state__in=unfinished).exists():
-            raise ValueError('This week still has unprocessed votes. Resolve the processing queue before publishing.')
+        unfinished = ["queued", "running", "failed"]
+        if (
+            InboundEvent.objects.filter(
+                station=station,
+                received_at__date__range=(start, end),
+                state__in=unfinished,
+            ).exists()
+            or VoteJob.objects.filter(
+                vote__station=station,
+                vote__vote_date__range=(start, end),
+                state__in=unfinished,
+            ).exists()
+        ):
+            raise ValueError(
+                "This week still has unprocessed votes. Resolve the processing queue before publishing."
+            )
         rebuild_tallies(station, date_range=(start, end))
         songs = (
             CleanedSong.objects.filter(
@@ -65,7 +78,9 @@ def publish_week(station, start, actor, size=20):
         )
         historical_peaks = dict(
             WeeklyChartEntry.objects.filter(
-                chart__station=station, chart__is_finalized=True
+                chart__station=station,
+                chart__is_finalized=True,
+                chart__week_start__lt=start,
             )
             .values("cleaned_song_id")
             .annotate(peak=Min("rank"))
