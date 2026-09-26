@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Radio Zimbabwe Voting Studio</title>
+    <link rel="stylesheet" href="setup.css" />
+    <script src="setup.js" defer></script>
+  </head>
+  <body>
+    <main>
+      <header>
+        <span class="mark" aria-hidden="true">▥</span>
+        <div>RADIO ZIMBABWE<br /><strong>Voting Studio</strong></div>
+        <span class="edition">WINDOWS</span>
+      </header>
+      <section aria-labelledby="heading">
+        <p class="eyebrow">YOUR STATION. ONE WORKSPACE.</p>
+        <h1 id="heading">Ready for the next chart.</h1>
+        <p class="intro">
+          Review songs, follow live votes and publish your station’s charts.
+        </p>
+        <form id="connection-form">
+          <label for="server">Station server</label>
+          <input
+            id="server"
+            name="server"
+            type="url"
+            placeholder="https://voting.your-station.org"
+            required
+            autocomplete="url"
+            spellcheck="false"
+            aria-describedby="server-help"
+          />
+          <p id="server-help" class="hint">
+            Use the address supplied by your administrator. We’ll remember it on
+            this computer.
+          </p>
+          <button id="connect" type="submit">
+            Open Voting Studio <span aria-hidden="true">→</span>
+          </button>
+        </form>
+        <div id="status" role="status" aria-live="polite">
+          Sign in with your station account after connecting.
+        </div>
+      </section>
+      <footer>
+        <span class="dot" aria-hidden="true"></span> Shared results across your
+        station <span class="version">2.1</span>
+      </footer>
+    </main>
+  </body>
+</html>

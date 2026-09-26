@@ -30,3 +30,7 @@ desktop/config.json
 .venv-desktop/
 
 node_modules/
+
+# Tauri build outputs (Cargo.lock is intentionally tracked)
+src-tauri/target/
+src-tauri/gen/

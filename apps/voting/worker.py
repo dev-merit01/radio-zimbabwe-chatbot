@@ -85,9 +85,21 @@ def send(item):
         item.event.provider
     ]()
     response = client.send_text(item.event.sender, item.text)
-    message_id = (
-        response.get("id") or response.get("result", {}).get("message_id") or ""
-    )
+    # The request may already have committed remotely. Treat malformed success
+    # envelopes as uncertain instead of retrying after AttributeError/TypeError.
+    if not isinstance(response, dict):
+        raise ValueError("Invalid delivery response")
+    result = response.get("result", {})
+    if not isinstance(result, dict):
+        raise ValueError("Invalid delivery result")
+    message_id = response.get("id") or result.get("message_id")
+    if item.event.provider in {"telegram", "bird"} and not message_id:
+        raise ValueError("Missing delivery message ID")
+    if message_id is not None and (
+        type(message_id) not in (str, int) or not str(message_id).strip()
+    ):
+        raise ValueError("Invalid delivery message ID")
+    message_id = message_id if message_id is not None else ""
     finish(item, state="done", provider_message_id=str(message_id)[:200])
 
 

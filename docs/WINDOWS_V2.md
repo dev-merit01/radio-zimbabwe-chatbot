@@ -1,4 +1,8 @@
-# Voting Studio 2.0: implementation and handover
+# Voting Studio 2.0: central-server handover
+
+**Desktop packaging is superseded by [the Tauri handover](WINDOWS_TAURI.md).**
+The server staging and operations sections below still apply. The pywebview
+packaging described here is historical and is no longer built by CI.
 
 Status: development implementation, not a production release.
 
