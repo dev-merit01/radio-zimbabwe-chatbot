@@ -61,14 +61,14 @@ can be copied to the other supported Windows PCs.
 
 For CI, set the optional repository variable `VOTING_STUDIO_SERVER_URL` to the
 real HTTPS origin. Run **Quality checks**; the `windows` job runs Rust tests and
-builds the NSIS installer with WebView2. The artifact is named
+builds the NSIS installer with WebView2, then silently installs it and checks
+native-window startup and single-instance behavior on the Windows runner. The artifact is named
 `VotingStudio-Tauri-Windows-x64`, and includes SHA-256 checksums. A successful
 artifact upload is required before an installer can be downloaded.
 
-The Tauri and plugin versions and npm lockfile are pinned. The initial Windows
-run must generate `src-tauri/Cargo.lock`; it is also uploaded for review. Commit
-that generated lockfile and use Cargo's `--locked` flag in release builds before
-distributing a production version. Do not fabricate a dependency lockfile.
+The Tauri and plugin versions, npm lockfile and generated Cargo lockfile are
+committed. Release builds and Rust tests use `--locked` to prevent unexpected
+dependency resolution changes. Update dependencies deliberately through review.
 
 ## Central-server compatibility
 

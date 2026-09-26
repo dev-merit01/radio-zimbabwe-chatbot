@@ -64,13 +64,18 @@ jobs:
           workspaces: src-tauri
       - run: npm ci
       - run: npm run desktop:check
-      - run: cargo test --manifest-path src-tauri/Cargo.toml
+      - run: cargo test --locked --manifest-path src-tauri/Cargo.toml
       - name: Build Tauri Windows installer with WebView2
         run: npm run desktop:build
+      - name: Install and launch smoke test
+        shell: pwsh
+        run: ./desktop/smoke.ps1
       - name: Installer checksums
         shell: pwsh
         run: |
-          Get-ChildItem src-tauri/target/release/bundle/nsis/*-setup.exe | ForEach-Object {
+          $installers = @(Get-ChildItem src-tauri/target/release/bundle/nsis/*-setup.exe)
+          if (!$installers.Count) { throw 'No Windows installer was produced.' }
+          $installers | ForEach-Object {
             $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower()
             "$hash  $($_.Name)" | Out-File -Encoding ascii "$($_.FullName).sha256"
           }
@@ -80,5 +85,10 @@ jobs:
           path: |
             src-tauri/target/release/bundle/nsis/*-setup.exe
             src-tauri/target/release/bundle/nsis/*.sha256
-            src-tauri/Cargo.lock
           if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: VotingStudio-Rust-lockfile
+          path: src-tauri/Cargo.lock
+          if-no-files-found: warn

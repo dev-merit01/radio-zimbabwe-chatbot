@@ -15,7 +15,7 @@ npm ci
 if ($LASTEXITCODE -ne 0) { throw 'Dependency installation failed.' }
 npm run desktop:check
 if ($LASTEXITCODE -ne 0) { throw 'Desktop configuration check failed.' }
-cargo test --manifest-path src-tauri/Cargo.toml
+cargo test --locked --manifest-path src-tauri/Cargo.toml
 if ($LASTEXITCODE -ne 0) { throw 'Desktop policy tests failed.' }
 npm run desktop:build
 if ($LASTEXITCODE -ne 0) { throw 'Windows installer build failed.' }

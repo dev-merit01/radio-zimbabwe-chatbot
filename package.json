@@ -4,7 +4,7 @@
   "scripts": {
     "test:browser": "node tests/browser/workspace.cjs",
     "desktop:dev": "tauri dev",
-    "desktop:build": "tauri build --bundles nsis",
+    "desktop:build": "tauri build --bundles nsis -- --locked",
     "desktop:check": "node desktop/check.cjs && node --check desktop/ui/setup.js",
     "test:desktop-ui": "node tests/browser/desktop.cjs"
   },
