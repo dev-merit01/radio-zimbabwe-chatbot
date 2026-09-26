@@ -9,12 +9,22 @@ pub struct Configuration {
     pub server_url: String,
 }
 
+// Plain HTTP is allowed only for the numeric IPv4 loopback address. No DNS,
+// LAN address or remote hostname may use this local-development exception.
+fn allowed_transport(url: &Url) -> bool {
+    url.scheme() == "https" || (url.scheme() == "http" && url.host_str() == Some("127.0.0.1"))
+}
+
 pub fn validate_server(value: &str) -> Result<Url, String> {
     if value.chars().any(|c| c.is_control() || c == '\\') || value.len() > 2048 {
-        return Err("Enter a valid HTTPS server address.".into());
+        return Err(
+            "Enter an HTTPS server address, or http://127.0.0.1:8000 for this computer.".into(),
+        );
     }
-    let url = Url::parse(value.trim()).map_err(|_| "Enter a valid HTTPS server address.")?;
-    if url.scheme() != "https"
+    let url = Url::parse(value.trim()).map_err(|_| {
+        "Enter an HTTPS server address, or http://127.0.0.1:8000 for this computer."
+    })?;
+    if !allowed_transport(&url)
         || url.host_str().is_none()
         || !url.username().is_empty()
         || url.password().is_some()
@@ -23,7 +33,7 @@ pub fn validate_server(value: &str) -> Result<Url, String> {
         || url.path() != "/"
         || url.port() == Some(0)
     {
-        return Err("Use only the HTTPS server address, without a path, password or query.".into());
+        return Err("Use only the server address, without a path, password or query.".into());
     }
     // Never confuse a user-supplied remote server with Tauri's privileged local origin.
     if matches!(url.host_str(), Some("tauri.localhost" | "ipc.localhost")) {
@@ -33,7 +43,7 @@ pub fn validate_server(value: &str) -> Result<Url, String> {
 }
 
 pub fn allowed_navigation(server: &Url, target: &Url) -> bool {
-    target.scheme() == "https"
+    allowed_transport(target)
         && target.username().is_empty()
         && target.password().is_none()
         && target.origin() == server.origin()
@@ -87,6 +97,33 @@ mod tests {
             "https://station.example/"
         );
         assert!(validate_server("https://station.example:8443/").is_ok());
+    }
+
+    #[test]
+    fn local_http_is_limited_to_numeric_loopback_and_same_origin() {
+        let local = validate_server("http://127.0.0.1:8000").unwrap();
+        assert!(allowed_navigation(
+            &local,
+            &Url::parse("http://127.0.0.1:8000/accounts/login/").unwrap()
+        ));
+        for address in [
+            "http://localhost:8000",
+            "http://192.168.1.2:8000",
+            "http://0.0.0.0:8000",
+            "http://127.0.0.1.evil.example:8000",
+            "http://[::1]:8000",
+        ] {
+            assert!(validate_server(address).is_err(), "{address}");
+        }
+        for address in [
+            "http://127.0.0.1:8001/",
+            "https://127.0.0.1:8000/",
+            "https://station.example/",
+        ] {
+            assert!(!allowed_navigation(&local, &Url::parse(address).unwrap()));
+        }
+        let remote = validate_server("https://station.example").unwrap();
+        assert!(!allowed_navigation(&remote, &local));
     }
 
     #[test]

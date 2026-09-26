@@ -130,7 +130,7 @@ async fn connect_server(
     let navigation_origin = server.clone();
     let download_origin = server.clone();
     let workspace = WebviewWindowBuilder::new(&app, "workspace", WebviewUrl::External(server))
-        .title("Radio Zimbabwe Voting Studio")
+        .title("AirVote · Radio Zimbabwe Voting Studio")
         .inner_size(1360.0, 900.0).min_inner_size(900.0, 600.0)
         .incognito(true)
         .on_navigation(move |target| allowed_navigation(&navigation_origin, target))

@@ -1,8 +1,10 @@
-# Voting Studio 2.1 — Windows application
+# Voting Studio 2.1.1 — Windows application
 
-Status: Tauri source implementation. A Windows installer must pass the build and
-acceptance checks below before it is distributed. No completed installer is
-claimed merely because its workflow is configured.
+For a trial entirely on one PC, follow [LOCAL_WINDOWS.md](LOCAL_WINDOWS.md).
+The local profile uses `http://127.0.0.1:8000`; hosted servers still require HTTPS.
+The Windows CI job builds, installs and checks native startup, local Django
+sign-in-page loading and single-instance behavior. Clean-machine acceptance and
+signing remain release requirements.
 
 ## What staff install
 
@@ -27,7 +29,8 @@ the central voting system.
 
 1. Extract the Windows build artifact and run its `*-setup.exe`.
 2. Open **Radio Zimbabwe Voting Studio** from Start.
-3. If the server address was not included when building, enter the HTTPS address
+3. For the local trial, start `start-local.cmd` and enter `http://127.0.0.1:8000`.
+   For a hosted server, enter the HTTPS address
    supplied by the station administrator once. Sign in with a staff account.
 4. On subsequent launches the saved server opens automatically. If unreachable,
    the bundled connection screen lets you retry or correct the address.
@@ -77,10 +80,11 @@ desktop version. It is a public, read-only compatibility response containing onl
 the application identifier and desktop protocol version. No votes, listeners,
 staff information or secrets are returned. It is not a worker-health endpoint.
 
-The native launcher checks this endpoint using TLS verification, a 15-second
+For hosted servers, the native launcher checks this endpoint using TLS verification, a 15-second
 timeout, a bounded response body and no automatic redirects. This avoids silently
-loading a different site or leaving first launch on an unreachable page. The
-server must use a valid HTTPS certificate and its final origin address.
+loading a different site or leaving first launch on an unreachable page. A hosted
+server must use a valid HTTPS certificate and its final origin address. Plain
+HTTP is accepted only for numeric loopback `127.0.0.1` when testing on one PC.
 
 ## Security and maintenance
 
@@ -88,7 +92,7 @@ server must use a valid HTTPS certificate and its final origin address.
   Custom commands are declared in the Tauri application manifest and allowed
   only by a local `setup` capability. Rust also checks the calling window/origin.
 - The remote workspace gets no native command, filesystem, shell or opener
-  permissions. Main-frame navigation stays on the configured HTTPS origin;
+  permissions. Main-frame navigation stays on the configured origin, including its port;
   pop-up windows are denied. The app does not include a browser-opening plugin.
 - Settings writes are atomic. No provider tokens or staff passwords are embedded
   in the installer. Preconfigured addresses are public configuration, not secrets.
@@ -108,7 +112,7 @@ server must use a valid HTTPS certificate and its final origin address.
 Local automated checks cover the compatibility endpoint and full Python suite,
 JavaScript syntax, the installed Tauri configuration schema, explicit capability
 boundaries, installer options and required icon assets. Rust policy tests cover
-HTTPS validation, cross-origin navigation, damaged settings and atomic overwrite.
+HTTPS/loopback validation, cross-origin navigation, damaged settings and atomic overwrite.
 The Playwright desktop test exercises the local UI using a mocked native bridge;
 it does not establish native Windows behavior.
 

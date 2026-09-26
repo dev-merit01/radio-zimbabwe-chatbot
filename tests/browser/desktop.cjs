@@ -11,6 +11,8 @@ const path = require("node:path");
     "/": ["index.html", "text/html"],
     "/setup.js": ["setup.js", "text/javascript"],
     "/setup.css": ["setup.css", "text/css"],
+    "/assets/airvote.png": ["assets/airvote.png", "image/png"],
+    "/assets/app-icon.png": ["assets/app-icon.png", "image/png"],
   };
   const server = http.createServer((req, res) => {
     const asset = files[req.url];
@@ -71,8 +73,14 @@ const path = require("node:path");
         args: { serverUrl: "https://station.example" },
       },
     ]);
+    assert.equal(await first.locator(".welcome-logo").evaluate(img => img.complete && img.naturalWidth > 0), true);
     await first.screenshot({ path: "/tmp/voting-desktop-setup.png" });
     await first.close();
+
+    const local = await pageFor({ server_url: "http://127.0.0.1:8000", warning: "" });
+    await local.getByText("Workspace opened.", { exact: false }).waitFor();
+    assert.equal(await local.evaluate(() => window.calls[0].args.serverUrl), "http://127.0.0.1:8000");
+    await local.close();
 
     const offline = await pageFor(
       { server_url: "https://station.example/", warning: "" },

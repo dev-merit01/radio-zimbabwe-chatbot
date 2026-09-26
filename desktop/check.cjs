@@ -36,14 +36,15 @@ if (server) {
   );
   const url = new URL(server);
   assert.ok(
-    url.protocol === "https:" &&
+    (url.protocol === "https:" ||
+      (url.protocol === "http:" && url.hostname === "127.0.0.1")) &&
       url.pathname === "/" &&
       !url.username &&
       !url.password &&
       !url.search &&
       !url.hash &&
       url.port !== "0",
-    "Use an HTTPS origin for VOTING_STUDIO_SERVER_URL",
+    "Use an HTTPS origin, or http://127.0.0.1:8000 for local testing",
   );
   assert.ok(
     !["tauri.localhost", "ipc.localhost"].includes(url.hostname),

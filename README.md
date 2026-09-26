@@ -2,6 +2,13 @@
 
 A centrally hosted voting service with an installable Windows staff application. Telegram and WhatsApp messages enter authenticated, deduplicated webhooks. Durable background jobs record votes, match songs and send replies. The staff workspace provides live weekly results, song review, archives, CSV exports and an audit trail.
 
+## Try everything on one Windows PC
+
+Use the 2.1.1 installer and [same-computer setup instructions](docs/LOCAL_WINDOWS.md).
+Install Python 3.12, run `setup-local.cmd` once, then `start-local.cmd`. Open the
+installed app and connect to `http://127.0.0.1:8000`. This isolated local mode uses
+SQLite and disables live provider integrations; no hosting is needed.
+
 ## Windows installation
 
 The desktop client is now **Tauri 2**. It opens the workspace in its own Windows
