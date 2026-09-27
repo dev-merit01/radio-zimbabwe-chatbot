@@ -73,7 +73,8 @@ const path = require("node:path");
         args: { serverUrl: "https://station.example" },
       },
     ]);
-    assert.equal(await first.locator(".welcome-logo").evaluate(img => img.complete && img.naturalWidth > 0), true);
+    assert.equal(await first.locator("img").count(), 1);
+    assert.equal(await first.locator(".mark").evaluate(img => img.complete && img.naturalWidth > 0), true);
     await first.screenshot({ path: "/tmp/voting-desktop-setup.png" });
     await first.close();
 
