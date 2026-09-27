@@ -272,7 +272,11 @@ def health(request):
                         and settings.TELEGRAM_WEBHOOK_SECRET,
                     ),
                     (
-                        "Bird WhatsApp",
+                        "Bird WhatsApp reception",
+                        settings.BIRD_WEBHOOK_SECRET,
+                    ),
+                    (
+                        "Bird legacy replies",
                         settings.BIRD_ACCESS_KEY
                         and settings.BIRD_WORKSPACE_ID
                         and settings.BIRD_CHANNEL_ID

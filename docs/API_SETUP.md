@@ -19,8 +19,9 @@ votes already received from a provider. This is real local data, not a demo butt
 
 1. Stop start-local.cmd with Ctrl+C.
 2. Copy `.env.providers.example` to `.env.providers` in the server folder.
-3. Fill all fields for the provider you use, including its station ID. Leave other
-   providers blank. Supported station IDs: `radio_zimbabwe`, `national_fm`,
+3. Fill the required fields for your provider, including its station ID. For
+   Bird reception, only BIRD_WEBHOOK_SECRET is required; leave BIRD_CHANNEL_ID
+   blank for receive-only mode. Other providers still require their full group. Supported station IDs: `radio_zimbabwe`, `national_fm`,
    `power_fm`, `classic_263`, `central_radio`, `khulumani_fm`.
 4. Run start-connected.cmd. It uses the same local database and worker, but opts
    into the configured provider credentials. It may send real replies when
@@ -40,7 +41,7 @@ DEBUG=False, proper host/proxy settings and supervised workers.
 | Provider | Path | Authentication | Vote event |
 | --- | --- | --- | --- |
 | Telegram | `/webhook/telegram/` | `X-Telegram-Bot-Api-Secret-Token` equals TELEGRAM_WEBHOOK_SECRET | New private `message`, numeric update_id and chat.id |
-| Bird WhatsApp | `/webhook/bird/` | Standard Webhooks HMAC headers with a base64/whsec_ key | Incoming message with sender.contact.identifierValue and body.text.text |
+| Bird WhatsApp | `/webhook/bird/` | Standard Webhooks HMAC headers with a base64/whsec_ key | whatsapp.received with data.from.phone_number and data.text.body; legacy incoming payloads also supported |
 | OneMsg WhatsApp | `/webhook/whatsapp/` | `X-Webhook-Token` equals ONEMSG_WEBHOOK_SECRET | id, sender and payload.conversation / extendedTextMessage |
 
 Bind each provider's station in server configuration; a station value in an
@@ -73,3 +74,26 @@ provider account, credentials, network or actual webhook configuration works.
 Primary references:
 - https://core.telegram.org/bots/api#setwebhook
 - https://bird.com/en-ca/docs/guides/webhooks
+
+## Bird without channel IDs
+
+Current Bird WhatsApp reception uses the `whatsapp.received` event,
+`data.from.phone_number`, `data.text.body`, and `data.whatsapp_id`. Subscribe
+to that event at `/webhook/bird/`. Standard Webhooks signature verification
+remains required. A 403 is an authentication failure, not a missing channel ID.
+
+`start-connected.cmd` accepts a signing secret without a channel ID, workspace
+ID or API access key. `BIRD_STATION` selects the destination station. Connections
+shows reception separately from legacy replies. Without all three legacy outbound
+credentials, new inbound events are processed without creating automatic reply
+jobs. Existing queued replies are not removed. This patch does not implement
+outbound sending through Bird's new API.
+
+Stop the server, run `git pull --ff-only origin main`, and restart
+`start-connected.cmd`. No database migration or desktop reinstall is needed.
+For a 403, check the exact endpoint signing secret, restart after editing it,
+and inspect the names of the signature headers in ngrok. Never disable signature
+verification. The startup script loads the local Django secret automatically;
+starting manage.py directly does not load the same local profile.
+
+Reference: https://bird.com/docs/guides/whatsapp/webhooks/messages

@@ -67,13 +67,15 @@ def local_environment(root=ROOT, providers=False):
         allowed.update({"TELEGRAM_STATION", "BIRD_STATION", "ONEMSG_STATION", "OPENAI_MODEL", "AUTO_AI_MATCH"})
         env.update({key: value for key, value in ProviderEnv.ENVIRON.items() if key in allowed})
         groups = [("TELEGRAM_BOT_TOKEN", "TELEGRAM_WEBHOOK_SECRET"),
-                  ("BIRD_ACCESS_KEY", "BIRD_WORKSPACE_ID", "BIRD_CHANNEL_ID", "BIRD_WEBHOOK_SECRET"),
+                  ("BIRD_WEBHOOK_SECRET",),
                   ("ONEMSG_APP_KEY", "ONEMSG_AUTH_KEY", "ONEMSG_WEBHOOK_SECRET")]
         if not any(all(env.get(key) for key in group) for group in groups):
             raise RuntimeError("Configure at least one complete messaging provider in .env.providers.")
         for group in groups:
             if any(env.get(key) for key in group) and not all(env.get(key) for key in group):
                 raise RuntimeError("Incomplete provider configuration: " + ", ".join(group))
+        if any(env.get(key) for key in ("BIRD_ACCESS_KEY", "BIRD_WORKSPACE_ID", "BIRD_CHANNEL_ID")) and not env.get("BIRD_WEBHOOK_SECRET"):
+            raise RuntimeError("Bird reception requires BIRD_WEBHOOK_SECRET.")
     return env
 
 

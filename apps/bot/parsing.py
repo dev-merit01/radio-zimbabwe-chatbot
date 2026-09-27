@@ -132,7 +132,16 @@ def _extract_bird_message(payload: dict) -> tuple[str | None, str, str | None]:
     Returns:
         (sender, text, media_type) - media_type is None for text messages
     """
-    # Extract sender phone number - try multiple possible paths
+    # Current Bird API: whatsapp.received/data, without channel IDs.
+    if "from" in payload:
+        sender = payload.get("from", {}).get("phone_number")
+        for kind in MEDIA_TYPES | {"contact_cards", "interactive_reply", "unsupported"}:
+            if kind in payload:
+                return sender, "", kind
+        text = payload.get("text", {}).get("body", "")
+        return sender, text.strip() if isinstance(text, str) else text, None
+
+    # Legacy channel-based payloads remain supported.
     sender = None
     sender_info = payload.get("sender", {})
 

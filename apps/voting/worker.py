@@ -9,6 +9,7 @@ from django.utils import timezone
 from .models import InboundEvent, VoteJob, OutboundMessage
 from .services import VotingService
 from .pipeline import process_vote
+from apps.bot.bird_client import replies_configured as bird_replies_configured
 
 
 LEASE_SECONDS = 180
@@ -71,7 +72,9 @@ def ingest(item):
                     event.text, vote_date=timezone.localdate(event.received_at)
                 )
             event.save(update_fields=["reply"])
-        if event.provider != "manual":
+        if event.provider != "manual" and (
+            event.provider != "bird" or bird_replies_configured()
+        ):
             OutboundMessage.objects.get_or_create(
                 event=event, defaults={"text": event.reply}
             )

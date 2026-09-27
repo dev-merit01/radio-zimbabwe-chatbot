@@ -29,3 +29,18 @@ def test_connected_mode_is_opt_in_and_cannot_replace_database(tmp_path):
     assert connected['TELEGRAM_STATION'] == 'national_fm'
     assert connected['DATABASE_URL'].startswith('sqlite:///')
     assert connected['DJANGO_DEBUG'] == 'True'
+
+
+def test_bird_receive_only_needs_no_channel_or_access_key(tmp_path):
+    (tmp_path / '.env.providers').write_text('BIRD_WEBHOOK_SECRET=whsec_dGVzdA==\nBIRD_CHANNEL_ID=\n')
+    env = local_environment(tmp_path, providers=True)
+    assert env['BIRD_WEBHOOK_SECRET'] == 'whsec_dGVzdA=='
+    assert env['BIRD_CHANNEL_ID'] == env['BIRD_ACCESS_KEY'] == ''
+    assert local_environment(tmp_path)['BIRD_WEBHOOK_SECRET'] == ''
+
+
+def test_bird_credentials_without_signing_secret_are_rejected(tmp_path):
+    import pytest
+    (tmp_path / '.env.providers').write_text('BIRD_ACCESS_KEY=test\nTELEGRAM_BOT_TOKEN=test\nTELEGRAM_WEBHOOK_SECRET=test\n')
+    with pytest.raises(RuntimeError, match='BIRD_WEBHOOK_SECRET'):
+        local_environment(tmp_path, providers=True)

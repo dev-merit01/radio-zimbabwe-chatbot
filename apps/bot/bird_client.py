@@ -17,6 +17,13 @@ from django.conf import settings
 logger = logging.getLogger(__name__)
 
 
+def replies_configured():
+    """Legacy outbound credentials are optional for authenticated reception."""
+    return all(getattr(settings, name, "") for name in (
+        "BIRD_ACCESS_KEY", "BIRD_WORKSPACE_ID", "BIRD_CHANNEL_ID"
+    ))
+
+
 class BirdClientError(RuntimeError):
     """Base Bird client error."""
 

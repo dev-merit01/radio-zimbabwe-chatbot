@@ -80,15 +80,16 @@ def receive(request, provider):
             message = payload.get("payload", payload.get("data", payload))
             event_type = payload.get("event", payload.get("type", ""))
             if (
-                not event_type.endswith(".inbound")
-                and message.get("direction") != "incoming"
+                event_type != "whatsapp.received"
+                and not event_type.endswith(".inbound")
+                and message.get("direction") not in {"incoming", "inbound"}
             ):
                 return JsonResponse({"ok": True, "ignored": True})
             # Refuse outbound/self echoes even with a broad subscription.
             if message.get("direction") in {"outgoing", "outbound"}:
                 return JsonResponse({"ok": True, "ignored": True})
             sender, text, media = _extract_bird_message(message)
-            message_id = message.get("id") or request.headers.get("webhook-id")
+            message_id = message.get("whatsapp_id") or message.get("id") or request.headers.get("webhook-id")
         else:
             if payload.get("fromMe") or payload.get("key", {}).get("fromMe"):
                 return JsonResponse({"ok": True, "ignored": True})

@@ -113,7 +113,8 @@ class AirVoteTests(TestCase):
 
     @override_settings(TELEGRAM_WEBHOOK_SECRET='telegram-test', TELEGRAM_STATION='national_fm',
                        ONEMSG_WEBHOOK_SECRET='onemsg-test', ONEMSG_STATION='national_fm',
-                       BIRD_WEBHOOK_SECRET=base64.b64encode(b'bird-test-key').decode(), BIRD_STATION='national_fm')
+                       BIRD_WEBHOOK_SECRET=base64.b64encode(b'bird-test-key').decode(), BIRD_STATION='national_fm',
+                       BIRD_ACCESS_KEY='test', BIRD_WORKSPACE_ID='test', BIRD_CHANNEL_ID='test')
     def test_provider_receipts_process_once_and_reach_correct_dashboard(self):
         text = 'River Artist - Morning Song'
         payloads = [
