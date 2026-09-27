@@ -1,5 +1,9 @@
 name: Quality checks
-on: [push, pull_request]
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
 permissions:
   contents: read
 jobs:
@@ -38,28 +42,93 @@ jobs:
         with:
           node-version: "22"
       - run: npm ci
+      - run: npm run desktop:check
       - run: npx playwright install --with-deps chromium
+      - run: npm run test:desktop-ui
       - run: python manage.py migrate --noinput
       - run: python manage.py shell < tests/browser/seed.py
       - name: Browser workflows
         run: |
           python manage.py runserver 127.0.0.1:8765 --noreload > /tmp/voting-server.log 2>&1 &
           for i in $(seq 1 30); do curl -fs http://127.0.0.1:8765/accounts/login/ >/dev/null && break; sleep 1; done
+          python manage.py run_vote_worker > /tmp/airvote-worker.log 2>&1 &
           npm run test:browser
+          npm run test:airvote
   windows:
     runs-on: windows-latest
+    env:
+      VOTING_STUDIO_SERVER_URL: ${{ vars.VOTING_STUDIO_SERVER_URL }}
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+      - run: npm ci
+      - run: npm run desktop:check
+      - run: cargo test --locked --manifest-path src-tauri/Cargo.toml
+      - name: Build Tauri Windows installer with WebView2
+        run: npm run desktop:build
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - name: Install Inno Setup
-        run: choco install innosetup --no-progress -y
-      - name: Build installer
+          cache: pip
+      - run: python -m pip install -r requirements.txt
+      - name: Install and launch smoke test
         shell: pwsh
-        run: ./desktop/build.ps1
+        run: ./desktop/smoke.ps1
+      - name: Installer checksums
+        shell: pwsh
+        run: |
+          $installers = @(Get-ChildItem src-tauri/target/release/bundle/nsis/*-setup.exe)
+          if (!$installers.Count) { throw 'No Windows installer was produced.' }
+          $installers | ForEach-Object {
+            $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower()
+            "$hash  $($_.Name)" | Out-File -Encoding ascii "$($_.FullName).sha256"
+          }
       - uses: actions/upload-artifact@v4
         with:
-          name: VotingStudio-Windows-Installer
-          path: dist/installer/*.exe
+          name: AirVote-Windows-x64
+          path: |
+            src-tauri/target/release/bundle/nsis/*-setup.exe
+            src-tauri/target/release/bundle/nsis/*.sha256
           if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: AirVote-Rust-lockfile
+          path: src-tauri/Cargo.lock
+          if-no-files-found: warn
+
+  release:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [backend, windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: AirVote-Windows-x64
+          path: release-assets
+      - name: Publish AirVote 2.2.0 release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          test "$(node -p 'require("./src-tauri/tauri.conf.json").version')" = "2.2.0"
+          test -f release-assets/AirVote_2.2.0_x64-setup.exe
+          (cd release-assets && sha256sum -c AirVote_2.2.0_x64-setup.exe.sha256)
+          git archive --format=zip --prefix=AirVote-2.2.0-source/ --output=release-assets/AirVote-2.2.0-source.zip "$GITHUB_SHA"
+          (cd release-assets && sha256sum AirVote-2.2.0-source.zip > AirVote-2.2.0-source.zip.sha256)
+          if gh release view v2.2.0 >/dev/null 2>&1; then
+            echo 'AirVote 2.2.0 already published; preserving the existing release.'
+            exit 0
+          fi
+          gh release create v2.2.0 release-assets/* --target "$GITHUB_SHA" --title "AirVote 2.2.0" --notes-file docs/RELEASE_2.2.0.md --prerelease

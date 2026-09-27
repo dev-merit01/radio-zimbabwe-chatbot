@@ -119,7 +119,7 @@ def chart_today(request):
             "week_start": str(week_start),
             "week_end": str(week_end),
             "week_number": today.isocalendar()[1],
-            "year": today.year,
+            "year": today.isocalendar().year,
             "updated_at": timezone.now().isoformat(),
             "total_songs": len(data),
             "total_votes": total_week_votes,
@@ -134,7 +134,7 @@ def chart_today(request):
 def chart_archives(request):
     """API endpoint returning list of all archived weekly charts."""
     try:
-        year = int(request.GET.get("year", timezone.localdate().year))
+        year = int(request.GET.get("year", timezone.localdate().isocalendar().year))
         if not 1900 <= year <= 9999:
             raise ValueError()
     except ValueError:

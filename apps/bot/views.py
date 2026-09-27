@@ -24,11 +24,14 @@ def authorised(request, provider):
         return False
     if provider == "telegram":
         return hmac.compare_digest(
-            request.headers.get("X-Telegram-Bot-Api-Secret-Token", ""), secret
+            request.headers.get("X-Telegram-Bot-Api-Secret-Token", "").encode(),
+            secret.encode(),
         )
     if provider == "onemsg":
         # Configure a provider/gateway capable of adding this secret header.
-        return hmac.compare_digest(request.headers.get("X-Webhook-Token", ""), secret)
+        return hmac.compare_digest(
+            request.headers.get("X-Webhook-Token", "").encode(), secret.encode()
+        )
     try:
         timestamp = request.headers["webhook-timestamp"]
         if abs(time.time() - int(timestamp)) > 300:
@@ -91,7 +94,20 @@ def receive(request, provider):
                 return JsonResponse({"ok": True, "ignored": True})
             sender, text, media = _extract_whatsapp_message(payload)
             message_id = payload.get("id") or payload.get("key", {}).get("id")
-        if not sender or message_id is None or not isinstance(text, str):
+        if (
+            type(sender) not in (str, int)
+            or type(message_id) not in (str, int)
+            or not sender
+            or not isinstance(text, str)
+            or (media is not None and not isinstance(media, str))
+        ):
+            raise ValueError()
+        if provider == "telegram" and (
+            type(message_id) is not int
+            or message_id < 0
+            or type(sender) is not int
+            or sender <= 0
+        ):
             raise ValueError()
         sender = str(sender).strip().lstrip("+")
         message_id = str(message_id)

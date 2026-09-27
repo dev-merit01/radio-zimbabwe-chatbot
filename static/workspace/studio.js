@@ -165,9 +165,13 @@
                 )
               : empty) +
             pager(d),
+          incoming && permissions.can_record_vote ? btn("Record vote", "record-vote") :
           !incoming && permissions.can_add ? btn("Add song", "add") : "",
         );
         window.studioSongs = d.items;
+        if (incoming && d.submissions?.length) {
+          html += `<section class="panel"><div class="panel-heading"><h2>Recent submissions</h2></div><div class="table-wrap"><table><thead><tr><th>Vote</th><th>Processing</th><th>Result</th></tr></thead><tbody>${d.submissions.map(s => `<tr><td>${esc(s.text)}</td><td>${esc(s.state)}</td><td>${esc(s.reply || "Waiting for the voting worker")}</td></tr>`).join("")}</tbody></table></div></section>`;
+        }
       } else if (page === "archives") {
         const d = await read(
           "chart/archives" +
@@ -219,7 +223,7 @@
             )
             .join(
               "",
-            )}${d.can_retry ? btn("Retry failed jobs", "retry") : ""}</div>`,
+            )}${d.can_retry ? '<a class="button secondary" href="/admin/auth/user/">Manage staff</a>' + btn("Set station password", "station-password") + btn("Retry failed jobs", "retry") : ""}</div>`,
         );
       }
       if (current !== generation) return;
@@ -377,6 +381,21 @@
           '<label class="field">Chart size<select name="size"><option>20</option><option>50</option><option>100</option></select></label><p class="hint">This saves a permanent snapshot of verified votes.</p>',
         (f) => api("workspace/publish", Object.fromEntries(f)),
       );
+      return;
+    }
+    if (action === "record-vote") {
+      const requestId = crypto.randomUUID();
+      modal("Record a listener vote",
+        field("Listener reference", "listener") + field("Artist - Song", "text") +
+        '<p class="hint">Use the same reference for the same listener. Daily limits and duplicate rules apply. This creates a real manual vote for the selected station. New songs need review before charting.</p>',
+        f => api("workspace/votes", {...Object.fromEntries(f), request_id: requestId}));
+      return;
+    }
+    if (action === "station-password") {
+      modal("Set password for this station",
+        field("New station password (12–128 characters)", "password", "", "password") +
+        '<p class="hint">Share it only with authorised station staff. Changing it revokes their existing switches to this station. Administrators do not need this password.</p>',
+        f => api("workspace/station-password", Object.fromEntries(f)));
       return;
     }
     if (action === "retry") {

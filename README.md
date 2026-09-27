@@ -1,14 +1,30 @@
-# Radio Zimbabwe Voting Studio 2
+# AirVote
 
 A centrally hosted voting service with an installable Windows staff application. Telegram and WhatsApp messages enter authenticated, deduplicated webhooks. Durable background jobs record votes, match songs and send replies. The staff workspace provides live weekly results, song review, archives, CSV exports and an audit trail.
 
+## Try everything on one Windows PC
+
+Use the 2.2.0 installer and [same-computer setup instructions](docs/LOCAL_WINDOWS.md).
+Install Python 3.12, run `setup-local.cmd` once, then `start-local.cmd`. Open the
+installed app and connect to `http://127.0.0.1:8000`. This isolated local mode uses
+SQLite and disables live provider integrations; no hosting is needed.
+
 ## Windows installation
 
-Download `VotingStudio-Windows-Installer` from a successful **Quality checks** GitHub Actions run, extract the ZIP and run `VotingStudio-2.0.0-Setup.exe`. A successful build is required before this download exists. Install Microsoft Edge WebView2 Runtime if it is absent. On first launch, enter the HTTPS server address supplied by your station administrator, then sign in. Use the Start Menu **Configure station server** shortcut to change the address.
+The desktop client is now **Tauri 2**. It opens the workspace in its own Windows
+application window; it does not launch the default browser. The NSIS installer
+includes the offline WebView2 installer and installs for the current Windows user.
+Staff PCs do not need Python, Rust, Node.js or a local database.
+
+After the Windows build succeeds, download `AirVote-Windows-x64` from
+**Quality checks**, extract it and run its `*-setup.exe`. Open **AirVote** from Start, enter the station's HTTPS server once if it is not
+preconfigured, then sign in. Change it using **Application → Connection settings**.
+Read [Windows installation and release checks](docs/WINDOWS_TAURI.md).
 
 The client contains no provider credentials or local voting database. The central server and workers must be running. Closing the app does not stop voting. Internet access is required.
 
-To build on Windows yourself, install Python 3.12 x64 and Inno Setup 6, then run:
+To build on Windows, install Node.js 22, Rust MSVC and Visual Studio C++ Build
+Tools with the Windows SDK, then run:
 
 ```powershell
 .\desktop\build.ps1
@@ -39,7 +55,7 @@ Sign in at http://127.0.0.1:8000. No demonstration passwords or listener data ar
 
 ## Production and validation
 
-Read [the deployment and Windows handover](docs/WINDOWS_V2.md) and [the review report](docs/REVIEW.md). Production requires PostgreSQL, Redis, HTTPS and supervised intake, matching and reply workers. Rehearse migrations on a backup before changing live services.
+Read [the central-server handover](docs/WINDOWS_V2.md), [Tauri desktop handover](docs/WINDOWS_TAURI.md) and [latest voting review](docs/REVIEW_2026-09-26.md). Production requires PostgreSQL, Redis, HTTPS and supervised intake, matching and reply workers. Rehearse migrations on a backup before changing live services.
 
 ```bash
 pytest -q
@@ -52,3 +68,8 @@ pip-audit -r requirements.txt
 The CI workflow runs PostgreSQL tests, browser journeys and a Windows installer build. The concurrency test deliberately skips on SQLite. Real provider delivery and interactive Windows installation remain separate acceptance checks.
 
 Legacy `process_votes`, `llm_match`, `clear_database` and polling commands are retired. Use the audited workspace and v2 worker. `load_songs --station radio_zimbabwe` adds missing songs for review without changing existing decisions. `enrich_spotify --station radio_zimbabwe` adds metadata without approving songs or changing vote identity.
+
+## AirVote 2.2.0
+
+Use [versioned releases](https://github.com/dev-merit01/radio-zimbabwe-chatbot/releases) for the installer EXE and separate source ZIP; Actions artifacts expire.
+See [release instructions](docs/RELEASE_2.2.0.md) for voting, station passwords and upgrades, and [API setup](docs/API_SETUP.md) for connected mode.

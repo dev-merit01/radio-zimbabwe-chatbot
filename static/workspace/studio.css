@@ -1,12 +1,12 @@
 :root {
-  --ink: #1e302c;
-  --muted: #718079;
-  --green: #1d5b45;
-  --green-dark: #123f30;
-  --mint: #eaf3ec;
-  --line: #e5eae5;
+  --ink: #152b4d;
+  --muted: #62748d;
+  --green: #0754bd;
+  --green-dark: #073779;
+  --mint: #eaf2fe;
+  --line: #e1e7f0;
   --paper: #fff;
-  --bg: #f5f7f3;
+  --bg: #f3f6fc;
   --orange: #b8753d;
   --shadow: 0 5px 22px #153e2410;
   font-family: Inter, "Segoe UI", Arial, sans-serif;
@@ -1408,3 +1408,12 @@ input[type="date"] {
     min-height: 36px;
   }
 }
+
+/* AirVote brand assets supplied by the project owner. */
+.airvote-icon { width: 44px; height: 44px; object-fit: contain; flex-shrink: 0; border-radius: 11px; }
+.airvote-welcome { display: block; width: 150px; height: 150px; object-fit: contain; margin-bottom: 28px; border-radius: 32px; }
+.auth-art { background: linear-gradient(145deg, #061d49, #064caa); }
+@media(max-width: 800px) { .airvote-welcome { width: 100px; height: 100px; } }
+
+.station-switch { flex-wrap: wrap; }
+.station-switch input { width: 100%; min-width: 0; padding: 8px; border: 1px solid var(--line); border-radius: 6px; }

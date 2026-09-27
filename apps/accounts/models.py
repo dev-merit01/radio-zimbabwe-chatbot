@@ -1,3 +1,4 @@
+import uuid
 from django.conf import settings
 from django.db import models
 
@@ -23,3 +24,11 @@ class AccountProfile(models.Model):
 
     def __str__(self) -> str:
         return f"{self.user.username} ({self.get_station_display()})"
+
+
+class StationAccess(models.Model):
+    """Station-wide entry password; only hashes and a revocation version persist."""
+    station = models.CharField(max_length=32, choices=Station.choices, unique=True)
+    password_hash = models.CharField(max_length=128)
+    version = models.UUIDField(default=uuid.uuid4, editable=False)
+    updated_at = models.DateTimeField(auto_now=True)

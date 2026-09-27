@@ -1,0 +1,42 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "AirVote",
+  "version": "2.2.0",
+  "identifier": "zw.co.radiozimbabwe.votingstudio",
+  "build": { "frontendDist": "../desktop/ui" },
+  "app": {
+    "withGlobalTauri": true,
+    "windows": [
+      {
+        "label": "setup",
+        "title": "AirVote",
+        "width": 780,
+        "height": 660,
+        "minWidth": 540,
+        "minHeight": 560,
+        "center": true,
+        "url": "index.html",
+        "useHttpsScheme": true
+      }
+    ],
+    "security": {
+      "capabilities": ["setup"],
+      "csp": "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src ipc: http://ipc.localhost https://ipc.localhost; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'"
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "shortDescription": "Station voting, song review and live charts",
+    "icon": ["icons/icon.ico", "icons/128x128.png"],
+    "windows": {
+      "webviewInstallMode": { "type": "offlineInstaller", "silent": true },
+      "nsis": {
+        "installMode": "currentUser",
+        "displayLanguageSelector": false,
+        "languages": ["English"],
+        "startMenuFolder": "AirVote"
+      }
+    }
+  }
+}

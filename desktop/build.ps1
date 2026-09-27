@@ -1,14 +1,22 @@
+[CmdletBinding()]
+param([string]$ServerUrl)
+
 $ErrorActionPreference = 'Stop'
 Set-Location (Split-Path $PSScriptRoot -Parent)
-py -3.12 -m venv .venv-desktop
-if ($LASTEXITCODE -ne 0) { throw 'Python 3.12 is required.' }
-& .\.venv-desktop\Scripts\python.exe -m pip install --upgrade pip
-if ($LASTEXITCODE -ne 0) { throw 'Build tooling update failed.' }
-& .\.venv-desktop\Scripts\python.exe -m pip install -r desktop/requirements.txt
+foreach ($tool in @('node', 'npm', 'cargo')) {
+    if (!(Get-Command $tool -ErrorAction SilentlyContinue)) {
+        throw "Missing build tool: $tool. See docs/WINDOWS_TAURI.md. Staff PCs do not need build tools."
+    }
+}
+if ($PSBoundParameters.ContainsKey('ServerUrl')) {
+    $env:VOTING_STUDIO_SERVER_URL = $ServerUrl
+}
+npm ci
 if ($LASTEXITCODE -ne 0) { throw 'Dependency installation failed.' }
-& .\.venv-desktop\Scripts\python.exe -m PyInstaller --noconfirm --clean --windowed --name VotingStudio --collect-all webview desktop/launcher.py
-if ($LASTEXITCODE -ne 0) { throw 'Application build failed.' }
-$iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
-if (!(Test-Path $iscc)) { throw 'Install Inno Setup 6, then run this script again.' }
-& $iscc desktop/installer.iss
-if ($LASTEXITCODE -ne 0) { throw 'Installer build failed.' }
+npm run desktop:check
+if ($LASTEXITCODE -ne 0) { throw 'Desktop configuration check failed.' }
+cargo test --locked --manifest-path src-tauri/Cargo.toml
+if ($LASTEXITCODE -ne 0) { throw 'Desktop policy tests failed.' }
+npm run desktop:build
+if ($LASTEXITCODE -ne 0) { throw 'Windows installer build failed.' }
+Write-Host 'Installer: src-tauri/target/release/bundle/nsis/*-setup.exe'

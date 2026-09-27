@@ -95,37 +95,48 @@ def logout_view(request):
 
 
 @login_required
-@user_passes_test(lambda u: u.is_superuser)
 def switch_station(request):
-    """
-    Allow superusers to switch to a different station.
-    Affects both dashboard AND admin views.
-    """
-    if request.method == "POST":
-        station = request.POST.get("station")
-        valid_stations = [s[0] for s in Station.choices]
+    from django.contrib.auth.hashers import check_password
+    from .models import StationAccess
+    from .context_processors import get_active_station
+    from apps.voting.models import ReviewAudit
 
-        if station in valid_stations:
-            request.session["switched_station"] = station
-            # Get display name
-            station_display = dict(Station.choices).get(station, station)
-            messages.success(request, f"✅ Switched to {station_display}")
-        else:
-            messages.error(request, "Invalid station selected.")
-
-        # Redirect back to where user came from, or dashboard
-        next_url = (
-            request.POST.get("next") or request.META.get("HTTP_REFERER") or "dashboard"
-        )
-        return redirect(safe_next(request, next_url))
-
-    # GET request - return JSON list of stations
-    return JsonResponse(
-        {
-            "current_station": request.session.get("switched_station", ""),
-            "stations": [{"value": s[0], "label": s[1]} for s in Station.choices],
-        }
-    )
+    if request.method == "GET":
+        return JsonResponse({"current_station": get_active_station(request),
+            "stations": [{"value": s, "label": label} for s, label in Station.choices]})
+    if request.method != "POST":
+        return JsonResponse({"error": "POST required"}, status=405)
+    station = request.POST.get("station")
+    next_url = safe_next(request, request.POST.get("next", "/"))
+    if station not in Station.values:
+        return JsonResponse({"error": "Invalid station selected."}, status=400)
+    previous = get_active_station(request)
+    if station == previous:
+        return redirect(next_url)
+    version = None
+    if not request.user.is_superuser:
+        throttle = f"station-switch:{request.user.pk}"
+        try:
+            attempts = 1 if cache.add(throttle, 1, 900) else cache.incr(throttle)
+        except Exception:
+            return JsonResponse({"error": "Station switching temporarily unavailable."}, status=503)
+        if attempts > 10:
+            messages.error(request, "Too many station password attempts. Wait 15 minutes.")
+            return redirect(next_url)
+        access = StationAccess.objects.filter(station=station).first()
+        password = request.POST.get("password", "")
+        if not access or not password or len(password) > 128 or not check_password(password, access.password_hash):
+            messages.error(request, "Station password not accepted. Ask an administrator for access.")
+            return redirect(next_url)
+        cache.delete(throttle)
+        version = str(access.version)
+    request.session["switched_station"] = station
+    request.session["station_access_version"] = version
+    request.session.cycle_key()
+    ReviewAudit.objects.create(station=station, actor=request.user,
+        action="station_switch", details={"from": previous})
+    messages.success(request, f"Switched to {Station(station).label}")
+    return redirect(next_url)
 
 
 @login_required

@@ -16,3 +16,6 @@ while run_one(VoteJob):
     pass
 for song in CleanedSong.objects.all()[:3]:
     review_song('radio_zimbabwe',user,song.id,'verified')
+from apps.accounts.models import AccountProfile
+staff = get_user_model().objects.create_user('ui-staff', password='local-staff-test-only')
+AccountProfile.objects.create(user=staff, station='radio_zimbabwe')

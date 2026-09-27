@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AirVote</title>
+    <link rel="stylesheet" href="setup.css" />
+    <script src="setup.js" defer></script>
+  </head>
+  <body>
+    <main>
+      <header>
+        <img class="mark" src="assets/app-icon.png" alt="" />
+        <div>VOTING WORKSPACE<br /><strong>AirVote</strong></div>
+        <span class="edition">WINDOWS</span>
+      </header>
+      <section aria-labelledby="heading">
+        <img class="welcome-logo" src="assets/airvote.png" alt="AirVote" width="112" height="112" />
+        <p class="eyebrow">YOUR STATION. ONE WORKSPACE.</p>
+        <h1 id="heading">Ready for the next chart.</h1>
+        <p class="intro">
+          Review songs, follow live votes and publish your station’s charts.
+        </p>
+        <form id="connection-form">
+          <label for="server">Station server</label>
+          <input
+            id="server"
+            name="server"
+            type="url"
+            placeholder="https://voting.your-station.org"
+            required
+            autocomplete="url"
+            spellcheck="false"
+            aria-describedby="server-help"
+          />
+          <p id="server-help" class="hint">
+            For a server on this computer, use http://127.0.0.1:8000.
+            For your station server, use its HTTPS address.
+          </p>
+          <button id="connect" type="submit">
+            Open AirVote <span aria-hidden="true">→</span>
+          </button>
+        </form>
+        <div id="status" role="status" aria-live="polite">
+          Sign in with your station account after connecting.
+        </div>
+      </section>
+      <footer>
+        <span class="dot" aria-hidden="true"></span> Shared results across your
+        station <span class="version">2.2.0</span>
+      </footer>
+    </main>
+  </body>
+</html>

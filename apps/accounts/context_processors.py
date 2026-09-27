@@ -1,4 +1,4 @@
-from .models import Station
+from .models import Station, StationAccess
 
 
 _STATION_LOGOS = {
@@ -25,7 +25,7 @@ def get_active_station(request) -> str:
     Get the active station for the current request.
 
     For superusers: Check session for switched station, fallback to profile station
-    For regular users: Use their profile station
+    For regular users: Validate the station password grant, otherwise use their profile
     Fallback: Radio Zimbabwe
     """
     try:
@@ -33,12 +33,17 @@ def get_active_station(request) -> str:
         if not user or not getattr(user, "is_authenticated", False):
             return Station.RADIO_ZIMBABWE
 
-        # Superusers can switch stations via session
-        if getattr(user, "is_superuser", False):
-            session = getattr(request, "session", None)
-            switched_station = session.get("switched_station") if session else None
-            if switched_station and switched_station in [s[0] for s in Station.choices]:
-                return switched_station
+        session = getattr(request, "session", None)
+        switched = session.get("switched_station") if session else None
+        if switched in Station.values:
+            if user.is_superuser:
+                return switched
+            version = session.get("station_access_version")
+            access = StationAccess.objects.filter(station=switched).first()
+            if access and version == str(access.version):
+                return switched
+            session.pop("switched_station", None)
+            session.pop("station_access_version", None)
 
         # Regular users use their profile station
         profile = getattr(user, "profile", None)
@@ -66,12 +71,11 @@ def station_branding(request):
             station, _STATION_LOGOS[Station.RADIO_ZIMBABWE]
         )
 
-        # Check if superuser can switch stations
+        # Every signed-in station user can request a password-protected switch
         user = getattr(request, "user", None)
         can_switch_station = bool(
             user
             and getattr(user, "is_authenticated", False)
-            and getattr(user, "is_superuser", False)
         )
 
         return {

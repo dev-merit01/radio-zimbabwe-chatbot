@@ -1,4 +1,4 @@
-"""Windows client for the centrally hosted Voting Studio. No provider secrets."""
+"""Windows client for the centrally hosted AirVote. No provider secrets."""
 import json
 import os
 import sys
@@ -30,7 +30,7 @@ def choose_server(path):
     root.withdraw()
     try:
         while True:
-            value = simpledialog.askstring('Voting Studio setup', 'Station server HTTPS address:', parent=root)
+            value = simpledialog.askstring('AirVote setup', 'Station server HTTPS address:', parent=root)
             if value is None:
                 return None
             try:
@@ -59,7 +59,7 @@ def main():
     try:
         import webview
         webview.settings['ALLOW_DOWNLOADS'] = True
-        webview.create_window('Radio Zimbabwe · Voting Studio', url=url,
+        webview.create_window('AirVote', url=url,
                               width=1360, height=900, min_size=(900,600),
                               background_color='#F5F7F3', text_select=True)
         # No Python API bridge is exposed to remote page content.
@@ -69,7 +69,7 @@ def main():
         from tkinter import messagebox
         root = tk.Tk()
         root.withdraw()
-        messagebox.showerror('Voting Studio could not start',
+        messagebox.showerror('AirVote could not start',
             'Check that Microsoft Edge WebView2 Runtime is installed. '
             'You can also open your station server address in a browser.', parent=root)
         root.destroy()
