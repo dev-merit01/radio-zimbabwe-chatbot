@@ -377,7 +377,7 @@ class VotingService:
     def _welcome_message():
         from django.conf import settings
 
-        return f"🎶 Welcome to Radio Zimbabwe Top 100!\n\nSend: Artist - Song\nExample: Winky D - Ijipita\n\nUp to {settings.VOTING_DAILY_LIMIT} votes per day."
+        return f"🎶 Welcome to AirVote!\n\nSend: Artist - Song\nExample: Winky D - Ijipita\n\nUp to {settings.VOTING_DAILY_LIMIT} votes per day."
 
     @staticmethod
     def _help_message():

@@ -17,7 +17,7 @@
 <aside class="sidebar" id="sidebar">
 <a class="brand" href="/"><img class="airvote-icon" src="{% static 'images/airvote/app-icon.png' %}" alt=""><span>AirVote<small>STATION WORKSPACE</small></span></a>
 <div class="station"><span class="station-logo"><img src="{% static branding_station_logo %}" alt=""></span><div><strong>{{ branding_station_name }}</strong><span>Station workspace</span></div><span class="tiny-dot"></span></div>
-{% if can_switch_station %}<form class="station-switch" method="post" action="{% url 'accounts:switch_station' %}">{% csrf_token %}<label class="sr-only" for="station-select">Switch station</label><select id="station-select" name="station">{% for value,label in station_choices %}<option value="{{ value }}" {% if value == active_station %}selected{% endif %}>{{ label }}</option>{% endfor %}</select><button type="submit" title="Switch station">Go</button></form>{% endif %}
+{% if can_switch_station %}<form class="station-switch" method="post" action="{% url 'accounts:switch_station' %}">{% csrf_token %}<label class="sr-only" for="station-select">Switch station</label><select id="station-select" name="station">{% for value,label in station_choices %}<option value="{{ value }}" {% if value == active_station %}selected{% endif %}>{{ label }}</option>{% endfor %}</select>{% if not request.user.is_superuser %}<label class="sr-only" for="station-password">Station password</label><input id="station-password" name="password" type="password" required maxlength="128" placeholder="Station password" autocomplete="off">{% endif %}<button type="submit" title="Switch station">Go</button></form>{% endif %}
 <div class="nav-label">WORKSPACE</div><nav aria-label="Main navigation">
 <button class="nav-item active" data-page="overview"><svg><use href="#i-grid"/></svg>Overview</button>
 <button class="nav-item" data-page="incoming"><svg><use href="#i-wave"/></svg>Incoming votes</button>
@@ -35,7 +35,7 @@
 <div class="notice hidden" id="offline-banner" role="status">Connection interrupted. Results are from the last successful update. Changes are unavailable until reconnected.</div>
 {% if messages %}<div class="notice">{% for message in messages %}<p>{{ message }}</p>{% endfor %}</div>{% endif %}
 <div id="page-content"><div class="loading"><span class="spinner"></span>Loading your workspace…</div></div>
-<footer class="workspace-footer"><span>AirVote <b>2.1.1</b> · {{ branding_station_name }}</span><span id="last-updated">Secure station workspace</span></footer></main></div></div>
+<footer class="workspace-footer"><span>AirVote <b>2.2.0</b> · {{ branding_station_name }}</span><span id="last-updated">Secure station workspace</span></footer></main></div></div>
 <div id="toast" class="toast hidden" role="status"></div>
 <dialog id="modal"><form id="modal-form"><div class="modal-top"><h2 id="modal-title"></h2><button type="button" class="icon-button" id="close-modal" aria-label="Close dialog">×</button></div><div id="modal-content"></div><p class="form-error" id="modal-error" role="alert"></p><div class="modal-actions"><button type="button" class="button secondary" id="cancel-modal">Cancel</button><button type="submit" class="button primary" id="modal-submit">Save changes</button></div></form></dialog>
 <input type="hidden" id="csrf-token" value="{{ csrf_token }}">

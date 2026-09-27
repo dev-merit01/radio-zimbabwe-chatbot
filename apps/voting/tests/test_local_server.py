@@ -19,3 +19,13 @@ def test_local_profile_is_isolated_and_preserves_existing_files(tmp_path, monkey
     assert env['DJANGO_ALLOWED_HOSTS'] == '127.0.0.1,localhost'
     assert local_environment(tmp_path)['DJANGO_SECRET_KEY'] == env['DJANGO_SECRET_KEY']
     assert (tmp_path / '.env').read_bytes() == existing
+
+
+def test_connected_mode_is_opt_in_and_cannot_replace_database(tmp_path):
+    (tmp_path / '.env.providers').write_text('TELEGRAM_BOT_TOKEN=test-token\nTELEGRAM_WEBHOOK_SECRET=test-secret\nTELEGRAM_STATION=national_fm\nDATABASE_URL=postgres://wrong/live\nDJANGO_DEBUG=False\n')
+    assert local_environment(tmp_path)['TELEGRAM_BOT_TOKEN'] == ''
+    connected = local_environment(tmp_path, providers=True)
+    assert connected['TELEGRAM_BOT_TOKEN'] == 'test-token'
+    assert connected['TELEGRAM_STATION'] == 'national_fm'
+    assert connected['DATABASE_URL'].startswith('sqlite:///')
+    assert connected['DJANGO_DEBUG'] == 'True'

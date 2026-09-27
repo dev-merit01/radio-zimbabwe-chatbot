@@ -94,6 +94,7 @@ def overview(request):
             "version": settings.APP_VERSION,
             "station": station,
             "today": str(today),
+            "can_record_vote": request.user.has_perm("voting.add_rawvote"),
             "can_review": request.user.has_perm("voting.change_cleanedsong"),
             "can_add": request.user.has_perm("voting.add_cleanedsong"),
             "can_publish": request.user.has_perm("voting.add_weeklychart"),
@@ -219,6 +220,8 @@ def incoming(request):
     return JsonResponse(
         {
             **meta,
+            "submissions": list(InboundEvent.objects.filter(station=station, provider="manual")
+                .order_by("-received_at", "-id").values("id", "state", "reply", "text")[:10]),
             "items": [
                 {
                     "id": v.id,
@@ -390,5 +393,62 @@ def export_chart(request):
     response = HttpResponse(
         "\ufeff" + output.getvalue(), content_type="text/csv; charset=utf-8"
     )
-    response["Content-Disposition"] = 'attachment; filename="radio-zimbabwe-chart.csv"'
+    response["Content-Disposition"] = 'attachment; filename="airvote-chart.csv"'
     return response
+
+
+@require_POST
+@api_access()
+def station_password(request):
+    import uuid
+    from django.contrib.auth.hashers import make_password
+    from django.contrib.auth.password_validation import validate_password
+    from django.core.exceptions import ValidationError
+    from apps.accounts.models import StationAccess
+    from django.db import transaction
+    if not request.user.is_superuser:
+        return JsonResponse({"error": "Administrator access required."}, status=403)
+    password = json.loads(request.body).get("password")
+    if not isinstance(password, str) or not 12 <= len(password) <= 128:
+        raise ValueError("Use a station password of 12 to 128 characters.")
+    try:
+        validate_password(password)
+    except ValidationError as error:
+        raise ValueError(" ".join(error.messages)) from error
+    station = get_active_station(request)
+    with transaction.atomic():
+        StationAccess.objects.update_or_create(station=station,
+            defaults={"password_hash": make_password(password), "version": uuid.uuid4()})
+        ReviewAudit.objects.create(station=station, actor=request.user,
+            action="station_password", details={"rotated": True})
+    return JsonResponse({"ok": True})
+
+
+@require_POST
+@api_access("voting.add_rawvote")
+def submit_vote(request):
+    import uuid
+    from django.db import transaction
+    data = json.loads(request.body)
+    listener, text = data.get("listener"), data.get("text")
+    if not isinstance(listener, str) or not 1 <= len(listener.strip()) <= 64:
+        raise ValueError("Enter a listener reference, up to 64 characters.")
+    if not isinstance(text, str) or not 1 <= len(text.strip()) <= 100:
+        raise ValueError("Enter Artist - Song, up to 100 characters.")
+    try:
+        request_id = str(uuid.UUID(str(data.get("request_id", ""))))
+    except ValueError as error:
+        raise ValueError("Invalid submission identifier. Open the form again.") from error
+    station = get_active_station(request)
+    with transaction.atomic():
+        event, created = InboundEvent.objects.get_or_create(provider="manual", station=station,
+            message_id=f"staff:{request.user.pk}:{request_id}",
+            defaults={"sender": listener.strip(), "text": text.strip()})
+        if not created and (event.sender != listener.strip() or event.text != text.strip()):
+            return JsonResponse({"error": "This submission was already used. Open a new form."}, status=409)
+        if created:
+            ReviewAudit.objects.create(station=station, actor=request.user,
+                action="manual_vote", details={"event_id": event.pk})
+    return JsonResponse({"ok": True, "id": event.pk, "state": event.state,
+                         "message": "Queued for processing. Check Recent submissions for the result."},
+                        status=202 if created else 200)

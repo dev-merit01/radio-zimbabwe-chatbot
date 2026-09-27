@@ -1,7 +1,8 @@
 {
-  "name": "radio-zimbabwe-voting-studio",
+  "name": "airvote",
   "private": true,
   "scripts": {
+    "test:airvote": "node tests/browser/airvote.cjs",
     "test:browser": "node tests/browser/workspace.cjs",
     "desktop:dev": "tauri dev",
     "desktop:build": "tauri build --bundles nsis -- --locked",

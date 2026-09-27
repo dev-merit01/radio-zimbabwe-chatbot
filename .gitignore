@@ -38,3 +38,5 @@ src-tauri/gen/
 # Isolated same-computer development server
 .venv-local/
 .local-voting/
+
+.env.providers

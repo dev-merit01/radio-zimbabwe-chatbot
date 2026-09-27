@@ -1,4 +1,4 @@
-# Voting Studio 2.1.1 — Windows application
+# AirVote 2.2.0 — Windows application
 
 For a trial entirely on one PC, follow [LOCAL_WINDOWS.md](LOCAL_WINDOWS.md).
 The local profile uses `http://127.0.0.1:8000`; hosted servers still require HTTPS.
@@ -28,7 +28,7 @@ the central voting system.
 ## Everyday use
 
 1. Extract the Windows build artifact and run its `*-setup.exe`.
-2. Open **Radio Zimbabwe Voting Studio** from Start.
+2. Open **AirVote** from Start.
 3. For the local trial, start `start-local.cmd` and enter `http://127.0.0.1:8000`.
    For a hosted server, enter the HTTPS address
    supplied by the station administrator once. Sign in with a staff account.
@@ -66,7 +66,7 @@ For CI, set the optional repository variable `VOTING_STUDIO_SERVER_URL` to the
 real HTTPS origin. Run **Quality checks**; the `windows` job runs Rust tests and
 builds the NSIS installer with WebView2, then silently installs it and checks
 native-window startup and single-instance behavior on the Windows runner. The artifact is named
-`VotingStudio-Tauri-Windows-x64`, and includes SHA-256 checksums. A successful
+`AirVote-Windows-x64`, and includes SHA-256 checksums. A successful
 artifact upload is required before an installer can be downloaded.
 
 The Tauri and plugin versions, npm lockfile and generated Cargo lockfile are

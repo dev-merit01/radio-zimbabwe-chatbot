@@ -2,6 +2,10 @@ from django.contrib import admin
 from django.urls import path, include
 from apps.dashboard.api_urls import dashboard_urlpatterns
 
+admin.site.site_header = "AirVote administration"
+admin.site.site_title = "AirVote"
+admin.site.index_title = "Administration"
+
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('accounts/', include('apps.accounts.urls')),

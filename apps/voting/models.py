@@ -34,6 +34,7 @@ class User(models.Model):
     CHANNEL_CHOICES = (
         ("telegram", "Telegram"),
         ("whatsapp", "WhatsApp"),
+        ("manual", "Manual entry"),
     )
     channel = models.CharField(max_length=16, choices=CHANNEL_CHOICES)
     user_ref = models.CharField(max_length=64)

@@ -10,5 +10,5 @@ fn main() {
 
 #[cfg(not(windows))]
 fn main() {
-    eprintln!("Voting Studio desktop targets Windows. Run its policy tests with cargo test --lib.");
+    eprintln!("AirVote desktop targets Windows. Run its policy tests with cargo test --lib.");
 }

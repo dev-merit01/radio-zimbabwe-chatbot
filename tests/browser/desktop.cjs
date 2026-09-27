@@ -65,7 +65,7 @@ const path = require("node:path");
     await first
       .getByLabel("Station server", { exact: true })
       .fill("https://station.example");
-    await first.getByRole("button", { name: "Open Voting Studio" }).click();
+    await first.getByRole("button", { name: "Open AirVote" }).click();
     await first.getByText("Workspace opened.", { exact: false }).waitFor();
     assert.deepEqual(await first.evaluate(() => window.calls), [
       {
@@ -117,7 +117,7 @@ const path = require("node:path");
     const ordinary = await browser.newPage();
     await ordinary.goto(url);
     await ordinary
-      .getByText("Open Voting Studio from the installed Windows application.")
+      .getByText("Open AirVote from the installed Windows application.")
       .waitFor();
     await ordinary.close();
     console.log(

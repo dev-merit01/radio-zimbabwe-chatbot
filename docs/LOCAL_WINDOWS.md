@@ -1,6 +1,6 @@
-# Run Voting Studio entirely on your Windows computer
+# Run AirVote entirely on your Windows computer
 
-Use version **2.1.1 or later**. The older 2.1.0 installer accepts HTTPS only.
+Use version **2.2.0 or later**. The older 2.1.0 installer accepts HTTPS only.
 This local mode opens the installed Tauri window and connects to a Django server
 on the same PC. No domain, hosting, Redis or PostgreSQL is needed for this trial.
 
@@ -17,17 +17,17 @@ on the same PC. No domain, hosting, Redis or PostgreSQL is needed for this trial
    characters are not displayed while typing. Remember these details: there is
    no default account/password. Re-running setup preserves an existing account.
 5. Download/extract the matching Windows installer artifact and run
-   `Radio Zimbabwe Voting Studio_2.1.1_x64-setup.exe`. It includes WebView2. The
+   `AirVote_2.2.0_x64-setup.exe`. It includes WebView2. The
    installer remains unsigned and subject to Windows/device policy checks.
 6. Double-click `start-local.cmd`. Wait for **LOCAL SERVER READY** and leave that
    console window open. It starts both the web server and one voting worker.
-7. Open **Radio Zimbabwe Voting Studio** from Start. Enter exactly:
+7. Open **AirVote** from Start. Enter exactly:
 
    ```text
    http://127.0.0.1:8000
    ```
 
-8. Select **Open Voting Studio** and sign in with the account created in step 4.
+8. Select **Open AirVote** and sign in with the account created in step 4.
    The workspace opens in the app's own window. No browser is launched.
 
 If an old remote address is saved, use **Application → Connection settings**.
@@ -71,10 +71,18 @@ database. Later, configure staff apps to use one shared HTTPS server.
   Re-run setup after correcting it; do not delete your data folder.
 - **Cannot connect:** leave `start-local.cmd` running, check its readiness
   message, and enter the exact HTTP address above. Verify the installed app is
-  version 2.1.1 or later.
+  version 2.2.0 or later.
 - **Need another administrator:** in a terminal at the project root, run
   `.venv-local\Scripts\python.exe scripts\local_server.py account`.
 - **Server check:** run
   `.venv-local\Scripts\python.exe scripts\local_server.py check`.
 
 For deployment and the central-server architecture, see `WINDOWS_TAURI.md`.
+
+## Voting and API mode
+
+Use **Incoming votes → Record vote** to submit a manual vote. Keep the worker
+running; review new songs before they enter the verified chart. To opt into
+provider credentials, use [API_SETUP.md](API_SETUP.md) and start-connected.cmd.
+The default start-local.cmd remains isolated. See [release notes](RELEASE_2.2.0.md)
+for station passwords and administrator account management.

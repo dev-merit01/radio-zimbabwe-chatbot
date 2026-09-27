@@ -10,7 +10,7 @@ use tauri::{
     AppHandle, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder,
 };
 use tauri_plugin_dialog::DialogExt;
-use voting_studio::{allowed_navigation, load_configuration, save_configuration, validate_server};
+use airvote::{allowed_navigation, load_configuration, save_configuration, validate_server};
 
 #[derive(Default)]
 struct Connecting(AtomicBool);
@@ -104,7 +104,7 @@ async fn connect_server(
         .await
         .map_err(|_| "Cannot connect. Check the server address and network, then try again.")?;
     if !response.status().is_success() {
-        return Err("The server is unavailable or needs the Voting Studio desktop update.".into());
+        return Err("The server is unavailable or needs the AirVote desktop update.".into());
     }
     let mut bytes = Vec::new();
     while let Some(chunk) = response
@@ -113,14 +113,14 @@ async fn connect_server(
         .map_err(|_| "The connection was interrupted. Try again.")?
     {
         if bytes.len() + chunk.len() > 4096 {
-            return Err("This address did not return a Voting Studio response.".into());
+            return Err("This address did not return a AirVote response.".into());
         }
         bytes.extend_from_slice(&chunk);
     }
     let status: serde_json::Value = serde_json::from_slice(&bytes)
-        .map_err(|_| "This address is not a compatible Voting Studio server.")?;
+        .map_err(|_| "This address is not a compatible AirVote server.")?;
     if status["application"] != "radio-zimbabwe-voting-studio" || status["desktop_api"] != 1 {
-        return Err("This address is not a compatible Voting Studio server.".into());
+        return Err("This address is not a compatible AirVote server.".into());
     }
     save_configuration(&config_path(&app)?, &server)?;
     if let Some(old) = app.get_webview_window("workspace") {
@@ -130,7 +130,7 @@ async fn connect_server(
     let navigation_origin = server.clone();
     let download_origin = server.clone();
     let workspace = WebviewWindowBuilder::new(&app, "workspace", WebviewUrl::External(server))
-        .title("AirVote · Radio Zimbabwe Voting Studio")
+        .title("AirVote")
         .inner_size(1360.0, 900.0).min_inner_size(900.0, 600.0)
         .incognito(true)
         .on_navigation(move |target| allowed_navigation(&navigation_origin, target))
@@ -145,7 +145,7 @@ async fn connect_server(
                     // save dialog on WebView2's UI callback thread.
                     let reserved = webview.app_handle().path().download_dir().ok()
                         .and_then(|directory| tempfile::Builder::new()
-                            .prefix("radio-zimbabwe-chart-").suffix(".csv")
+                            .prefix("airvote-chart-").suffix(".csv")
                             .tempfile_in(directory).ok())
                         .and_then(|file| file.keep().ok());
                     if let Some((file, path)) = reserved {
@@ -171,7 +171,7 @@ async fn connect_server(
                 _ => true,
             }
         })
-        .build().map_err(|_| "The application window could not open. Restart Voting Studio and try again.")?;
+        .build().map_err(|_| "The application window could not open. Restart AirVote and try again.")?;
     workspace
         .set_focus()
         .map_err(|_| "Could not focus the workspace.")?;
@@ -248,5 +248,5 @@ pub fn run() {
             }
         })
         .run(tauri::generate_context!())
-        .expect("Voting Studio could not start");
+        .expect("AirVote could not start");
 }

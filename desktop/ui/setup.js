@@ -16,7 +16,7 @@
     if (busy) return;
     if (!invoke) {
       message(
-        "Open Voting Studio from the installed Windows application.",
+        "Open AirVote from the installed Windows application.",
         true,
       );
       return;
@@ -47,7 +47,7 @@
   async function start() {
     if (!invoke) {
       message(
-        "Open Voting Studio from the installed Windows application.",
+        "Open AirVote from the installed Windows application.",
         true,
       );
       return;

@@ -16,7 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 ADDRESS = "http://127.0.0.1:8000"
 
 
-def local_environment(root=ROOT):
+def local_environment(root=ROOT, providers=False):
     data = root / ".local-voting"
     data.mkdir(exist_ok=True)
     secret = data / "secret.key"
@@ -55,6 +55,25 @@ def local_environment(root=ROOT):
         "GEMINI_API_KEY", "COHERE_API_KEY", "ANTHROPIC_API_KEY",
     ):
         env[name] = ""
+    if providers:
+        import environ
+        class ProviderEnv(environ.Env):
+            ENVIRON = {}
+        path = root / ".env.providers"
+        if not path.is_file():
+            raise RuntimeError("Create .env.providers from .env.providers.example first.")
+        ProviderEnv.read_env(str(path), overwrite=True)
+        allowed = {key for key in env if key.startswith(("TELEGRAM_", "BIRD_", "ONEMSG_", "SPOTIFY_", "OPENAI_"))}
+        allowed.update({"TELEGRAM_STATION", "BIRD_STATION", "ONEMSG_STATION", "OPENAI_MODEL", "AUTO_AI_MATCH"})
+        env.update({key: value for key, value in ProviderEnv.ENVIRON.items() if key in allowed})
+        groups = [("TELEGRAM_BOT_TOKEN", "TELEGRAM_WEBHOOK_SECRET"),
+                  ("BIRD_ACCESS_KEY", "BIRD_WORKSPACE_ID", "BIRD_CHANNEL_ID", "BIRD_WEBHOOK_SECRET"),
+                  ("ONEMSG_APP_KEY", "ONEMSG_AUTH_KEY", "ONEMSG_WEBHOOK_SECRET")]
+        if not any(all(env.get(key) for key in group) for group in groups):
+            raise RuntimeError("Configure at least one complete messaging provider in .env.providers.")
+        for group in groups:
+            if any(env.get(key) for key in group) and not all(env.get(key) for key in group):
+                raise RuntimeError("Incomplete provider configuration: " + ", ".join(group))
     return env
 
 
@@ -79,7 +98,7 @@ def setup(env, no_account=False):
     print("Local setup complete. Run start-local.cmd, then connect the app to " + ADDRESS)
 
 
-def start(env):
+def start(env, providers=False):
     if not (ROOT / ".local-voting/db.sqlite3").exists():
         raise RuntimeError("Run setup-local.cmd first to create your local database and account.")
     with socket.socket() as probe:
@@ -109,9 +128,10 @@ def start(env):
             sys.executable, str(ROOT / "manage.py"), "run_vote_worker", "--allow-sqlite"
         ], cwd=ROOT, env=env))
         print("\nLOCAL SERVER READY: " + ADDRESS, flush=True)
-        print("Open the installed Voting Studio app and enter that address.", flush=True)
+        print("Open the installed AirVote app and enter that address.", flush=True)
         print("Keep this window open. Press Ctrl+C to stop both server and worker.", flush=True)
-        print("Local test database only; live messaging and AI providers are disabled.\n", flush=True)
+        print("Connected mode: configured providers may send real replies.\n" if providers else
+              "Local test database only; live messaging and AI providers are disabled.\n", flush=True)
         while all(process.poll() is None for process in processes):
             time.sleep(0.5)
         raise RuntimeError("A local server process stopped. Check the error above and restart.")
@@ -133,12 +153,13 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("command", choices=("setup", "start", "check", "account"))
     parser.add_argument("--no-account", action="store_true", help="Skip account prompt for CI setup")
+    parser.add_argument("--providers", action="store_true", help="Enable credentials from .env.providers")
     args = parser.parse_args()
-    env = local_environment()
+    env = local_environment(providers=args.providers)
     if args.command == "setup":
         setup(env, args.no_account)
     elif args.command == "start":
-        start(env)
+        start(env, providers=args.providers)
     elif args.command == "account":
         manage(env, "createsuperuser")
     else:

@@ -4421,8 +4421,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
-name = "voting-studio"
-version = "2.1.1"
+name = "airvote"
+version = "2.2.0"
 dependencies = [
  "reqwest 0.12.28",
  "serde",

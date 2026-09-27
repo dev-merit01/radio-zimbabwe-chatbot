@@ -62,7 +62,8 @@ def ingest(item):
                 event.reply = "Please send a text vote: Artist - Song. Media messages cannot be counted."
             else:
                 service = VotingService(
-                    "telegram" if event.provider == "telegram" else "whatsapp",
+                    ("manual" if event.provider == "manual" else
+                     "telegram" if event.provider == "telegram" else "whatsapp"),
                     event.sender,
                     event.station,
                 )
@@ -70,9 +71,10 @@ def ingest(item):
                     event.text, vote_date=timezone.localdate(event.received_at)
                 )
             event.save(update_fields=["reply"])
-        OutboundMessage.objects.get_or_create(
-            event=event, defaults={"text": event.reply}
-        )
+        if event.provider != "manual":
+            OutboundMessage.objects.get_or_create(
+                event=event, defaults={"text": event.reply}
+            )
         finish(item, state="done")
 
 

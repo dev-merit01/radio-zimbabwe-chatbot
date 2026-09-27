@@ -19,12 +19,12 @@ class TestVotingServiceWelcome(TestCase):
     def test_start_command_returns_welcome(self):
         """Test /start returns welcome message."""
         response = self.service.handle_incoming_text("/start")
-        assert "🎶 Welcome to Radio Zimbabwe Top 100!" in response
+        assert "🎶 Welcome to AirVote!" in response
 
     def test_start_lowercase_returns_welcome(self):
         """Test 'start' (lowercase) returns welcome message."""
         response = self.service.handle_incoming_text("start")
-        assert "🎶 Welcome to Radio Zimbabwe Top 100!" in response
+        assert "🎶 Welcome to AirVote!" in response
 
     def test_help_command_returns_help(self):
         """Test /help returns help message."""
@@ -34,7 +34,7 @@ class TestVotingServiceWelcome(TestCase):
     def test_empty_text_returns_welcome(self):
         """Test empty text returns welcome message."""
         response = self.service.handle_incoming_text("")
-        assert "🎶 Welcome to Radio Zimbabwe Top 100!" in response
+        assert "🎶 Welcome to AirVote!" in response
 
 
 class TestVotingServiceVoting(TestCase):

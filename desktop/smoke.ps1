@@ -5,7 +5,7 @@ if (!$installer) { throw 'No Windows installer was produced.' }
 $setup = Start-Process $installer.FullName -ArgumentList '/S' -PassThru
 if (!$setup.WaitForExit(180000)) { throw 'Installer timed out.' }
 if ($setup.ExitCode -notin @(0, 3010)) { throw "Installation failed: $($setup.ExitCode)" }
-$executable = Join-Path $env:LOCALAPPDATA 'Radio Zimbabwe Voting Studio/voting-studio.exe'
+$executable = Join-Path $env:LOCALAPPDATA 'AirVote/airvote.exe'
 if (!(Test-Path $executable)) { throw 'Installed application was not found.' }
 $app = $null
 $server = $null
@@ -37,7 +37,7 @@ try {
         if ($app.HasExited) { throw "Application exited before showing a window: $($app.ExitCode)" }
     } while ($app.MainWindowHandle -eq 0 -and (Get-Date) -lt $deadline)
     if ($app.MainWindowHandle -eq 0) { throw 'No application window appeared.' }
-    if ($app.MainWindowTitle -notlike '*Voting Studio*') { throw 'Unexpected application window.' }
+    if ($app.MainWindowTitle -notlike '*AirVote*') { throw 'Unexpected application window.' }
     $connected = $false
     foreach ($attempt in 1..60) {
         if ((Test-Path $stderr) -and (Select-String -Path $stderr -Pattern 'GET /accounts/login/' -Quiet)) {
