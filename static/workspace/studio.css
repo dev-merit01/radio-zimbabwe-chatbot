@@ -1411,9 +1411,7 @@ input[type="date"] {
 
 /* AirVote brand assets supplied by the project owner. */
 .airvote-icon { width: 44px; height: 44px; object-fit: contain; flex-shrink: 0; border-radius: 11px; }
-.airvote-welcome { display: block; width: 150px; height: 150px; object-fit: contain; margin-bottom: 28px; border-radius: 32px; }
 .auth-art { background: linear-gradient(145deg, #061d49, #064caa); }
-@media(max-width: 800px) { .airvote-welcome { width: 100px; height: 100px; } }
 
 .station-switch { flex-wrap: wrap; }
 .station-switch input { width: 100%; min-width: 0; padding: 8px; border: 1px solid var(--line); border-radius: 6px; }

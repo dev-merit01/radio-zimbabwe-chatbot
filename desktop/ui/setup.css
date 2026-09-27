@@ -162,6 +162,4 @@ footer {
 }
 
 .mark { object-fit: contain; background: transparent; }
-.welcome-logo { float: right; object-fit: contain; margin: -4px 0 12px 20px; border-radius: 24px; }
 form { clear: both; }
-@media (max-width: 550px) { .welcome-logo { width: 76px; height: 76px; margin-left: 10px; } }
