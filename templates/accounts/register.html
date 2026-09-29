@@ -1,7 +1,10 @@
-{% load static %}<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Create account · AirVote</title><link rel="stylesheet" href="{% static 'workspace/studio.css' %}"></head>
-<body class="auth-body"><section class="auth-art"><a class="brand" href="/"><img class="airvote-icon" src="{% static 'images/airvote/app-icon.png' %}" alt=""><span>AirVote<small>STATION WORKSPACE</small></span></a><div><h1>Your station.<br>Your account.</h1><p>Each station has its own music, voting results and saved charts.</p></div></section>
-<main class="auth-form-wrap"><div class="auth-form"><h1>Create your account</h1><p>Select your station. An administrator approves access before your first sign-in.</p>
-<form method="post">{% csrf_token %}{{ form.non_field_errors }}
+{% load static %}<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Create account · AirVote</title><link rel="stylesheet" href="{% static 'workspace/studio.css' %}"></head>
+<body class="studio-auth">{% include 'accounts/studio_welcome.html' %}<main class="welcome-entry"><div class="entry-panel registration-panel">
+<nav class="entry-tabs" aria-label="Account access"><a href="{% url 'accounts:login' %}">Sign in</a><a class="selected" aria-current="page" href="{% url 'accounts:register' %}">Create account</a></nav>
+<header class="entry-heading"><span class="studio-kicker">TAKE YOUR PLACE IN THE STUDIO</span><h1>Join your station.</h1><p>Create your personal account. Your administrator will approve your station access.</p></header>
+<div class="entry-scroll"><form method="post" class="entry-form registration-grid">{% csrf_token %}<div class="full-width">{{ form.non_field_errors }}</div>
 {% for field in form %}<div class="field"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{{ field.errors }}</div>{% endfor %}
-<button class="button primary" type="submit">Create account</button></form><p><a href="{% url 'accounts:login' %}">Back to sign in</a></p></div></main></body></html>
+<p class="entry-password-note full-width">Use at least 8 characters. Avoid common passwords and personal details.</p>
+<button class="button primary entry-submit full-width" type="submit">Create account <span aria-hidden="true">→</span></button></form></div>
+<footer class="entry-footer"><span class="entry-lock" aria-hidden="true">●</span> Your music and results stay within your station.</footer>
+</div></main></body></html>

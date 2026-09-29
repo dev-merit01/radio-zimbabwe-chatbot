@@ -1,6 +1,7 @@
 """One authoritative station-scoped review and reconciliation pipeline."""
 
 from itertools import islice
+from .presentation import music_name
 from django.db import transaction
 from django.db.models import OuterRef, Subquery, Sum
 from .models import (
@@ -141,8 +142,8 @@ def process_vote(vote):
             if not candidate:
                 candidate = CleanedSong.objects.create(
                     station=station,
-                    artist=vote.artist_raw,
-                    title=vote.song_raw,
+                    artist=music_name(vote.artist_normalized),
+                    title=music_name(vote.song_normalized),
                     canonical_name=vote.display_name,
                     status="pending",
                 )
@@ -188,7 +189,7 @@ def review_song(
         elif action == "edit":
             if not isinstance(artist, str) or not isinstance(title, str):
                 raise ValueError("Artist and title must be text.")
-            artist, title = artist.strip(), title.strip()
+            artist, title = music_name(artist), music_name(title)
             if not artist or not title or len(artist) > 240 or len(title) > 240:
                 raise ValueError(
                     "Artist and title are required (maximum 240 characters)."

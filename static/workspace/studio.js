@@ -106,7 +106,6 @@
     reader?.abort();
     reader = new AbortController();
     const read = (path) => api(path, undefined, reader.signal);
-    $("refresh").disabled = true;
     $("page-content").setAttribute("aria-busy", "true");
     clearTimeout(timer);
     try {
@@ -197,9 +196,21 @@
         );
       } else if (page === "administration") {
         const d = await read("workspace/administration");
-        html = panel("Station overview", table(["Station", "All-time votes", "Awaiting review"], d.stations.map(s => `<tr><td>${esc(s.name)}</td><td>${num(s.votes)}</td><td>${num(s.pending)}</td></tr>`))) +
-          panel("Accounts and station access", `<p class="hint">Approve only people authorised for the station shown. Use Manage accounts to change station assignments, disable access or reset passwords.</p>` + table(["Account", "Station", "Access"], d.accounts.map(u => `<tr><td>${esc(u.username)}<br><small>${esc(u.name)}</small></td><td>${esc(u.station)}</td><td>${u.active ? "Active" : btn("Approve access", "approve-account", u.id)}</td></tr>`)), '<a class="button secondary" href="/admin/auth/user/">Manage accounts</a>') +
-          panel("Voting controls", '<p>Use the station selector to manage a station. Song reviews, saved charts, station passwords and queue retries apply to the selected station.</p><div class="toolbar">' + btn("Review songs", "go-review") + btn("Save Saturday chart", "publish") + btn("Save December Top 50", "publish-year") + btn("Set station password", "station-password") + btn("Retry failed jobs", "retry") + '</div>');
+        const selected = d.stations.find(s => s.id === overview.station);
+        html = `<div class="admin-metrics">${[
+          ["Listener votes", num(d.summary.votes), "All stations · all time"],
+          ["Awaiting review", num(d.summary.pending_songs), "Songs across the network"],
+          ["Access requests", num(d.summary.pending_accounts), "Accounts awaiting activation"],
+          ["Active accounts", num(d.summary.active_accounts), "Approved station team members"],
+        ].map(([label,value,note]) => `<div class="admin-metric"><span>${label}</span><strong>${value}</strong><small>${note}</small></div>`).join("")}</div>
+        <div class="admin-grid"><div class="admin-main">
+        ${panel("Station directory", `<div class="station-directory">${d.stations.map(station => `<article class="station-tile ${station.id === overview.station ? "selected" : ""}"><div class="station-tile-heading"><span class="station-monogram">${esc(station.name.split(" ").map(w=>w[0]).join("").slice(0,2))}</span><div><h3>${esc(station.name)}</h3><small>${station.id === overview.station ? "Current workspace" : "Independent station workspace"}</small></div></div><div class="station-tile-stats"><span><strong>${num(station.votes)}</strong> received votes</span><span><strong>${num(station.pending)}</strong> to review</span></div>${station.id === overview.station ? '<span class="access-badge">Selected</span>' : btn("Open station", "admin-station", station.id)}</article>`).join("")}</div>`)}
+        ${panel("Accounts & access", `<div class="admin-section-intro"><p>Approve access for the station shown. Account management includes station assignments, password resets and deactivation.</p></div>` + table(["Team member", "Assigned station", "Access", "Action"], d.accounts.map(u => `<tr><td><strong>${esc(u.name || u.username)}</strong><br><small>@${esc(u.username)}</small></td><td>${esc(u.station)}</td><td><span class="access-badge ${u.active ? "" : "pending"}">${u.active ? "Active" : "Awaiting activation"}</span></td><td>${u.active ? '<a class="account-link" href="/admin/auth/user/' + u.id + '/change/">Manage account →</a>' : btn("Approve access", "approve-account", u.id)}</td></tr>`)), '<a class="button secondary" href="/admin/auth/user/">Manage accounts</a>')}
+        </div><aside class="admin-aside">
+        <section class="admin-station-focus"><span class="studio-kicker">CURRENT WORKSPACE</span><h2>${esc(selected?.name)}</h2><p>These controls apply to this station.</p></section>
+        ${panel("Voting & publication", `<div class="admin-action-list"><button data-page="review"><strong>Review music <span>→</span></strong><small>Edit, verify, reject or merge songs.</small></button><button data-action="publish"><strong>Save Saturday chart <span>→</span></strong><small>Publish a permanent Top 20 or Top 50.</small></button><button data-action="publish-year"><strong>December Top 50 <span>→</span></strong><small>Save the year-end countdown.</small></button><button data-page="archives"><strong>Chart archives <span>→</span></strong><small>Revisit and export saved editions.</small></button></div>`)}
+        ${panel("Station operations", `<div class="admin-action-list"><button data-action="station-password"><strong>Station password <span>→</span></strong><small>Manage access when switching stations.</small></button><button data-page="connections"><strong>Connections & queues <span>→</span></strong><small>Check providers and retry failed jobs.</small></button><button data-page="activity"><strong>Activity history <span>→</span></strong><small>Review recorded administrative actions.</small></button></div>`)}
+        </aside></div>`;
       } else if (page === "activity") {
         const d = await read("workspace/audit?page=" + pagination);
         html = panel(
@@ -248,10 +259,9 @@
         error.message + " Previous results, if shown, have not been updated.";
       if ($("page-content").querySelector(".loading"))
         $("page-content").innerHTML =
-          `<div class="empty">${esc(error.message)}<p>Use Refresh to reconnect.</p></div>`;
+          `<div class="empty">${esc(error.message)}<p>Reconnecting automatically…</p></div>`;
     } finally {
       if (current === generation) {
-        $("refresh").disabled = false;
         $("page-content").setAttribute("aria-busy", "false");
         schedule();
       }
@@ -266,7 +276,7 @@
       if (
         !document.hidden &&
         !editing &&
-        ["overview", "incoming", "connections"].includes(page)
+        !$("station-dialog").open
       )
         render();
       else schedule();
@@ -320,7 +330,6 @@
       activity: "A record of catalogue changes and chart publications.",
       connections: "Provider setup, background workers and processing queues.",
     }[page];
-    $("refresh").classList.toggle("hidden", page === "overview");
     document
       .querySelectorAll("[data-page]")
       .forEach((b) => b.classList.toggle("active", b.dataset.page === page));
@@ -380,6 +389,11 @@
       } catch (err) {
         toast(err.message);
       }
+      return;
+    }
+    if (action === "admin-station") {
+      $("station-select").value = id;
+      $("station-select").dispatchEvent(new Event("change"));
       return;
     }
     if (action === "go-review") { navigate("review"); return; }
@@ -499,7 +513,21 @@
       render();
     }
   });
-  $("refresh").onclick = render;
+  const stationForm = $("station-switch-form");
+  if (stationForm) {
+    $("station-select").addEventListener("change", () => {
+      const selected = $("station-select").value;
+      if (selected === stationForm.dataset.current) return;
+      if (stationForm.dataset.admin === "true") { stationForm.requestSubmit(); return; }
+      $("destination-station").value = selected;
+      $("station-destination-label").textContent = "Enter the password for " + $("station-select").selectedOptions[0].textContent + ".";
+      $("station-password").value = "";
+      $("station-dialog").showModal();
+      $("station-password").focus();
+    });
+    $("station-dialog").addEventListener("close", () => { $("station-select").value = stationForm.dataset.current; });
+    $("cancel-station").onclick = () => $("station-dialog").close();
+  }
   $("menu-toggle").onclick = () => $("sidebar").classList.toggle("open");
   $("close-modal").onclick = $("cancel-modal").onclick = () =>
     $("modal").close();

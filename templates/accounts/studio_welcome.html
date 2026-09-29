@@ -1,0 +1,8 @@
+{% load static %}
+<section class="welcome-stage" aria-label="AirVote studio">
+  <a class="welcome-brand" href="{% url 'accounts:login' %}"><img src="{% static 'images/airvote/app-icon.png' %}" alt=""><span>AirVote<small>VOTING STUDIO</small></span></a>
+  <div class="welcome-story"><span class="studio-kicker">THE SOUND OF YOUR AUDIENCE</span><h1>Every listener.<br>Every vote.<br><em>Your next No. 1.</em></h1>
+  <div class="studio-visual" aria-hidden="true"><div class="sound-ring ring-one"></div><div class="sound-ring ring-two"></div><div class="sound-ring ring-three"></div><div class="sound-bars">{% for bar in '123456789012345678901234567' %}<i></i>{% endfor %}</div><div class="console-caption"><span>LISTENERS → VOTES → CHARTS</span><span>01 / 50</span></div></div>
+  <p>Bring your station’s music, listener votes and countdowns into one workspace.</p></div>
+  <footer class="welcome-footer"><span>BUILT FOR THE BROADCAST</span><span>AirVote 2.3</span></footer>
+</section>

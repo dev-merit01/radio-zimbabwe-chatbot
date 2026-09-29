@@ -1,3 +1,4 @@
+from apps.voting.presentation import music_name
 from django.http import JsonResponse
 from django.shortcuts import render
 from django.utils import timezone
@@ -85,9 +86,9 @@ def chart_today(request):
         data.append(
             {
                 "rank": rank,
-                "title": song.title,
-                "artists": song.artist,
-                "display_name": song.canonical_name,
+                "title": music_name(song.title),
+                "artists": music_name(song.artist),
+                "display_name": f"{music_name(song.artist)} - {music_name(song.title)}",
                 "album": song.album or "",
                 "image_url": song.image_url or "",
                 "spotify_track_id": song.spotify_track_id or "",
@@ -198,9 +199,9 @@ def chart_detail(request, chart_id):
         data.append(
             {
                 "rank": entry.rank,
-                "title": entry.title,
-                "artists": entry.artist,
-                "display_name": entry.canonical_name,
+                "title": music_name(entry.title),
+                "artists": music_name(entry.artist),
+                "display_name": f"{music_name(entry.artist)} - {music_name(entry.title)}",
                 "album": entry.album,
                 "image_url": entry.image_url,
                 "spotify_track_id": entry.spotify_track_id,

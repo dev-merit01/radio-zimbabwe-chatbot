@@ -54,7 +54,7 @@ class ProfileTests(TestCase):
         response = self.client.get('/')
         self.assertNotContains(response, 'breadcrumb-page')
         self.assertContains(response, 'href="/accounts/profile/"')
-        self.assertContains(response, 'class="button secondary hidden" id="refresh"')
+        self.assertNotContains(response, 'id="refresh"')
 
 
 @override_settings(SECURE_SSL_REDIRECT=False, ALLOWED_HOSTS=['testserver', 'station.ngrok-free.dev'],

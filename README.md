@@ -4,7 +4,7 @@ A centrally hosted voting service with an installable Windows staff application.
 
 ## Try everything on one Windows PC
 
-Use the 2.2.0 installer and [same-computer setup instructions](docs/LOCAL_WINDOWS.md).
+Use the 2.3.0 installer and [same-computer setup instructions](docs/LOCAL_WINDOWS.md).
 Install Python 3.12, run `setup-local.cmd` once, then `start-local.cmd`. Open the
 installed app and connect to `http://127.0.0.1:8000`. This isolated local mode uses
 SQLite and disables live provider integrations; no hosting is needed.
@@ -16,8 +16,7 @@ application window; it does not launch the default browser. The NSIS installer
 includes the offline WebView2 installer and installs for the current Windows user.
 Staff PCs do not need Python, Rust, Node.js or a local database.
 
-After the Windows build succeeds, download `AirVote-Windows-x64` from
-**Quality checks**, extract it and run its `*-setup.exe`. Open **AirVote** from Start, enter the station's HTTPS server once if it is not
+Download the installer from [AirVote releases](https://github.com/dev-merit01/radio-zimbabwe-chatbot/releases). Open **AirVote** from Start, enter the station's HTTPS server once if it is not
 preconfigured, then sign in. Change it using **Application → Connection settings**.
 Read [Windows installation and release checks](docs/WINDOWS_TAURI.md).
 

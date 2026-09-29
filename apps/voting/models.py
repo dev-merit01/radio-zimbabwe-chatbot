@@ -2,6 +2,7 @@ import re
 from django.db import models
 from django.utils import timezone
 from apps.accounts.models import Station
+from .presentation import music_name
 
 
 def normalize_text(text: str) -> str:
@@ -27,7 +28,7 @@ def make_display_name(artist: str, song: str) -> str:
     """Create a clean display name from raw input."""
     artist = re.sub(r"\s+", " ", artist.strip())
     song = re.sub(r"\s+", " ", song.strip())
-    return f"{artist} - {song}"
+    return f"{music_name(artist)} - {music_name(song)}"
 
 
 class User(models.Model):

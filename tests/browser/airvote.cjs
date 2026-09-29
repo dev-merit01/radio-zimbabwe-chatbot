@@ -21,9 +21,13 @@ const assert = require('node:assert/strict');
       await page.locator('#page-content[aria-busy="false"]').waitFor();
     }
     async function switchTo(station, password) {
-      await page.locator('#station-select').selectOption(station);
-      if (password !== undefined) await page.getByLabel('Station password', {exact: true}).fill(password);
-      await page.locator('.station-switch button').click();
+      if (password === undefined) {
+        await Promise.all([page.waitForNavigation(), page.locator('#station-select').selectOption(station)]);
+      } else {
+        await page.locator('#station-select').selectOption(station);
+        await page.getByLabel('Station password', {exact: true}).fill(password);
+        await Promise.all([page.waitForNavigation(), page.locator('#station-dialog button[type="submit"]').click()]);
+      }
       await page.locator('#connection').getByText('Connected', {exact: true}).waitFor();
     }
     await login('ui-operator', 'local-browser-test-only');

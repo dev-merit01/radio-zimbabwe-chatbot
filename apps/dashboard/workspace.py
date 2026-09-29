@@ -22,6 +22,7 @@ from apps.voting.models import (
     WorkerHeartbeat,
 )
 from apps.voting.pipeline import review_song
+from apps.voting.presentation import music_name
 
 
 def api_access(permission=None):
@@ -141,8 +142,8 @@ def songs(request):
             "items": [
                 {
                     "id": s.id,
-                    "artist": s.artist,
-                    "title": s.title,
+                    "artist": music_name(s.artist),
+                    "title": music_name(s.title),
                     "status": s.status,
                     "votes": s.votes or 0,
                     "spotify": bool(s.spotify_track_id),
@@ -178,7 +179,7 @@ def add_song(request):
         data.get("title"), str
     ):
         raise ValueError("Artist and title must be text.")
-    artist, title = data["artist"].strip(), data["title"].strip()
+    artist, title = music_name(data["artist"]), music_name(data["title"])
     if not artist or not title or len(artist) > 240 or len(title) > 240:
         raise ValueError("Artist and title are required (maximum 240 characters).")
     from django.db import transaction
@@ -468,7 +469,9 @@ def administration(request):
     from apps.accounts.models import Station
     votes = dict(RawVote.objects.values("station").annotate(n=Count("id")).values_list("station", "n"))
     pending = dict(CleanedSong.objects.filter(status="pending").values("station").annotate(n=Count("id")).values_list("station", "n"))
+    users = get_user_model().objects.filter(is_superuser=False, profile__isnull=False)
     return JsonResponse({
+        "summary": {"votes": sum(votes.values()), "pending_songs": sum(pending.values()), "active_accounts": users.filter(is_active=True).count(), "pending_accounts": users.filter(is_active=False).count()},
         "stations": [{"id": value, "name": label, "votes": votes.get(value, 0), "pending": pending.get(value, 0)} for value, label in Station.choices],
         "accounts": [{"id": u.pk, "username": u.username, "name": u.get_full_name(),
                       "station": u.profile.get_station_display(), "active": u.is_active}

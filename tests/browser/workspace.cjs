@@ -86,7 +86,6 @@ const assert = require("node:assert/strict");
   await page.locator('nav [data-page="incoming"]').click();
   await page.locator('#page-content[aria-busy="false"]').waitFor();
   await page.context().setOffline(true);
-  await page.getByRole("button", { name: "Refresh", exact: true }).click();
   await page.locator("#offline-banner").waitFor({ state: "visible" });
   await page.context().setOffline(false);
   await page

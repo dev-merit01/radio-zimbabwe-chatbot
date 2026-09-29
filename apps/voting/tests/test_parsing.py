@@ -121,4 +121,4 @@ class TestMakeDisplayName:
     def test_display_name_collapses_internal_spaces(self):
         """Test display name collapses multiple internal spaces."""
         result = make_display_name("Jah   Prayzah", "Mwana   WaMambo")
-        assert result == "Jah Prayzah - Mwana WaMambo"
+        assert result == "Jah Prayzah - Mwana Wamambo"

@@ -1043,10 +1043,6 @@
                             <div class="panel-subtitle" id="panel-subtitle">Live Top 20 based on listener voting</div>
                         </div>
                         <div class="panel-header-right">
-                            <button id="btn-refresh" class="btn-small">
-                                <span class="icon">⟳</span>
-                                Refresh
-                            </button>
                         </div>
                     </header>
 
@@ -1143,7 +1139,6 @@
             panelSubtitle: document.getElementById('panel-subtitle'),
             btnExpand: document.getElementById('btn-expand'),
             btnExport: document.getElementById('btn-export'),
-            btnRefresh: document.getElementById('btn-refresh'),
             search: document.getElementById('search'),
             visibleCount: document.getElementById('visible-count'),
             totalCount: document.getElementById('total-count'),
@@ -1470,13 +1465,6 @@
             }
         });
 
-        els.btnRefresh.addEventListener('click', () => {
-            if (currentMode === 'archive' && currentArchiveId) {
-                loadArchiveChart(currentArchiveId);
-            } else {
-                loadCurrentChart();
-            }
-        });
 
         els.btnExport.addEventListener('click', exportCsv);
 

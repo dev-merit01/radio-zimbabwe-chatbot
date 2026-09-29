@@ -1421,3 +1421,62 @@ input[type="date"] {
 .profile-page .field { margin-top: 16px; }
 .profile a { color: inherit; text-decoration: none; }
 a.avatar { text-decoration: none; }
+
+/* Welcome screens: the form pane scrolls independently at small heights. */
+.studio-auth { height:100vh; height:100dvh; overflow:hidden; display:grid; grid-template-columns: minmax(0,1.08fr) minmax(0,1fr); background:#f8faff; color:#112746; }
+.welcome-stage { position:relative; min-height:0; overflow:hidden; padding:clamp(28px,4vw,64px); display:flex; flex-direction:column; justify-content:space-between; background:radial-gradient(ellipse at 30% 75%,#124b80 0%,transparent 65%),#061a33; color:white; }
+.welcome-brand { display:flex; align-items:center; gap:12px; color:white; text-decoration:none; font-size:25px; font-weight:750; letter-spacing:-.7px; }
+.welcome-brand img { width:42px; height:42px; border-radius:11px; }
+.welcome-brand small { display:block; margin-top:2px; font-size:9px; letter-spacing:2.8px; color:#9bb8d1; }
+.studio-kicker { font-size:10px; letter-spacing:2px; font-weight:700; color:#537396; }
+.welcome-stage .studio-kicker { color:#81cadc; }
+.welcome-story { position:relative; margin:auto 0; padding:25px 0; }
+.welcome-story h1 { font-size:clamp(33px,3.8vw,60px); font-weight:650; line-height:1.12; letter-spacing:-2px; margin:18px 0; }
+.welcome-story h1 em { font-style:normal; color:#68dcf3; }
+.welcome-story > p { font-size:14px; line-height:1.7; max-width:360px; color:#b2c7db; }
+.welcome-footer { display:flex; justify-content:space-between; gap:12px; font-size:9px; letter-spacing:1.4px; color:#8daac3; }
+.studio-visual { height:clamp(110px,20vh,205px); position:relative; overflow:hidden; margin:14px 0 20px; border-bottom:1px solid #315575; }
+.sound-ring { position:absolute; width:300px; height:300px; border:1px solid #5794b332; border-radius:50%; left:50%; top:50%; transform:translate(-50%,-50%); }
+.ring-two { width:220px;height:220px; } .ring-three { width:140px;height:140px; }
+.sound-bars { position:absolute; inset:0 8% 25px; display:flex; align-items:center; justify-content:center; gap:clamp(3px,.55vw,8px); }
+.sound-bars i { width:7px; height:22%; border-radius:6px; background:linear-gradient(#94f8fa,#1594dc); box-shadow:0 0 20px #0dcde829; }
+.sound-bars i:nth-child(3n) { height:42%; } .sound-bars i:nth-child(4n) { height:70%; } .sound-bars i:nth-child(5n) { height:54%; } .sound-bars i:nth-child(7n) { height:90%; }
+.console-caption { position:absolute; bottom:10px; left:0; right:0; display:flex; justify-content:space-between; font-size:8px; letter-spacing:1.6px; color:#9abed4; }
+.welcome-entry { min-height:0; min-width:0; overflow:hidden; display:flex; align-items:center; justify-content:center; padding:clamp(24px,4vw,64px); }
+.entry-panel { display:flex; flex-direction:column; width:100%; max-width:440px; max-height:100%; min-height:0; }
+.entry-tabs { display:flex; flex-shrink:0; border-bottom:1px solid #dce5ef; gap:28px; margin-bottom:32px; }
+.entry-tabs a { text-decoration:none; padding:0 0 13px; color:#6c7f95; font-size:13px; font-weight:650; border-bottom:3px solid transparent; }
+.entry-tabs a.selected { color:#0957bb; border-color:#0957bb; }
+.entry-heading { flex-shrink:0; }
+.entry-heading h1 { font-size:clamp(26px,2.5vw,36px); line-height:1.2; letter-spacing:-1px; margin:12px 0; }
+.entry-heading > p { font-size:13px; line-height:1.65; color:#63768c; margin:0 0 24px; }
+.entry-scroll { min-height:0; overflow-y:auto; scrollbar-gutter:stable; padding:3px; }
+.entry-form { display:grid; gap:18px; }
+.entry-form .field { margin:0; min-width:0; display:flex; flex-direction:column; gap:7px; }
+.entry-form label { font-size:12px; font-weight:650; color:#314d6c; }
+.entry-form input,.entry-form select { width:100%; min-width:0; height:45px; padding:10px 12px; background:#fff; border:1px solid #cbd8e8; border-radius:8px; font-size:13px; color:#132e4e; }
+.entry-submit { width:100%; display:flex; justify-content:space-between; padding:14px 17px; font-size:14px; margin-top:6px; }
+.entry-assistance { margin-top:25px; padding:17px 0 0; border-top:1px solid #dce5ef; font-size:12px; }
+.entry-assistance p { line-height:1.7; color:#63768c; margin:7px 0; }
+.entry-footer { flex-shrink:0; font-size:10px; color:#708499; margin-top:24px; line-height:1.6; }
+.entry-lock { color:#239582; margin-right:6px; }
+.registration-grid { grid-template-columns:1fr 1fr; gap:14px 16px; }
+.full-width { grid-column:1/-1; }
+.registration-grid > .full-width:empty { display:none; }
+.entry-password-note { font-size:10px; line-height:1.5; color:#708499; margin:0; }
+@media(max-height:720px) { .entry-tabs { margin-bottom:20px; } .entry-heading > p { margin-bottom:16px; } .entry-footer { margin-top:16px; } .welcome-story { padding:12px 0; } .studio-visual { height:110px; } }
+@media(max-width:800px) { .studio-auth { grid-template-columns:1fr; } .welcome-stage { display:none; } .welcome-entry { padding:24px; } .entry-panel { max-width:460px; } }
+@media(max-width:400px) { .registration-grid { grid-template-columns:1fr; } }
+
+.admin-metrics { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:16px; margin-bottom:24px; }
+.admin-metric { padding:22px; background:white; border:1px solid var(--line); border-radius:12px; display:flex; flex-direction:column; gap:10px; }
+.admin-metric > span { color:#49617d; font-size:12px; font-weight:650; }.admin-metric > strong { font-size:32px; letter-spacing:-1px; }.admin-metric small { font-size:10px; color:#74869b; }
+.admin-grid { display:grid; grid-template-columns:minmax(0,1fr) 290px; gap:24px; align-items:start; }.admin-main,.admin-aside { display:grid; gap:24px; min-width:0; }
+.station-directory { display:grid; grid-template-columns:1fr 1fr; gap:14px; padding:20px; }.station-tile { border:1px solid #e0e7f0; padding:18px; border-radius:10px; }.station-tile.selected { border-color:#96bce9; background:#f7fbff; }
+.station-tile-heading { display:flex; gap:10px; align-items:center; }.station-monogram { flex-shrink:0; width:36px;height:36px;display:grid;place-items:center;background:#e7f0fc;color:#0958b9;border-radius:8px;font-size:12px;font-weight:700; }.station-tile h3 { margin:0 0 4px; font-size:13px; }.station-tile small { font-size:9px;color:#7a8b9d; }.station-tile-stats { display:flex; gap:20px; margin:20px 0; font-size:10px;color:#647992; }.station-tile-stats strong { display:block; font-size:19px;color:#163254;margin-bottom:4px; }.station-tile .button { padding:8px 12px; font-size:11px; }
+.access-badge { display:inline-block; padding:5px 9px; border-radius:5px; background:#e9f5ee;color:#26754c;font-size:10px;font-weight:650; }.access-badge.pending { background:#fff3db;color:#96660d; }.account-link { font-size:11px;color:#0857b9;text-decoration:none; }.admin-section-intro { padding:0 22px 16px; color:#667a92; font-size:12px; line-height:1.6; }.admin-section-intro p { margin:0; }
+.admin-station-focus { border-radius:12px; padding:24px;background:#0c2c51;color:white; }.admin-station-focus .studio-kicker { color:#8fcbdc; }.admin-station-focus h2 { margin:12px 0;font-size:22px; }.admin-station-focus p { margin:0;color:#aec3da;font-size:12px;line-height:1.6; }
+.admin-action-list { padding:0 10px 10px; }.admin-action-list button { width:100%;display:block;text-align:left;padding:15px 12px;background:transparent;border:0;border-radius:7px;cursor:pointer;color:#183351; }.admin-action-list button:hover { background:#f1f6fc; }.admin-action-list strong { display:flex;justify-content:space-between;font-size:12px; }.admin-action-list small { display:block;margin-top:7px;font-size:11px;line-height:1.5;color:#6d8198; }
+#station-dialog { max-width:430px; }#station-dialog form { padding:24px; }#station-dialog p { font-size:13px;line-height:1.6;color:#60758b;margin-bottom:20px; }
+@media(max-width:1150px) { .admin-grid { grid-template-columns:1fr; }.admin-aside { grid-template-columns:1fr 1fr; }.admin-station-focus { grid-column:1/-1; }.admin-metrics { grid-template-columns:1fr 1fr; } }
+@media(max-width:600px) { .station-directory,.admin-aside { grid-template-columns:1fr; }.admin-metric { padding:16px; }.admin-metric > strong { font-size:26px; } }

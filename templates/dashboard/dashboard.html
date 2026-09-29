@@ -1096,10 +1096,6 @@
                     <h1 class="topbar-title">Weekend Charts Dashboard</h1>
                 </div>
                 <div class="topbar-right">
-                    <button class="btn-primary" id="refresh-btn">
-                        <span>⟳</span>
-                        <span>Refresh</span>
-                    </button>
                     <button class="btn-primary" id="expand-btn">
                         <span>⇵</span>
                         <span id="expand-text">Expand to 50</span>
@@ -1245,13 +1241,6 @@
                 loadCurrentChart();
                 // Highlight the live voting button
                 document.getElementById('live-voting-btn').classList.add('active');
-            });
-            document.getElementById('refresh-btn').addEventListener('click', () => {
-                if (currentMode === 'live') {
-                    loadCurrentChart();
-                } else if (currentArchiveId) {
-                    loadArchiveChart(currentArchiveId);
-                }
             });
 
             // Sidebar toggle (hamburger)
