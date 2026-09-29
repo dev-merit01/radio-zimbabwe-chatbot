@@ -7,8 +7,7 @@ manual vote using a stable listener reference and `Artist - Song`. Keep the work
 running. **Recent submissions** shows the processing state and result (including
 quota/duplicate rejection). Received totals update after intake; a new song enters
 Review queue. Verify it to include its votes in the chart. Already verified songs
-are matched automatically. Dashboard polling is every 15 seconds; Refresh checks
-sooner. `queued` is not proof a vote has been accepted.
+are matched automatically. Dashboard polling is every 15 seconds. `queued` is not proof a vote has been accepted.
 
 Manual votes are an audited source with the same per-listener/day rules. Listener
 identity is scoped to source and station; a manual reference is not automatically

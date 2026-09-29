@@ -230,3 +230,6 @@ SESSION_COOKIE_AGE = 28800
 
 # Connected local mode exposes only receipt routes through these explicit tunnel hosts.
 LOCAL_WEBHOOK_HOSTS = env.list("LOCAL_WEBHOOK_HOSTS", default=[])
+
+# Railway probes over its internal HTTP network; this endpoint exposes no data.
+SECURE_REDIRECT_EXEMPT = [r"^healthz/$"]

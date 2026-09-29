@@ -1,0 +1,17 @@
+*
+!requirements.txt
+!manage.py
+!radio_zimbabwe/
+!radio_zimbabwe/**
+!apps/
+!apps/**
+!templates/
+!templates/**
+!static/
+!static/**
+!deploy/
+!deploy/**
+**/__pycache__/
+**/*.pyc
+**/.env*
+**/*.sqlite3

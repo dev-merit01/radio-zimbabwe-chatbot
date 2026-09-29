@@ -76,3 +76,8 @@ See [release instructions](docs/RELEASE_2.2.0.md) for voting, station passwords 
 ## Station accounts and saved editions
 
 See [station accounts and chart editions](docs/STATIONS_AND_CHARTS.md) for account approval, administrator controls, Saturday Top 20/50 archives and December Top 50 publication.
+
+## Railway hosting
+
+See [the Railway deployment guide](docs/RAILWAY.md) for the web service, durable
+vote worker, PostgreSQL, Redis, environment variables and production cutover.
