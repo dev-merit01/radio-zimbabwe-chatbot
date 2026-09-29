@@ -5,4 +5,4 @@
 <form method="post">{% csrf_token %}<input type="hidden" name="next" value="{{ next }}">
 <label class="field" for="id_username">Username<input id="id_username" name="username" maxlength="150" autocomplete="username" value="{{ form.username.value|default:'' }}" required autofocus></label>{{ form.username.errors }}
 <label class="field" for="id_password">Password<input id="id_password" name="password" type="password" autocomplete="current-password" required></label>{{ form.password.errors }}{{ form.non_field_errors }}
-<button class="button primary" type="submit">Sign in</button></form><p class="auth-foot">Need access or a password reset?<br>Contact your station administrator.</p></div></main></body></html>
+<button class="button primary" type="submit">Sign in</button></form><p class="auth-foot"><a href="{% url 'accounts:register' %}">Create an account</a><br>For approval or a password reset, contact your administrator.</p></div></main></body></html>

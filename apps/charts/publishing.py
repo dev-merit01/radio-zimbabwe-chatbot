@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import date, timedelta
 from django.db import transaction
 from django.db.models import Sum, Min
 from django.utils import timezone
@@ -14,15 +14,54 @@ def publish_week(station, start, actor, size=20):
         )
     if size not in (20, 50, 100):
         raise ValueError("Chart size must be 20, 50 or 100.")
-    end = start + timedelta(days=6)
-    year, week, _ = start.isocalendar()
+    # Compatibility for old command callers; new UI uses Saturday editions.
+    return _publish(station, start, start + timedelta(days=6), actor, size)
+
+
+def publish_edition(station, chart_date, actor, size=20, kind="weekly"):
+    if size not in (20, 50):
+        raise ValueError("Choose Top 20 or Top 50.")
+    if chart_date > timezone.localdate():
+        raise ValueError("Cannot save a chart for a future date.")
+    if kind == "weekly":
+        if chart_date.weekday() != 5:
+            raise ValueError("Choose a Saturday for a weekly chart.")
+        start = chart_date - timedelta(days=6)
+    elif kind == "year_end":
+        if chart_date.month != 12 or size != 50:
+            raise ValueError(
+                "The year-end chart must be a Top 50 with a December publication date."
+            )
+        start = date(chart_date.year, 1, 1)
+    else:
+        raise ValueError("Unknown chart type.")
+    return _publish(
+        station, start, chart_date, actor, size, chart_date, kind == "year_end"
+    )
+
+
+def _publish(station, start, end, actor, size, chart_date=None, year_end=False):
+    year, week, _ = (chart_date or start).isocalendar()
+    if year_end:
+        year, week = end.year, 0
     with transaction.atomic():
         lock_station(station)
-        existing = WeeklyChart.objects.filter(
-            station=station, year=year, week_number=week
-        ).first()
+        existing_charts = WeeklyChart.objects.filter(
+            station=station, year=year, is_year_end=year_end
+        )
+        if not year_end:
+            existing_charts = existing_charts.filter(week_number=week)
+        existing = existing_charts.first()
         if existing:
             if existing.is_finalized:
+                if (
+                    existing.week_start != start
+                    or existing.week_end != end
+                    or existing.chart_size != size
+                ):
+                    raise ValueError(
+                        "An archive already exists for this edition with a different period or size. Saved charts cannot be overwritten."
+                    )
                 return existing, False
             raise ValueError(
                 "An unfinished legacy archive exists for this week; review it before publishing."
@@ -41,7 +80,7 @@ def publish_week(station, start, actor, size=20):
             ).exists()
         ):
             raise ValueError(
-                "This week still has unprocessed votes. Resolve the processing queue before publishing."
+                "This period still has unprocessed votes. Resolve the processing queue before publishing."
             )
         rebuild_tallies(station, date_range=(start, end))
         songs = (
@@ -55,12 +94,21 @@ def publish_week(station, start, actor, size=20):
             .filter(n__gt=0)
             .order_by("-n", "canonical_name", "id")
         )
-        totals = list(songs)
+        total_votes = songs.aggregate(total=Sum("n"))["total"] or 0
+        unique_songs = songs.count()
+        totals = list(songs[:size])
         if not totals:
-            raise ValueError("No verified votes exist for that week.")
-        previous = WeeklyChart.objects.filter(
-            station=station, week_start=start - timedelta(days=7), is_finalized=True
-        ).first()
+            raise ValueError("No verified votes exist for that period.")
+        previous = (
+            WeeklyChart.objects.filter(
+                station=station,
+                week_end=end - timedelta(days=7),
+                is_finalized=True,
+                is_year_end=False,
+            ).first()
+            if not year_end
+            else None
+        )
         previous_entries = (
             {e.cleaned_song_id: e for e in previous.entries.all()} if previous else {}
         )
@@ -68,11 +116,13 @@ def publish_week(station, start, actor, size=20):
             station=station,
             week_start=start,
             week_end=end,
+            chart_date=chart_date,
+            is_year_end=year_end,
             year=year,
             week_number=week,
             chart_size=size,
-            total_votes=sum(s.n for s in totals),
-            unique_songs=len(totals),
+            total_votes=total_votes,
+            unique_songs=unique_songs,
             is_finalized=True,
             finalized_at=timezone.now(),
         )
@@ -81,6 +131,7 @@ def publish_week(station, start, actor, size=20):
                 chart__station=station,
                 chart__is_finalized=True,
                 chart__week_start__lt=start,
+                chart__is_year_end=year_end,
             )
             .values("cleaned_song_id")
             .annotate(peak=Min("rank"))
@@ -112,6 +163,12 @@ def publish_week(station, start, actor, size=20):
             station=station,
             actor=actor,
             action="publish",
-            details={"chart_id": chart.id, "week_start": str(start)},
+            details={
+                "chart_id": chart.id,
+                "week_start": str(start),
+                "end": str(end),
+                "size": size,
+                "kind": "year_end" if year_end else "weekly",
+            },
         )
         return chart, True

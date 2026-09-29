@@ -1,1 +1,7 @@
-{% load static %}<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Station access</title><link rel="stylesheet" href="{% static 'workspace/studio.css' %}"></head><body><main><section class="panel settings-section"><h1>Station accounts are managed by your administrator</h1><p>Contact your station administrator to request access or reset your password.</p><a class="button primary" href="{% url 'accounts:login' %}">Back to sign in</a></section></main></body></html>
+{% load static %}<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Create account · AirVote</title><link rel="stylesheet" href="{% static 'workspace/studio.css' %}"></head>
+<body class="auth-body"><section class="auth-art"><a class="brand" href="/"><img class="airvote-icon" src="{% static 'images/airvote/app-icon.png' %}" alt=""><span>AirVote<small>STATION WORKSPACE</small></span></a><div><h1>Your station.<br>Your account.</h1><p>Each station has its own music, voting results and saved charts.</p></div></section>
+<main class="auth-form-wrap"><div class="auth-form"><h1>Create your account</h1><p>Select your station. An administrator approves access before your first sign-in.</p>
+<form method="post">{% csrf_token %}{{ form.non_field_errors }}
+{% for field in form %}<div class="field"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{{ field.errors }}</div>{% endfor %}
+<button class="button primary" type="submit">Create account</button></form><p><a href="{% url 'accounts:login' %}">Back to sign in</a></p></div></main></body></html>

@@ -9,19 +9,13 @@ from apps.accounts.context_processors import get_active_station
 
 
 def get_current_week_dates():
-    """Get the start (Monday) and end (Sunday) of the current week."""
-    today = timezone.localdate()
-    # Monday is 0, Sunday is 6
-    monday = today - timedelta(days=today.weekday())
-    sunday = monday + timedelta(days=6)
-    return monday, sunday
+    from apps.charts.periods import week_dates
+    return week_dates(timezone.localdate())
 
 
 def get_week_dates_for_date(target_date):
-    """Get the start (Monday) and end (Sunday) for a given date's week."""
-    monday = target_date - timedelta(days=target_date.weekday())
-    sunday = monday + timedelta(days=6)
-    return monday, sunday
+    from apps.charts.periods import week_dates
+    return week_dates(target_date)
 
 
 @login_required
@@ -30,6 +24,11 @@ def chart_today(request):
     today = timezone.localdate()
     week_start, week_end = get_current_week_dates()
     station = get_active_station(request)
+    period = request.GET.get("period", "weekly")
+    if period not in {"weekly", "year_end"}:
+        return JsonResponse({"error": "Invalid chart period"}, status=400)
+    if period == "year_end":
+        week_start, week_end = date(today.year, 1, 1), today
 
     # Check for limit parameter (default 20, max 50)
     try:
@@ -43,10 +42,10 @@ def chart_today(request):
     # Build previous week's rankings (station-scoped)
     prev_rankings = {}
     prev_chart = WeeklyChart.objects.filter(
-        station=station, week_start=prev_week_start, is_finalized=True
+        station=station, week_start=prev_week_start, is_finalized=True, is_year_end=False
     ).first()
 
-    if prev_chart:
+    if prev_chart and period == "weekly":
         for entry in prev_chart.entries.all():
             if entry.cleaned_song_id:
                 prev_rankings[entry.cleaned_song_id] = entry.rank
@@ -118,12 +117,12 @@ def chart_today(request):
             "date": str(today),
             "week_start": str(week_start),
             "week_end": str(week_end),
-            "week_number": today.isocalendar()[1],
-            "year": today.isocalendar().year,
+            "week_number": week_end.isocalendar()[1],
+            "year": today.year if period == "year_end" else week_end.isocalendar().year,
             "updated_at": timezone.now().isoformat(),
             "total_songs": len(data),
             "total_votes": total_week_votes,
-            "chart_type": "weekly",
+            "chart_type": period,
             "limit": limit,
             "top100": data,  # Keep key for backward compatibility
         }
@@ -134,7 +133,7 @@ def chart_today(request):
 def chart_archives(request):
     """API endpoint returning list of all archived weekly charts."""
     try:
-        year = int(request.GET.get("year", timezone.localdate().isocalendar().year))
+        year = int(request.GET.get("year", get_current_week_dates()[1].isocalendar().year))
         if not 1900 <= year <= 9999:
             raise ValueError()
     except ValueError:
@@ -143,7 +142,7 @@ def chart_archives(request):
 
     charts = WeeklyChart.objects.filter(
         station=station, year=year, is_finalized=True
-    ).order_by("-week_number")
+    ).order_by("-week_end", "-is_year_end")
 
     data = []
     for chart in charts:
@@ -155,6 +154,7 @@ def chart_archives(request):
                 "week_end": str(chart.week_end),
                 "year": chart.year,
                 "is_year_end": chart.is_year_end,
+                "chart_date": str(chart.chart_date) if chart.chart_date else None,
                 "chart_size": chart.chart_size,
                 "total_votes": chart.total_votes,
                 "unique_songs": chart.unique_songs,
@@ -221,6 +221,7 @@ def chart_detail(request, chart_id):
                 "week_end": str(chart.week_end),
                 "year": chart.year,
                 "is_year_end": chart.is_year_end,
+                "chart_date": str(chart.chart_date) if chart.chart_date else None,
                 "chart_size": chart.chart_size,
                 "total_votes": chart.total_votes,
                 "finalized_at": chart.finalized_at.isoformat()

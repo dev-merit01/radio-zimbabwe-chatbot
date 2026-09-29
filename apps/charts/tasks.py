@@ -1,6 +1,6 @@
 """Station-scoped compatibility tasks using the authoritative v2 reconciler."""
 
-from datetime import date, timedelta
+from datetime import date
 from celery import shared_task
 from django.db.models import Sum
 from django.utils import timezone
@@ -26,7 +26,8 @@ def compute_daily_chart(date_str=None, station=None):
 def compute_weekly_chart(station=None):
     validate_station(station)
     today = timezone.localdate()
-    start = today - timedelta(days=today.weekday())
+    from .periods import week_dates
+    start, _ = week_dates(today)
     totals = (
         CleanedSongTally.objects.filter(
             station=station,

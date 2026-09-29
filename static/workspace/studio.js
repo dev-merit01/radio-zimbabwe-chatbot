@@ -15,6 +15,7 @@
     );
   const num = (v) => Number(v || 0).toLocaleString();
   let reader, toastTimer;
+  let chartSize = 20, chartPeriod = "weekly";
   let page = "overview",
     pagination = 1,
     query = "",
@@ -23,7 +24,8 @@
     permissions = {},
     timer;
   const titles = {
-    overview: "Weekly overview",
+    overview: "Voting overview",
+    administration: "Admin control",
     incoming: "Incoming votes",
     review: "Review queue",
     catalogue: "Song catalogue",
@@ -114,7 +116,7 @@
       permissions = overview;
       $("nav-pending").textContent = num(overview.pending_songs);
       if (page === "overview") {
-        const data = await read("chart/today?limit=100");
+        const data = await read(`chart/today?limit=${chartSize}&period=${chartPeriod}`);
         html = `<div class="metrics">${[
           ["Received this week", overview.received],
           ["Verified votes", overview.verified_votes],
@@ -129,9 +131,9 @@
         html +=
           '<div class="content-grid"><div>' +
           panel(
-            "Live weekly chart",
-            chart(data.top100),
-            '<a class="button secondary" href="/api/workspace/export?limit=100">Export CSV</a>',
+            chartPeriod === "year_end" ? "Year-to-date Top " + chartSize : "Live weekly Top " + chartSize,
+            `<form id="chart-options" class="toolbar"><label>Period <select name="period"><option value="weekly" ${chartPeriod === "weekly" ? "selected" : ""}>Sunday–Saturday</option><option value="year_end" ${chartPeriod === "year_end" ? "selected" : ""}>Year to date</option></select></label><label>Chart size <select name="size"><option value="20" ${chartSize === 20 ? "selected" : ""}>Top 20</option><option value="50" ${chartSize === 50 ? "selected" : ""}>Top 50</option></select></label><button class="button secondary">Show chart</button></form><p class="hint">${esc(data.week_start)} to ${esc(data.week_end)} · Verified votes only</p>` + chart(data.top100),
+            `<a class="button secondary" href="/api/workspace/export?limit=${chartSize}&period=${chartPeriod}">Export CSV</a>`,
           ) +
           '</div><aside class="side-stack"><section class="panel activity-card"><h2>Votes this week</h2><p>Received votes by day, including songs awaiting review.</p><canvas id="timeline" width="520" height="250" aria-label="Daily vote counts" role="img"></canvas><p id="timeline-summary" class="sr-only"></p></section><section class="review-callout"><h3>' +
           num(overview.pending_songs) +
@@ -182,17 +184,22 @@
           `<form id="search-form" class="toolbar"><label>Year <input name="q" type="number" min="1900" max="9999" value="${esc(d.year)}"></label><button class="button secondary">Load</button></form>` +
             (d.charts.length
               ? table(
-                  ["Week", "Dates", "Votes", "Open"],
+                  ["Edition", "Voting period", "Votes", "Open"],
                   d.charts.map(
                     (c) =>
-                      `<tr><td>${c.week_number}</td><td>${esc(c.week_start)} – ${esc(c.week_end)}</td><td>${num(c.total_votes)}</td><td>${btn("View chart", "archive", c.id)}</td></tr>`,
+                      `<tr><td>${c.is_year_end ? "Year-end Top 50" : "Top " + c.chart_size + " · " + (c.chart_date || "Week " + c.week_number)}</td><td>${esc(c.week_start)} – ${esc(c.week_end)}</td><td>${num(c.total_votes)}</td><td>${btn("View chart", "archive", c.id)}</td></tr>`,
                   ),
                 )
               : empty),
           permissions.can_publish
-            ? btn("Publish completed week", "publish")
+            ? btn("Save Saturday chart", "publish") + btn("Save December Top 50", "publish-year")
             : "",
         );
+      } else if (page === "administration") {
+        const d = await read("workspace/administration");
+        html = panel("Station overview", table(["Station", "All-time votes", "Awaiting review"], d.stations.map(s => `<tr><td>${esc(s.name)}</td><td>${num(s.votes)}</td><td>${num(s.pending)}</td></tr>`))) +
+          panel("Accounts and station access", `<p class="hint">Approve only people authorised for the station shown. Use Manage accounts to change station assignments, disable access or reset passwords.</p>` + table(["Account", "Station", "Access"], d.accounts.map(u => `<tr><td>${esc(u.username)}<br><small>${esc(u.name)}</small></td><td>${esc(u.station)}</td><td>${u.active ? "Active" : btn("Approve access", "approve-account", u.id)}</td></tr>`)), '<a class="button secondary" href="/admin/auth/user/">Manage accounts</a>') +
+          panel("Voting controls", '<p>Use the station selector to manage a station. Song reviews, saved charts, station passwords and queue retries apply to the selected station.</p><div class="toolbar">' + btn("Review songs", "go-review") + btn("Save Saturday chart", "publish") + btn("Save December Top 50", "publish-year") + btn("Set station password", "station-password") + btn("Retry failed jobs", "retry") + '</div>');
       } else if (page === "activity") {
         const d = await read("workspace/audit?page=" + pagination);
         html = panel(
@@ -308,7 +315,8 @@
       incoming: "Listener submissions in the order they reached your station.",
       review: "Check artist names and titles before approving chart entries.",
       catalogue: "Search, edit and manage your station’s music.",
-      archives: "Completed weekly charts, preserved as published.",
+      archives: "Saturday and December charts, preserved as published.",
+      administration: "Manage accounts and oversee voting across every station.",
       activity: "A record of catalogue changes and chart publications.",
       connections: "Provider setup, background workers and processing queues.",
     }[page];
@@ -364,8 +372,8 @@
       try {
         const d = await api("chart/" + id);
         modal(
-          "Archived chart",
-          chart(d.entries) +
+          (d.chart.is_year_end ? "Year-end Top 50" : "Top " + d.chart.chart_size) + " · " + (d.chart.chart_date || d.chart.week_end),
+          `<p class="hint">Voting period: ${esc(d.chart.week_start)} to ${esc(d.chart.week_end)}. Saved ${esc(new Date(d.chart.finalized_at).toLocaleString())}.</p>` + chart(d.entries) +
             `<a class="button secondary" href="/api/workspace/export?archive=${id}">Export CSV</a>`,
           null,
         );
@@ -374,12 +382,19 @@
       }
       return;
     }
-    if (action === "publish") {
+    if (action === "go-review") { navigate("review"); return; }
+    if (action === "approve-account") {
+      modal("Approve station access", "<p>Allow this account to sign in and view its assigned station? Song moderation remains administrator-only.</p>", () => api(`workspace/accounts/${id}/approve`, {}));
+      return;
+    }
+    if (action === "publish" || action === "publish-year") {
+      const annual = action === "publish-year";
       modal(
-        "Publish a completed week",
-        field("Week beginning (Monday)", "week_start", "", "date") +
-          '<label class="field">Chart size<select name="size"><option>20</option><option>50</option><option>100</option></select></label><p class="hint">This saves a permanent snapshot of verified votes.</p>',
-        (f) => api("workspace/publish", Object.fromEntries(f)),
+        annual ? "Save December Top 50" : "Save Saturday chart",
+        field(annual ? "Publication date (December)" : "Chart date (Saturday)", "chart_date", "", "date") +
+          (annual ? '<input type="hidden" name="size" value="50">' : '<label class="field">Chart size<select name="size"><option>20</option><option>50</option></select></label>') +
+          `<p class="hint">${annual ? "Counts verified votes from January 1 through the chosen December date." : "Counts verified votes from Sunday through the chosen Saturday."} Saving today includes votes processed so far. Finish reviewing and processing votes first. This permanent snapshot cannot be overwritten; later votes and edits will not change it.</p>`,
+        (f) => api("workspace/publish", {...Object.fromEntries(f), kind: annual ? "year_end" : "weekly"}),
       );
       return;
     }
@@ -470,6 +485,13 @@
     );
   });
   document.addEventListener("submit", (e) => {
+    if (e.target.id === "chart-options") {
+      e.preventDefault();
+      const values = new FormData(e.target);
+      chartSize = Number(values.get("size"));
+      chartPeriod = values.get("period");
+      render();
+    }
     if (e.target.id === "search-form") {
       e.preventDefault();
       query = new FormData(e.target).get("q");

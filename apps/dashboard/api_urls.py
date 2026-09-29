@@ -5,6 +5,8 @@ from . import desktop, workspace
 
 urlpatterns = [
     path("desktop/status", desktop.status),
+    path("workspace/administration", workspace.administration),
+    path("workspace/accounts/<int:user_id>/approve", workspace.approve_account),
     path("workspace/station-password", workspace.station_password),
     path("workspace/votes", workspace.submit_vote),
     path("workspace/overview", workspace.overview),

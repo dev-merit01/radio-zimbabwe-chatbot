@@ -30,7 +30,8 @@ def api_access(permission=None):
         def call(request, *args, **kwargs):
             if not request.user.is_authenticated:
                 return JsonResponse({"error": "Sign in to continue."}, status=401)
-            if permission and not request.user.has_perm(permission):
+            admin_only = permission in {"admin", "voting.change_cleanedsong", "voting.add_cleanedsong", "voting.add_weeklychart"}
+            if permission and not (request.user.is_superuser if admin_only else request.user.has_perm(permission)):
                 return JsonResponse(
                     {"error": "Your account cannot perform this action."}, status=403
                 )
@@ -76,7 +77,8 @@ def page(request, qs):
 def overview(request):
     station = get_active_station(request)
     today = timezone.localdate()
-    start = today - timedelta(days=today.weekday())
+    from apps.charts.periods import week_dates
+    start, _ = week_dates(today)
     votes = RawVote.objects.filter(
         station=station, vote_date__gte=start, vote_date__lte=today
     )
@@ -91,13 +93,14 @@ def overview(request):
     )
     return JsonResponse(
         {
+            "is_admin": request.user.is_superuser,
             "version": settings.APP_VERSION,
             "station": station,
             "today": str(today),
             "can_record_vote": request.user.has_perm("voting.add_rawvote"),
-            "can_review": request.user.has_perm("voting.change_cleanedsong"),
-            "can_add": request.user.has_perm("voting.add_cleanedsong"),
-            "can_publish": request.user.has_perm("voting.add_weeklychart"),
+            "can_review": request.user.is_superuser,
+            "can_add": request.user.is_superuser,
+            "can_publish": request.user.is_superuser,
             "received": votes.count(),
             "verified_votes": accepted.aggregate(n=Sum("count"))["n"] or 0,
             "listeners": votes.values("user_id").distinct().count(),
@@ -356,14 +359,15 @@ def audit(request):
 @require_POST
 @api_access("voting.add_weeklychart")
 def publish(request):
-    from apps.charts.publishing import publish_week
+    from apps.charts.publishing import publish_edition
 
     data = json.loads(request.body)
-    chart, created = publish_week(
+    chart, created = publish_edition(
         get_active_station(request),
-        date.fromisoformat(data["week_start"]),
+        date.fromisoformat(data["chart_date"]),
         request.user,
         int(data.get("size", 20)),
+        kind=data.get("kind", "weekly"),
     )
     return JsonResponse({"ok": True, "id": chart.id, "created": created})
 
@@ -456,3 +460,34 @@ def submit_vote(request):
     return JsonResponse({"ok": True, "id": event.pk, "state": event.state,
                          "message": "Queued for processing. Check Recent submissions for the result."},
                         status=202 if created else 200)
+
+
+@api_access("admin")
+def administration(request):
+    from django.contrib.auth import get_user_model
+    from apps.accounts.models import Station
+    votes = dict(RawVote.objects.values("station").annotate(n=Count("id")).values_list("station", "n"))
+    pending = dict(CleanedSong.objects.filter(status="pending").values("station").annotate(n=Count("id")).values_list("station", "n"))
+    return JsonResponse({
+        "stations": [{"id": value, "name": label, "votes": votes.get(value, 0), "pending": pending.get(value, 0)} for value, label in Station.choices],
+        "accounts": [{"id": u.pk, "username": u.username, "name": u.get_full_name(),
+                      "station": u.profile.get_station_display(), "active": u.is_active}
+                     for u in get_user_model().objects.filter(is_superuser=False, profile__isnull=False).select_related("profile").order_by("is_active", "username")[:200]],
+    })
+
+
+@require_POST
+@api_access("admin")
+def approve_account(request, user_id):
+    from django.contrib.auth import get_user_model
+    from django.db import transaction
+    with transaction.atomic():
+        user = get_user_model().objects.select_for_update().filter(pk=user_id, is_superuser=False, profile__isnull=False).first()
+        if not user:
+            return JsonResponse({"error": "Account not found."}, status=404)
+        if not user.is_active:
+            user.is_active = True
+            user.save(update_fields=["is_active"])
+            ReviewAudit.objects.create(station=user.profile.station, actor=request.user,
+                                       action="approve_account", details={"user_id": user.pk})
+    return JsonResponse({"ok": True})

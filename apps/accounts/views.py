@@ -20,7 +20,7 @@ def safe_next(request, value):
     )
 
 
-from .forms import LoginForm
+from .forms import LoginForm, RegistrationForm
 from .models import Station
 
 
@@ -69,7 +69,7 @@ def login_view(request):
                 cache.delete(throttle)
                 login(request, user)
                 return redirect(next_url or "dashboard")
-            messages.error(request, "Invalid username or password.")
+            messages.error(request, "Invalid credentials, or your account is awaiting administrator approval.")
     else:
         form = LoginForm()
 
@@ -84,7 +84,30 @@ def login_view(request):
 
 
 def register_view(request):
-    return render(request, "accounts/register.html", status=403)
+    if request.user.is_authenticated:
+        return redirect("dashboard")
+    form = RegistrationForm(request.POST or None)
+    if request.method == "POST":
+        from django.db import IntegrityError
+        # Bound account-creation work; do not trust proxy headers as client identity.
+        key = "register:" + hashlib.sha256(request.META.get("REMOTE_ADDR", "").encode()).hexdigest()
+        try:
+            attempts = 1 if cache.add(key, 1, 3600) else cache.incr(key)
+        except Exception:
+            form.add_error(None, "Registration is temporarily unavailable. Please try again shortly.")
+            return render(request, "accounts/register.html", {"form": form}, status=503)
+        if attempts > 10:
+            form.add_error(None, "Too many registration attempts. Please try again in an hour.")
+            return render(request, "accounts/register.html", {"form": form}, status=429)
+        if form.is_valid():
+            try:
+                form.save()
+            except IntegrityError:
+                form.add_error("username", "That username is already taken.")
+            else:
+                messages.success(request, "Account created. An administrator must approve your station access before you can sign in.")
+                return redirect("accounts:login")
+    return render(request, "accounts/register.html", {"form": form})
 
 
 @login_required

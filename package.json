@@ -7,7 +7,8 @@
     "desktop:dev": "tauri dev",
     "desktop:build": "tauri build --bundles nsis -- --locked",
     "desktop:check": "node desktop/check.cjs && node --check desktop/ui/setup.js",
-    "test:desktop-ui": "node tests/browser/desktop.cjs"
+    "test:desktop-ui": "node tests/browser/desktop.cjs",
+    "test:editions": "node tests/browser/editions.cjs"
   },
   "devDependencies": {
     "@tauri-apps/cli": "2.11.5",

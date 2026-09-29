@@ -24,6 +24,8 @@
 <button class="nav-item" data-page="review"><svg><use href="#i-check"/></svg>Review queue<span id="nav-pending" class="nav-count">0</span></button>
 <button class="nav-item" data-page="catalogue"><svg><use href="#i-music"/></svg>Song catalogue</button>
 <button class="nav-item" data-page="archives"><svg><use href="#i-folder"/></svg>Chart archives</button>
+{% if request.user.is_superuser %}<div class="nav-label secondary-label">ADMINISTRATION</div>
+<button class="nav-item" data-page="administration"><svg><use href="#i-settings"/></svg>Admin control</button>{% endif %}
 <div class="nav-label secondary-label">MANAGEMENT</div>
 <button class="nav-item" data-page="activity"><svg><use href="#i-clock"/></svg>Activity log</button>
 <button class="nav-item" data-page="connections"><svg><use href="#i-settings"/></svg>Connections</button>

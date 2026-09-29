@@ -122,7 +122,7 @@ class RawSongTally(models.Model):
 
 
 # ============================================================
-# Global Song Catalog & Station-Scoped Songs
+# Legacy catalogue tables (not used by the station voting pipeline)
 # ============================================================
 
 
@@ -254,8 +254,8 @@ class CleanedSong(models.Model):
     Canonical song entry after cleaning/verification.
     Multiple raw match_keys can map to one CleanedSong.
 
-    NOTE: This model is being deprecated in favor of SongCatalog + StationSong.
-    Kept for backward compatibility during migration.
+    Authoritative station-owned catalogue. Names and verification are independent
+    for each station. Legacy SongCatalog/StationSong tables are not used by AirVote.
     """
 
     STATUS_CHOICES = (
@@ -606,7 +606,7 @@ class VerifiedArtist(models.Model):
 class WeeklyChart(models.Model):
     """
     Stores finalized weekly Top 20/50 charts.
-    Charts are finalized every Saturday, and Dec 31st is the Top 50.
+    Administrators save Saturday editions and a separate December year-end Top 50.
     Station-scoped: each station has its own weekly charts.
     """
 
@@ -617,10 +617,12 @@ class WeeklyChart(models.Model):
         db_index=True,
     )
 
+    chart_date = models.DateField(null=True, blank=True, help_text="Saturday broadcast or December year-end publication date; blank for legacy archives")
+
     # Week identification
-    week_start = models.DateField(help_text="Monday of the chart week")
+    week_start = models.DateField(help_text="First voting day included in this snapshot")
     week_end = models.DateField(
-        help_text="Sunday of the chart week (chart published on Saturday)"
+        help_text="Last voting day included in this snapshot"
     )
     week_number = models.IntegerField(help_text="ISO week number 1-52/53")
     year = models.IntegerField()
@@ -646,7 +648,7 @@ class WeeklyChart(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        unique_together = ("station", "year", "week_number")
+        unique_together = ("station", "year", "week_number", "is_year_end")
         ordering = ["-year", "-week_number"]
         verbose_name = "Weekly Chart"
         verbose_name_plural = "Weekly Charts"

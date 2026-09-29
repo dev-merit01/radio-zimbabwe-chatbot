@@ -73,3 +73,7 @@ Legacy `process_votes`, `llm_match`, `clear_database` and polling commands are r
 
 Use [versioned releases](https://github.com/dev-merit01/radio-zimbabwe-chatbot/releases) for the installer EXE and separate source ZIP; Actions artifacts expire.
 See [release instructions](docs/RELEASE_2.2.0.md) for voting, station passwords and upgrades, and [API setup](docs/API_SETUP.md) for connected mode.
+
+## Station accounts and saved editions
+
+See [station accounts and chart editions](docs/STATIONS_AND_CHARTS.md) for account approval, administrator controls, Saturday Top 20/50 archives and December Top 50 publication.
