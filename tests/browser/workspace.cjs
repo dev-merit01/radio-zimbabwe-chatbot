@@ -83,6 +83,8 @@ const assert = require("node:assert/strict");
   await page.getByRole("link", { name: "Export CSV", exact: true }).click();
   const download = await downloadPromise;
   assert.ok(download.suggestedFilename().endsWith(".csv"));
+  await page.locator('nav [data-page="incoming"]').click();
+  await page.locator('#page-content[aria-busy="false"]').waitFor();
   await page.context().setOffline(true);
   await page.getByRole("button", { name: "Refresh", exact: true }).click();
   await page.locator("#offline-banner").waitFor({ state: "visible" });

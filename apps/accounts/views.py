@@ -175,3 +175,35 @@ def clear_station_switch(request):
         request.GET.get("next") or request.META.get("HTTP_REFERER") or "dashboard"
     )
     return redirect(safe_next(request, next_url))
+
+
+@login_required
+def profile_view(request):
+    from django.contrib.auth.forms import PasswordChangeForm
+    from django.contrib.auth import update_session_auth_hash
+    from .forms import ProfileForm
+    from .context_processors import get_active_station_display
+    profile_form = ProfileForm(instance=request.user)
+    password_form = PasswordChangeForm(request.user)
+    if request.method == "POST":
+        if request.POST.get("action") == "password":
+            password_form = PasswordChangeForm(request.user, request.POST)
+            if password_form.is_valid():
+                user = password_form.save()
+                update_session_auth_hash(request, user)
+                messages.success(request, "Password changed. Other signed-in sessions will need to sign in again.")
+                return redirect("accounts:profile")
+        elif request.POST.get("action") == "profile":
+            profile_form = ProfileForm(request.POST, instance=request.user)
+            if profile_form.is_valid():
+                profile_form.save()
+                messages.success(request, "Profile updated.")
+                return redirect("accounts:profile")
+        else:
+            return JsonResponse({"error": "Invalid profile action."}, status=400)
+    profile = getattr(request.user, "profile", None)
+    return render(request, "accounts/profile.html", {
+        "profile_form": profile_form, "password_form": password_form,
+        "assigned_station": profile.get_station_display() if profile else "Administrator access",
+        "current_station": get_active_station_display(request),
+    })

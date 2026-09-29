@@ -320,7 +320,7 @@
       activity: "A record of catalogue changes and chart publications.",
       connections: "Provider setup, background workers and processing queues.",
     }[page];
-    $("breadcrumb-page").textContent = page;
+    $("refresh").classList.toggle("hidden", page === "overview");
     document
       .querySelectorAll("[data-page]")
       .forEach((b) => b.classList.toggle("active", b.dataset.page === page));

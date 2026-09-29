@@ -36,3 +36,27 @@ class WorkspaceSecurityMiddleware:
                 "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' https: data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
             )
         return response
+
+
+class LocalWebhookHostMiddleware:
+    """Keep the local dashboard and DEBUG pages off the configured public tunnel."""
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        from django.conf import settings
+        hosts = settings.LOCAL_WEBHOOK_HOSTS
+        if hosts:
+            host = request.get_host().split(":", 1)[0].lower().rstrip(".")
+            if host in hosts and request.path not in {
+                "/webhook/bird/", "/webhook/telegram/", "/webhook/whatsapp/"
+            }:
+                return JsonResponse({"error": "Not found."}, status=404)
+        response = self.get_response(request)
+        if hosts and host in hosts:
+            # Never send a local DEBUG traceback to an external webhook caller.
+            if response.status_code >= 500:
+                return JsonResponse({"error": "Webhook processing unavailable."}, status=503)
+            if response.status_code >= 400 and response.get("Content-Type", "").startswith("text/html"):
+                return JsonResponse({"error": "Webhook request rejected."}, status=response.status_code)
+        return response

@@ -44,3 +44,19 @@ def test_bird_credentials_without_signing_secret_are_rejected(tmp_path):
     (tmp_path / '.env.providers').write_text('BIRD_ACCESS_KEY=test\nTELEGRAM_BOT_TOKEN=test\nTELEGRAM_WEBHOOK_SECRET=test\n')
     with pytest.raises(RuntimeError, match='BIRD_WEBHOOK_SECRET'):
         local_environment(tmp_path, providers=True)
+
+
+def test_connected_webhook_hostname_is_explicit_and_isolated(tmp_path):
+    (tmp_path / '.env.providers').write_text('BIRD_WEBHOOK_SECRET=test\nWEBHOOK_PUBLIC_HOSTS=station.ngrok-free.dev\n')
+    connected = local_environment(tmp_path, providers=True)
+    assert connected['DJANGO_ALLOWED_HOSTS'] == '127.0.0.1,localhost,station.ngrok-free.dev'
+    assert connected['LOCAL_WEBHOOK_HOSTS'] == 'station.ngrok-free.dev'
+    assert local_environment(tmp_path)['LOCAL_WEBHOOK_HOSTS'] == ''
+
+
+def test_connected_webhook_hostname_rejects_wildcards_and_urls(tmp_path):
+    import pytest
+    for host in ['*', '.ngrok-free.dev', 'https://station.ngrok-free.dev', 'station.ngrok-free.dev/path', 'localhost', '127.0.0.1', 'station.ngrok-free.dev:8000']:
+        (tmp_path / '.env.providers').write_text('BIRD_WEBHOOK_SECRET=test\nWEBHOOK_PUBLIC_HOSTS=' + host + '\n')
+        with pytest.raises(RuntimeError, match='exact public hostnames'):
+            local_environment(tmp_path, providers=True)

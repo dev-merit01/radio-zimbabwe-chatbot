@@ -61,6 +61,7 @@ MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
+    "radio_zimbabwe.middleware.LocalWebhookHostMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
@@ -226,3 +227,6 @@ if not DEBUG:
 SECURE_HSTS_SECONDS = env.int("SECURE_HSTS_SECONDS", default=3600 if not DEBUG else 0)
 SECURE_REFERRER_POLICY = "same-origin"
 SESSION_COOKIE_AGE = 28800
+
+# Connected local mode exposes only receipt routes through these explicit tunnel hosts.
+LOCAL_WEBHOOK_HOSTS = env.list("LOCAL_WEBHOOK_HOSTS", default=[])

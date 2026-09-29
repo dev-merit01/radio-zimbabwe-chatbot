@@ -1,0 +1,12 @@
+{% load static %}<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Your profile · AirVote</title><link rel="stylesheet" href="{% static 'workspace/studio.css' %}"></head>
+<body><main class="profile-page"><a class="button secondary" href="/">Back to workspace</a><h1>Your profile</h1>
+{% if messages %}<div class="notice" role="status">{% for message in messages %}<p>{{ message }}</p>{% endfor %}</div>{% endif %}
+<section class="panel settings-section"><h2>Account</h2><p>Username: <strong>{{ request.user.username }}</strong></p><p>Role: {% if request.user.is_superuser %}Administrator{% else %}Station team{% endif %}</p><p>Assigned station: {{ assigned_station }}</p><p>Current station: {{ current_station }}</p><p class="hint">Contact your administrator to change station access.</p>
+<form method="post">{% csrf_token %}<input type="hidden" name="action" value="profile">{{ profile_form.non_field_errors }}
+{% for field in profile_form %}<div class="field"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{{ field.errors }}</div>{% endfor %}
+<button class="button primary" type="submit">Save profile</button></form></section>
+<section class="panel settings-section"><h2>Change password</h2><form method="post">{% csrf_token %}<input type="hidden" name="action" value="password">{{ password_form.non_field_errors }}
+{% for field in password_form %}<div class="field"><label for="{{ field.id_for_label }}">{{ field.label }}</label>{{ field }}{{ field.errors }}{% if field.help_text %}<div class="hint">{{ field.help_text|safe }}</div>{% endif %}</div>{% endfor %}
+<button class="button primary" type="submit">Change password</button></form></section>
+<form method="post" action="{% url 'accounts:logout' %}">{% csrf_token %}<button class="button secondary">Sign out</button></form></main></body></html>

@@ -1415,3 +1415,9 @@ input[type="date"] {
 
 .station-switch { flex-wrap: wrap; }
 .station-switch input { width: 100%; min-width: 0; padding: 8px; border: 1px solid var(--line); border-radius: 6px; }
+
+.profile-page { max-width: 720px; margin: 32px auto; padding: 0 20px; }
+.profile-page > * { margin-bottom: 24px; }
+.profile-page .field { margin-top: 16px; }
+.profile a { color: inherit; text-decoration: none; }
+a.avatar { text-decoration: none; }

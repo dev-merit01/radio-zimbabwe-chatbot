@@ -1,8 +1,9 @@
-"""Isolated, loopback-only local server. Never loads live provider credentials."""
+"""Loopback-only local server; --providers opts into explicit provider configuration."""
 
 import argparse
 import json
 import os
+import re
 from pathlib import Path
 import secrets
 import socket
@@ -35,6 +36,7 @@ def local_environment(root=ROOT, providers=False):
         "DJANGO_DEBUG": "True",
         "DJANGO_LOG_LEVEL": "INFO",
         "DJANGO_ALLOWED_HOSTS": "127.0.0.1,localhost",
+        "LOCAL_WEBHOOK_HOSTS": "",
         "DJANGO_TIMEZONE": "Africa/Harare",
         "DATABASE_URL": "sqlite:///" + (data / "db.sqlite3").as_posix(),
         "SECURE_SSL_REDIRECT": "False",
@@ -66,6 +68,16 @@ def local_environment(root=ROOT, providers=False):
         allowed = {key for key in env if key.startswith(("TELEGRAM_", "BIRD_", "ONEMSG_", "SPOTIFY_", "OPENAI_"))}
         allowed.update({"TELEGRAM_STATION", "BIRD_STATION", "ONEMSG_STATION", "OPENAI_MODEL", "AUTO_AI_MATCH"})
         env.update({key: value for key, value in ProviderEnv.ENVIRON.items() if key in allowed})
+        hosts = [host.strip().lower() for host in ProviderEnv.ENVIRON.get("WEBHOOK_PUBLIC_HOSTS", "").split(",") if host.strip()]
+        for host in hosts:
+            if len(host) > 253 or "." not in host or any(
+                not re.fullmatch(r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?", label)
+                for label in host.split(".")
+            ) or host in {"127.0.0.1", "localhost"}:
+                raise RuntimeError("WEBHOOK_PUBLIC_HOSTS must contain exact public hostnames, without https://, paths, ports or wildcards.")
+        if hosts:
+            env["LOCAL_WEBHOOK_HOSTS"] = ",".join(dict.fromkeys(hosts))
+            env["DJANGO_ALLOWED_HOSTS"] += "," + env["LOCAL_WEBHOOK_HOSTS"]
         groups = [("TELEGRAM_BOT_TOKEN", "TELEGRAM_WEBHOOK_SECRET"),
                   ("BIRD_WEBHOOK_SECRET",),
                   ("ONEMSG_APP_KEY", "ONEMSG_AUTH_KEY", "ONEMSG_WEBHOOK_SECRET")]

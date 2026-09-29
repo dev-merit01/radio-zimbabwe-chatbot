@@ -86,3 +86,32 @@ running; review new songs before they enter the verified chart. To opt into
 provider credentials, use [API_SETUP.md](API_SETUP.md) and start-connected.cmd.
 The default start-local.cmd remains isolated. See [release notes](RELEASE_2.2.0.md)
 for station passwords and administrator account management.
+
+## Bird through ngrok: resolving DisallowedHost
+
+For `start-connected.cmd`, set this in `.env.providers` (keep the other provider
+settings already present):
+
+```dotenv
+WEBHOOK_PUBLIC_HOSTS=xerophytic-unpresumptively-zachery.ngrok-free.dev
+```
+
+Use only the hostname shown by your ngrok agent, without `https://` or a path.
+Restart `start-connected.cmd`, then in another terminal run:
+
+```powershell
+.\ngrok.exe http 8000
+```
+
+Configure Bird's webhook URL as `https://YOUR-NGROK-HOST/webhook/bird/`.
+The configured tunnel hostname is allowed only on the three webhook receipt
+routes; the local workspace still opens at `http://127.0.0.1:8000`.
+Do not set `ALLOWED_HOSTS=['*']` and do not remove webhook signature verification.
+Do not combine this setup with a Host rewrite to localhost, which would bypass
+the hostname-based route restriction. If using an existing ngrok traffic policy,
+retain its webhook-only path restriction.
+
+A valid new delivery returns HTTP 202 and a duplicate returns 200. HTTP 403 means
+signature verification still needs attention; resolving the host does not verify
+Bird credentials. The worker must run and new songs must be verified before their
+votes appear in the verified chart.
