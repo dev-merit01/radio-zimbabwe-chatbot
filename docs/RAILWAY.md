@@ -8,10 +8,25 @@ Deployment files are prepared; a connected Railway account, configured secrets a
 | --- | --- | --- |
 | Postgres | Railway PostgreSQL with persistent volume | Accounts, votes, songs, charts and durable job queue |
 | Redis | Railway Redis | Shared cache and request throttling |
-| airvote-web | This GitHub repo, main; `/railway.json` | HTTPS workspace and signed webhook intake |
-| airvote-worker | Same repo/branch; `/deploy/railway-worker.json` | Ingestion, matching and replies |
+| airvote-web | This GitHub repo, main; Dockerfile + service settings | HTTPS workspace and signed webhook intake |
+| airvote-worker | Same repo/branch; Dockerfile + worker settings | Ingestion, matching and replies |
 
-Keep the repository root as the build root for both code services. Docker builds Python only, never Tauri/Node. Set the worker's config-file path before deploying it; otherwise the root web config starts a second web server. Only web gets a public domain. Keep database connections private and all four services in the same region. Start with one web replica and one worker. Leave service sleeping/serverless OFF: inbound votes and queued work must run when staff close their apps.
+Keep the repository root as the build root for both code services. Docker builds Python only, never Tauri/Node. Set explicit service commands as shown below; new Railway services no longer read railway.json/railway.toml. Do not rely on a config-file path. Only web gets a public domain. Keep database connections private and all four services in the same region. Start with one web replica and one worker. Leave service sleeping/serverless OFF: inbound votes and queued work must run when staff close their apps.
+
+## Service deployment settings
+
+Railway deprecated Config as Code for new services on 2026-08-28. Configure these values through Railway service settings/API. Existing legacy config files stop being read on 2026-12-01. For future project-wide automation, import the configured project with `railway config pull`, review `railway config plan`, and preserve secrets rather than exporting their values.
+
+| Setting | Web | Worker |
+| --- | --- | --- |
+| Builder | Dockerfile, path `Dockerfile` | Dockerfile, path `Dockerfile` |
+| Start command | `sh deploy/web.sh` | `sh deploy/worker.sh` |
+| Pre-deploy | `python deploy/check_environment.py && python manage.py migrate --noinput` | None |
+| Healthcheck | `/healthz/`, timeout 300 seconds | None; check heartbeat in Connections |
+| Restart | On failure, 10 retries | On failure, 10 retries |
+| Serverless/sleep | Off | Off |
+
+Redis is cache-only; votes and durable jobs are in PostgreSQL. A private Redis 7.4 service can run with a generated password, 64 MB cache ceiling and `noeviction` (fail rather than silently discard rate-limit keys). It needs no public domain. PostgreSQL still needs a persistent volume and backups.
 
 ## Variables
 
@@ -43,7 +58,7 @@ Important: current Bird configuration binds one provider account to one station.
 
 1. Back up the existing server database. Decide whether this is a fresh production database or whether existing users, votes and archives must migrate. Do not overwrite or import into production without checking counts and relationships on a staging restore.
 2. Create Postgres and Redis, then web with the variables above. The web pre-deploy command validates configuration and runs Django migrations; static files are already in the image. Wait for its readiness check to pass.
-3. Start worker with its dedicated config and the same environment. No Celery or Telegram polling process is needed for this durable-worker/webhook pipeline.
+3. Start worker with its dedicated settings and the same environment. No Celery or Telegram polling process is needed for this durable-worker/webhook pipeline.
 4. In a Railway remote shell connected to web, run `python manage.py createsuperuser` interactively. Do not commit a default admin password. Log in, set station passwords and approve/assign staff accounts.
 5. Enable scheduled database-volume backups and verify a restore. Monitor usage and configure billing alerts; the $5 Hobby amount is not a guarantee that four services cost only $5 in total. Do not set an automatic shutdown limit without accepting that votes may be unavailable when it is reached.
 
