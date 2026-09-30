@@ -26,16 +26,14 @@
 <button class="nav-item" data-page="archives"><svg><use href="#i-folder"/></svg>Chart archives</button>
 {% if request.user.is_superuser %}<div class="nav-label secondary-label">ADMINISTRATION</div>
 <button class="nav-item" data-page="administration"><svg><use href="#i-settings"/></svg>Admin control</button>{% endif %}
-<div class="nav-label secondary-label">MANAGEMENT</div>
-<button class="nav-item" data-page="activity"><svg><use href="#i-clock"/></svg>Activity log</button>
-<button class="nav-item" data-page="connections"><svg><use href="#i-settings"/></svg>Connections</button>
 </nav>
-<div class="sidebar-bottom"><div class="cloud-note"><span class="tiny-dot"></span><div><strong>One station. Always in sync.</strong><p>Voting continues while the server is running.</p></div></div><div class="profile"><a class="avatar" href="{% url 'accounts:profile' %}" aria-label="Your account">{{ request.user.username|first|upper }}</a><div><a href="{% url 'accounts:profile' %}" title="Your profile"><strong>{{ request.user.first_name|default:request.user.username }}</strong></a><span>{% if request.user.is_superuser %}Administrator{% else %}Station team{% endif %}</span></div><form method="post" action="{% url 'accounts:logout' %}">{% csrf_token %}<button class="signout" title="Sign out" aria-label="Sign out">↗</button></form></div></div>
+<div class="sidebar-bottom"><div class="profile"><a class="avatar" href="{% url 'accounts:profile' %}" aria-label="Your account">{{ request.user.username|first|upper }}</a><div><a href="{% url 'accounts:profile' %}" title="Your profile"><strong>{{ request.user.first_name|default:request.user.username }}</strong></a><span>{% if request.user.is_superuser %}Administrator{% else %}Station team{% endif %}</span></div><form method="post" action="{% url 'accounts:logout' %}">{% csrf_token %}<button class="signout" title="Sign out" aria-label="Sign out">↗</button></form></div></div>
 </aside>
 <div class="main-shell"><header class="topbar"><div><button class="mobile-toggle icon-button" id="menu-toggle" aria-label="Toggle navigation" aria-controls="sidebar">☰</button></div><div class="topbar-right"><span class="connection" id="connection"><i></i><span>Connecting</span></span><span class="topbar-divider"></span><span id="today-label"></span><a class="avatar small" href="{% url 'accounts:profile' %}" aria-label="Open your profile" title="Your profile">{{ request.user.username|first|upper }}</a></div></header>
 <main id="main-content"><div class="page-heading"><div><span class="eyebrow" id="page-eyebrow">YOUR STATION, AT A GLANCE</span><h1 id="page-title">Weekly overview</h1><p id="page-description">Received votes, verified results and the songs waiting for review.</p></div></div>
 <div class="notice hidden" id="offline-banner" role="status">Connection interrupted. Results are from the last successful update. Changes are unavailable until reconnected.</div>
 {% if messages %}<div class="notice">{% for message in messages %}<p>{{ message }}</p>{% endfor %}</div>{% endif %}
+{% if not request.user.is_superuser %}<div class="workspace-tools" aria-label="Station tools"><button class="button secondary" data-page="activity">Activity log</button><button class="button secondary" data-page="connections">Connections</button></div>{% endif %}
 <div id="page-content"><div class="loading"><span class="spinner"></span>Loading your workspace…</div></div>
 <footer class="workspace-footer"><span>AirVote <b>2.3.0</b> · {{ branding_station_name }}</span><span id="last-updated">Secure station workspace</span></footer></main></div></div>
 <div id="toast" class="toast hidden" role="status"></div>
@@ -43,3 +41,4 @@
 <dialog id="station-dialog"><form method="post" action="{% url 'accounts:switch_station' %}">{% csrf_token %}<input type="hidden" name="station" id="destination-station"><div class="modal-top"><h2>Unlock station</h2></div><p id="station-destination-label"></p><label class="field" for="station-password">Station password<input id="station-password" name="password" type="password" required maxlength="128" autocomplete="off"></label><div class="modal-actions"><button type="button" class="button secondary" id="cancel-station">Cancel</button><button class="button primary" type="submit">Unlock station</button></div></form></dialog>
 <input type="hidden" id="csrf-token" value="{{ csrf_token }}">
 </body></html>
+

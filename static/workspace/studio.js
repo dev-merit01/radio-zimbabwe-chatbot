@@ -245,6 +245,9 @@
         );
       }
       if (current !== generation) return;
+      if (permissions.is_admin && ["activity", "connections"].includes(page)) {
+        html = '<div class="workspace-tools"><button class="button secondary" data-page="administration">← Admin control</button></div>' + html;
+      }
       $("page-content").innerHTML = html;
       status(true);
       if (page === "overview") drawTimeline(overview.timeline);
@@ -332,7 +335,14 @@
     }[page];
     document
       .querySelectorAll("[data-page]")
-      .forEach((b) => b.classList.toggle("active", b.dataset.page === page));
+      .forEach((b) => {
+        const active = b.dataset.page === page || (b.classList.contains("nav-item") && b.dataset.page === "administration" && ["activity", "connections"].includes(page));
+        b.classList.toggle("active", active);
+        if (b.classList.contains("nav-item")) {
+          if (active) b.setAttribute("aria-current", "page");
+          else b.removeAttribute("aria-current");
+        }
+      });
     $("sidebar").classList.remove("open");
     $("page-content").innerHTML = '<div class="loading">Loading…</div>';
     render();
@@ -542,3 +552,4 @@
   window.addEventListener("offline", () => status(false));
   render();
 })();
+

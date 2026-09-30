@@ -1398,9 +1398,6 @@ input[type="date"] {
   .audit-item time {
     margin-left: 0;
   }
-  .sidebar {
-    overflow-y: auto;
-  }
   .topbar-right {
     min-width: 78px;
   }
@@ -1480,3 +1477,48 @@ a.avatar { text-decoration: none; }
 #station-dialog { max-width:430px; }#station-dialog form { padding:24px; }#station-dialog p { font-size:13px;line-height:1.6;color:#60758b;margin-bottom:20px; }
 @media(max-width:1150px) { .admin-grid { grid-template-columns:1fr; }.admin-aside { grid-template-columns:1fr 1fr; }.admin-station-focus { grid-column:1/-1; }.admin-metrics { grid-template-columns:1fr 1fr; } }
 @media(max-width:600px) { .station-directory,.admin-aside { grid-template-columns:1fr; }.admin-metric { padding:16px; }.admin-metric > strong { font-size:26px; } }
+
+
+/* Keep navigation and account controls inside the available app viewport. */
+.sidebar { height:100vh; height:100dvh; padding:20px 16px 12px; overflow:clip; gap:0; }
+.sidebar > * { flex-shrink:0; }
+.sidebar .station { margin:20px 0 12px; padding:10px; }
+.sidebar .station-switch { margin-bottom:6px; }
+.sidebar .nav-label { margin:12px 12px 7px; }
+.sidebar .secondary-label { margin-top:16px; }
+.sidebar .nav-item { min-height:40px; padding:9px 12px; margin:2px 0; }
+.sidebar-bottom { margin-top:auto; padding-top:12px; }
+.sidebar .profile { margin-top:0; padding-top:12px; border-top:1px solid var(--line); }
+.sidebar .profile > div { min-width:0; flex:1; }
+.sidebar .profile strong { display:block; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.sidebar .profile .avatar, .sidebar .profile form { flex-shrink:0; }
+.workspace-tools { display:flex; flex-wrap:wrap; gap:8px; margin-bottom:18px; }
+@media(max-height:700px) {
+  .sidebar { padding-top:14px; padding-bottom:10px; }
+  .sidebar .brand small, .sidebar .station div > span { display:none; }
+  .sidebar .airvote-icon { width:34px; height:34px; }
+  .sidebar .station { margin:12px 0 8px; padding:8px 10px; }
+  .sidebar .nav-label { margin-top:8px; margin-bottom:5px; }
+  .sidebar .secondary-label { margin-top:10px; }
+  .sidebar .nav-item { min-height:36px; padding:7px 12px; }
+  .sidebar-bottom { padding-top:8px; }
+  .sidebar .profile { padding-top:8px; }
+}
+@media(max-height:540px) {
+  .sidebar { padding:10px 12px; }
+  .sidebar .station { border:0; padding:0; margin:10px 0 8px; }
+  .sidebar .station-logo, .sidebar .nav-label { display:none; }
+  .sidebar .station-switch { margin-bottom:6px; }
+  .sidebar .nav-item { min-height:32px; padding:6px 10px; margin:1px 0; }
+  .sidebar .profile div span { display:none; }
+}
+@media(max-height:380px) {
+  .sidebar .brand { font-size:16px; }
+  .sidebar .airvote-icon { width:26px; height:26px; }
+  .sidebar .station { margin:6px 0; }
+  .sidebar:has(.station-switch) .station { display:none; }
+  .sidebar nav { display:grid; grid-template-columns:1fr 1fr; gap:3px; }
+  .sidebar .nav-item { font-size:11px; gap:5px; padding:6px; min-height:38px; }
+  .sidebar .nav-item svg { display:none; }
+  .sidebar .nav-count { padding:1px 3px; }
+}
