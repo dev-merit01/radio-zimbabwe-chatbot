@@ -17,7 +17,13 @@ const assert = require('node:assert/strict');
       await page.locator('#connection').getByText('Connected', {exact: true}).waitFor();
     }
     async function navigate(name) {
-      await page.locator(`nav [data-page="${name}"]`).click();
+      if (["activity", "connections"].includes(name)) {
+        await page.locator('nav [data-page="administration"]').click();
+        await page.locator('#page-content[aria-busy="false"]').waitFor();
+        await page.locator(`#page-content [data-page="${name}"]`).click();
+      } else {
+        await page.locator(`nav [data-page="${name}"]`).click();
+      }
       await page.locator('#page-content[aria-busy="false"]').waitFor();
     }
     async function switchTo(station, password) {
