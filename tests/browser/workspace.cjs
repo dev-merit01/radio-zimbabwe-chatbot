@@ -35,7 +35,13 @@ const assert = require("node:assert/strict");
     "activity",
     "connections",
   ]) {
-    await page.locator(`nav [data-page="${section}"]`).click();
+    if (["activity", "connections"].includes(section)) {
+      await page.locator('nav [data-page="administration"]').click();
+      await page.locator('#page-content[aria-busy="false"]').waitFor();
+      await page.locator(`#page-content [data-page="${section}"]`).click();
+    } else {
+      await page.locator(`nav [data-page="${section}"]`).click();
+    }
     await page.locator('#page-content[aria-busy="false"]').waitFor();
     assert.equal(
       await page.locator("#page-content .loading").count(),

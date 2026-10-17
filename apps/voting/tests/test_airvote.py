@@ -93,7 +93,7 @@ class AirVoteTests(TestCase):
         review_song('radio_zimbabwe', self.admin, song.pk, 'verified')
         self.assertEqual(self.client.get('/api/workspace/overview').json()['verified_votes'], 1)
         self.assertEqual(self.client.get('/api/chart/today').json()['top100'][0]['count'], 1)
-        self.assertIn('Vote recorded', self.client.get('/api/workspace/incoming').json()['submissions'][0]['reply'])
+        self.assertIn('Submission received', self.client.get('/api/workspace/incoming').json()['submissions'][0]['reply'])
         data['request_id'] = str(uuid.uuid4())
         self.post('votes', data)
         run_one(InboundEvent)

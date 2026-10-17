@@ -17,7 +17,13 @@ const assert = require('node:assert/strict');
       await page.locator('#connection').getByText('Connected', {exact: true}).waitFor();
     }
     async function navigate(name) {
-      await page.locator(`nav [data-page="${name}"]`).click();
+      if (["activity", "connections"].includes(name)) {
+        await page.locator('nav [data-page="administration"]').click();
+        await page.locator('#page-content[aria-busy="false"]').waitFor();
+        await page.locator(`#page-content [data-page="${name}"]`).click();
+      } else {
+        await page.locator(`nav [data-page="${name}"]`).click();
+      }
       await page.locator('#page-content[aria-busy="false"]').waitFor();
     }
     async function switchTo(station, password) {
@@ -43,7 +49,7 @@ const assert = require('node:assert/strict');
     await page.getByLabel('Artist - Song', {exact: true}).fill('River Artist - Morning Song');
     await page.locator('#modal-submit').click();
     await page.locator('#modal').waitFor({state: 'hidden'});
-    await page.getByText('Vote recorded!', {exact: false}).waitFor({timeout: 35000});
+    await page.getByText('Submission received!', {exact: false}).waitFor({timeout: 35000});
     await navigate('review');
     await page.getByRole('button', {name: 'Verify', exact: true}).click();
     await page.locator('#modal-submit').click();

@@ -159,13 +159,6 @@ def clean_song_title(title: str) -> str:
         r"\[hd\]",
         r"\(4k\)",
         r"\[4k\]",
-        r"\(live\)",
-        r"\[live\]",
-        r"\(acoustic\)",
-        r"\[acoustic\]",
-        r"\(remix\)",  # Keep this info but clean the format
-        r"\(radio\s*edit\)",
-        r"\(extended\s*(mix|version)?\)",
     ]
 
     cleaned = title

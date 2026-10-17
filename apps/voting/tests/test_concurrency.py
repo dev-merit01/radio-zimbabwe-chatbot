@@ -25,7 +25,7 @@ class TestConcurrentIntake(TransactionTestCase):
 
         with ThreadPoolExecutor(max_workers=8) as pool:
             results = list(pool.map(vote, range(16)))
-        self.assertEqual(sum("Vote recorded!" in r for r in results), 5)
+        self.assertEqual(sum("Submission received!" in r for r in results), 5)
         self.assertEqual(RawVote.objects.count(), 5)
         self.assertEqual(VoteJob.objects.count(), 5)
 
@@ -60,6 +60,6 @@ class TestConcurrentIntake(TransactionTestCase):
 
         with ThreadPoolExecutor(max_workers=8) as pool:
             results = list(pool.map(vote, range(16)))
-        self.assertEqual(sum("Vote recorded!" in result for result in results), 1)
+        self.assertEqual(sum("Submission received!" in result for result in results), 1)
         self.assertEqual(RawVote.objects.count(), 1)
         self.assertEqual(VoteJob.objects.count(), 1)

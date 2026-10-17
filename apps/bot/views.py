@@ -123,6 +123,13 @@ def receive(request, provider):
             raise ValueError()
         if not text and not media:
             return JsonResponse({"ok": True, "ignored": True})
+        from apps.voting.services import validate_submission
+        valid, reason = validate_submission(text)
+        if media or not valid:
+            # Acknowledge delivery so providers do not retry rejected content.
+            # No inbound/outbound row or raw vote is created for rubbish/media.
+            return JsonResponse({"ok": True, "ignored": True, "reason":
+                "Text votes only." if media else reason})
         _, created = InboundEvent.objects.get_or_create(
             provider=provider,
             station=station,

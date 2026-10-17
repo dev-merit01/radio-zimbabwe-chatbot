@@ -1,5 +1,6 @@
 import re
 import logging
+import unicodedata
 from django.db import transaction
 from django.utils import timezone
 from django.core.cache import cache
@@ -98,6 +99,15 @@ def validate_vote_content(text: str) -> tuple[bool, str | None]:
     Returns:
         (is_valid, error_message) - error_message is None if valid
     """
+    if not isinstance(text, str):
+        return False, "Please send a text vote: Artist - Song."
+    if any(unicodedata.category(c).startswith("C") for c in text):
+        return False, "Please send a single line vote without control characters."
+    if not any(c.isalpha() for c in text):
+        return (
+            False,
+            "Please include an artist or song name, not just numbers or symbols.",
+        )
     text_lower = text.lower().strip()
 
     # Check for URLs/links
@@ -220,6 +230,20 @@ def parse_vote_input(text: str):
         None - if completely invalid
         'song_only' - special marker + song name tuple for song-only votes
     """
+    text = unicodedata.normalize("NFKC", text).translate(
+        str.maketrans(
+            {
+                "–": "-",
+                "—": "-",
+                "−": "-",
+                "‐": "-",
+                "‑": "-",
+                "|": "-",
+            }
+        )
+    )
+    # Prefer a spaced separator so hyphenated artist names remain intact.
+    spaced = re.search(r"\s+-\s+", text)
     # Must contain at least one dash for standard format
     if "-" not in text:
         # Could be a song-only vote
@@ -230,7 +254,11 @@ def parse_vote_input(text: str):
         return None
 
     # Split on dash with optional surrounding spaces
-    parts = SEPARATOR_PATTERN.split(text, maxsplit=1)
+    parts = (
+        [text[: spaced.start()], text[spaced.end() :]]
+        if spaced
+        else SEPARATOR_PATTERN.split(text, maxsplit=1)
+    )
 
     if len(parts) != 2:
         return None
@@ -241,7 +269,31 @@ def parse_vote_input(text: str):
     if len(artist) < 2 or len(song) < 2:
         return None
 
+    if not any(c.isalpha() for c in artist) or not any(c.isalnum() for c in song):
+        return None
     return artist, song
+
+
+def validate_submission(text):
+    """Cheap pre-storage gate shared by providers, manual entry and intake."""
+    if isinstance(text, str) and text.strip().lower() in {
+        "/start",
+        "start",
+        "/help",
+        "help",
+    }:
+        return True, None
+    valid, error = validate_vote_content(text)
+    if not valid:
+        return valid, error
+    parsed = parse_vote_input(text)
+    if not parsed:
+        return False, "Please use: Artist - Song. Example: Winky D - Ijipita"
+    artist, title = parsed
+    artist, title = clean_vote_text(artist or "Unknown Artist", title)
+    if not any(c.isalpha() for c in artist) or not any(c.isalnum() for c in title):
+        return False, "Please include an artist and song title."
+    return True, None
 
 
 class VotingService:
@@ -263,7 +315,7 @@ class VotingService:
             return self._welcome_message()
         if text.lower() in {"/help", "help"}:
             return self._help_message()
-        valid, error = validate_vote_content(text)
+        valid, error = validate_submission(text)
         if not valid:
             return error
         parsed = parse_vote_input(text)
@@ -289,6 +341,11 @@ class VotingService:
         # Lock the voter row before counting: different requests for one voter cannot
         # both use the final slot. Production requires PostgreSQL row locking.
         with transaction.atomic():
+            # Same lock order as reconciliation keeps raw and canonical totals
+            # consistent while a reviewer merges songs or publishes a chart.
+            from .pipeline import lock_station
+
+            lock_station(self.station)
             user, _ = User.objects.get_or_create(
                 channel=self.channel, user_ref=self.user_ref, station=self.station
             )
@@ -325,7 +382,7 @@ class VotingService:
             RawSongTally.objects.filter(pk=tally.pk).update(count=F("count") + 1)
             VoteJob.objects.create(vote=vote)
         remaining = limit - count - 1
-        return f"✅ Vote recorded!\n\n🎵 {display_name}\n\nYou have {remaining} vote{'s' if remaining != 1 else ''} remaining today."
+        return f"✅ Submission received! Song verification is required before it counts on the chart.\n\n🎵 {display_name}\n\nYou have {remaining} vote{'s' if remaining != 1 else ''} remaining today."
 
     def _already_voted(self, votes, match_key, artist, title):
         """Check known aliases even when the canonical vote is still queued.
