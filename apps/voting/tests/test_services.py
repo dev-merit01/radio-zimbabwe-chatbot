@@ -50,7 +50,7 @@ class TestVotingServiceVoting(TestCase):
 
         response = self.service.handle_incoming_text("Winky D - Ijipita")
 
-        assert "✅ Vote recorded!" in response
+        assert "✅ Submission received!" in response
         assert "Winky D - Ijipita" in response
 
         # Verify vote was saved
@@ -67,7 +67,7 @@ class TestVotingServiceVoting(TestCase):
         response = self.service.handle_incoming_text("Ijipita")
 
         # Song-only votes are now accepted with "Unknown Artist"
-        assert "✅ Vote recorded!" in response
+        assert "✅ Submission received!" in response
         assert "Unknown Artist - Ijipita" in response
 
     @patch("apps.voting.services.timezone")
@@ -89,7 +89,7 @@ class TestVotingServiceVoting(TestCase):
         response = self.service.handle_incoming_text("Takabva Kure")
 
         # Should match the existing song and use Killer T as artist
-        assert "✅ Vote recorded!" in response
+        assert "✅ Submission received!" in response
         assert "Killer T" in response
         assert "Unknown Artist" not in response
 
@@ -100,7 +100,7 @@ class TestVotingServiceVoting(TestCase):
 
         # First vote
         response1 = self.service.handle_incoming_text("Jah Prayzah - Mudhara")
-        assert "✅ Vote recorded!" in response1
+        assert "✅ Submission received!" in response1
 
         # Second vote for same song
         response2 = self.service.handle_incoming_text("Jah Prayzah - Mudhara")
@@ -128,7 +128,7 @@ class TestVotingServiceVoting(TestCase):
 
         for i, song in enumerate(songs[:MAX_VOTES_PER_DAY]):
             response = service.handle_incoming_text(song)
-            assert "✅ Vote recorded!" in response, f"Vote {i + 1} failed: {response}"
+            assert "✅ Submission received!" in response, f"Vote {i + 1} failed: {response}"
 
         # Try to cast one more
         response = service.handle_incoming_text("Juliet Kilo - Ocean Waves Breaking")
@@ -183,8 +183,8 @@ class TestVotingServiceChannels(TestCase):
         response2 = whatsapp_service.handle_incoming_text("Selmor Mtukudzi - Amai")
 
         # Both should succeed
-        assert "✅ Vote recorded!" in response1
-        assert "✅ Vote recorded!" in response2
+        assert "✅ Submission received!" in response1
+        assert "✅ Submission received!" in response2
 
         # Should create two separate users
         users = User.objects.filter(user_ref=same_ref)

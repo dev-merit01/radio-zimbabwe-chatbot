@@ -53,7 +53,7 @@ class TestPipelineRegressions(TestCase):
         ]:
             service = VotingService("telegram", listener)
             self.assertIn(
-                "Vote recorded!",
+                "Submission received!",
                 service.handle_incoming_text(f"Example Artist - {titles[0]}"),
             )
             self.assertIn(
@@ -74,7 +74,7 @@ class TestPipelineRegressions(TestCase):
         service = VotingService("telegram", "repeat-listener")
         for title in ["Example Song", "Alternate Title", "Example Song"]:
             self.assertIn(
-                "Vote recorded!",
+                "Submission received!",
                 service.handle_incoming_text(f"Example Artist - {title}"),
             )
         self.assertEqual(RawVote.objects.count(), 3)
@@ -89,7 +89,7 @@ class TestPipelineRegressions(TestCase):
         service = VotingService("telegram", "station-listener")
         for title in ["Example Song", "Alternate Title"]:
             self.assertIn(
-                "Vote recorded!",
+                "Submission received!",
                 service.handle_incoming_text(f"Example Artist - {title}"),
             )
         self.assertEqual(RawVote.objects.count(), 2)

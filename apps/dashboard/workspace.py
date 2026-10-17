@@ -444,6 +444,10 @@ def submit_vote(request):
         raise ValueError("Enter a listener reference, up to 64 characters.")
     if not isinstance(text, str) or not 1 <= len(text.strip()) <= 100:
         raise ValueError("Enter Artist - Song, up to 100 characters.")
+    from apps.voting.services import validate_submission
+    valid, error = validate_submission(text)
+    if not valid:
+        raise ValueError(error)
     try:
         request_id = str(uuid.UUID(str(data.get("request_id", ""))))
     except ValueError as error:

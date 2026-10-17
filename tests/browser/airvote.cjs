@@ -43,7 +43,7 @@ const assert = require('node:assert/strict');
     await page.getByLabel('Artist - Song', {exact: true}).fill('River Artist - Morning Song');
     await page.locator('#modal-submit').click();
     await page.locator('#modal').waitFor({state: 'hidden'});
-    await page.getByText('Vote recorded!', {exact: false}).waitFor({timeout: 35000});
+    await page.getByText('Submission received!', {exact: false}).waitFor({timeout: 35000});
     await navigate('review');
     await page.getByRole('button', {name: 'Verify', exact: true}).click();
     await page.locator('#modal-submit').click();

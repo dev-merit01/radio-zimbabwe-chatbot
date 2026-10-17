@@ -3,7 +3,8 @@
 from itertools import islice
 from .presentation import music_name
 from django.db import transaction
-from django.db.models import OuterRef, Subquery, Sum
+from django.db.models import OuterRef, Subquery, Sum, Count
+from django.conf import settings
 from .models import (
     StationState,
     CleanedSong,
@@ -11,12 +12,46 @@ from .models import (
     RawSongTally,
     CleanedSongTally,
     ReviewAudit,
+    RawVote,
+    LLMDecisionLog,
 )
 
 
 def lock_station(station):
     obj, _ = StationState.objects.get_or_create(station=station)
     return StationState.objects.select_for_update().get(pk=obj.pk)
+
+
+def duplicate_adjustments(station, mappings, date_range=None):
+    """Subtract repeated listener/day/song submissions without deleting evidence.
+
+    Keep legacy raw tallies intact: only duplicates backed by individual raw
+    submissions are deducted. Imported historical totals remain available.
+    """
+    if settings.ALLOW_REPEAT_SONG:
+        return {}
+    votes = RawVote.objects.filter(
+        station=station, match_key__in=mappings.values("match_key")
+    )
+    if date_range:
+        votes = votes.filter(vote_date__range=date_range)
+    votes = votes.annotate(
+        song_id=Subquery(
+            mappings.filter(match_key=OuterRef("match_key"))
+            .order_by()
+            .values("cleaned_song_id")[:1]
+        )
+    )
+    groups = (
+        votes.order_by()
+        .values("vote_date", "song_id")
+        .annotate(extra=Count("id") - Count("user_id", distinct=True))
+        .filter(extra__gt=0)
+    )
+    return {
+        (r["vote_date"], r["song_id"]): r["extra"]
+        for r in groups.iterator(chunk_size=500)
+    }
 
 
 def rebuild_tallies(station, song_ids=None, date_range=None):
@@ -50,13 +85,16 @@ def rebuild_tallies(station, song_ids=None, date_range=None):
             raw = raw.filter(date__range=date_range)
             cleaned = cleaned.filter(date__range=date_range)
         totals = raw.order_by().values("date", "song_id").annotate(total=Sum("count"))
+        duplicates = duplicate_adjustments(station, mapping_qs, date_range)
         cleaned.delete()
         rows = (
             CleanedSongTally(
                 station=station,
                 date=row["date"],
                 cleaned_song_id=row["song_id"],
-                count=row["total"],
+                count=max(
+                    0, row["total"] - duplicates.get((row["date"], row["song_id"]), 0)
+                ),
             )
             for row in totals.iterator(chunk_size=500)
         )
@@ -76,6 +114,14 @@ def update_song_tally(station, song_id, date):
         ).aggregate(n=Sum("count"))["n"]
         or 0
     )
+    if not settings.ALLOW_REPEAT_SONG:
+        votes = RawVote.objects.filter(
+            station=station, vote_date=date, match_key__in=keys
+        )
+        counts = votes.aggregate(
+            total=Count("id"), listeners=Count("user_id", distinct=True)
+        )
+        count = max(0, count - (counts["total"] - counts["listeners"]))
     if song.status != "verified" or not count:
         CleanedSongTally.objects.filter(
             station=station, date=date, cleaned_song=song
@@ -95,35 +141,55 @@ def process_vote(vote):
         station=station, match_key=vote.match_key, cleaned_song__station=station
     ).first()
     candidate = None
+    decision = None
     if not mapping:
-        candidates = CleanedSong.objects.filter(
-            station=station, status="verified", artist__iexact=vote.artist_normalized
+        from .catalogue_matching import ranked_candidates, automatic_candidate
+
+        ranked = ranked_candidates(
+            station, vote.artist_normalized, vote.song_normalized
         )
-        exact = list(candidates.filter(title__iexact=vote.song_normalized)[:2])
-        if len(exact) == 1:
-            candidate = exact[0]
-        elif settings.AUTO_AI_MATCH:
-            # A relevant, bounded shortlist; no catalogue-wide API call on intake.
-            shortlist = list(candidates.order_by("id")[:30])
-            if shortlist:
-                result = match_vote_with_llm(
-                    vote.artist_raw,
-                    vote.song_raw,
-                    [
-                        {"id": s.id, "canonical_name": s.canonical_name}
-                        for s in shortlist
-                    ],
-                )
-                if str(result.get("reasoning", "")).startswith(
-                    ("LLM error:", "LLM response parsing error:")
-                ):
-                    raise RuntimeError("AI matching unavailable")
-                allowed = {s.id: s for s in shortlist}
-                if result.get("matched") and result.get("confidence") == "high":
-                    matched_id = result.get("matched_song_id")
-                    candidate = (
-                        allowed.get(matched_id) if type(matched_id) is int else None
-                    )
+        candidate = automatic_candidate(
+            ranked, vote.artist_normalized, vote.song_normalized
+        )
+        if candidate:
+            decision = {
+                "action": "match",
+                "confidence": "high",
+                "reasoning": "Conservative catalogue similarity with runner-up gap.",
+            }
+        elif settings.AUTO_AI_MATCH and ranked:
+            shortlist = [row[3] for row in ranked]
+            result = match_vote_with_llm(
+                vote.artist_raw,
+                vote.song_raw,
+                [
+                    {"id": song.id, "canonical_name": song.canonical_name}
+                    for song in shortlist
+                ],
+            )
+            if str(result.get("reasoning", "")).startswith(
+                ("LLM error:", "LLM response parsing error:")
+            ):
+                raise RuntimeError("AI matching unavailable")
+            allowed = {song.id: song for song in shortlist}
+            matched_id = result.get("matched_song_id")
+            # AI cannot override ambiguity between near-identical candidates.
+            gap = ranked[0][0] - ranked[1][0] if len(ranked) > 1 else 1
+            if (
+                result.get("matched") is True
+                and result.get("confidence") == "high"
+                and type(matched_id) is int
+                and gap >= 0.08
+                and matched_id == ranked[0][3].pk
+                and min(len(vote.song_normalized), len(ranked[0][3].title)) >= 6
+            ):
+                candidate = allowed.get(matched_id)
+            decision = {
+                "action": "match" if candidate else "new",
+                "confidence": "high" if candidate else "none",
+                "reasoning": "AI shortlist decision: "
+                + str(result.get("reasoning", ""))[:2000],
+            }
     # External calls complete before taking a database lock.
     with transaction.atomic():
         lock_station(station)
@@ -133,7 +199,11 @@ def process_vote(vote):
         if not mapping:
             if candidate:
                 candidate = CleanedSong.objects.filter(
-                    pk=candidate.pk, station=station, status="verified"
+                    pk=candidate.pk,
+                    station=station,
+                    status="verified",
+                    artist=candidate.artist,
+                    title=candidate.title,
                 ).first()
             if not candidate:
                 candidate = CleanedSong.objects.filter(
@@ -154,6 +224,31 @@ def process_vote(vote):
                 sample_display_name=vote.display_name,
                 is_auto_mapped=candidate.status == "verified",
             )
+            if decision and decision["reasoning"].startswith("AI shortlist"):
+                LLMDecisionLog.objects.create(
+                    station=station,
+                    input_text=vote.raw_input,
+                    input_type="raw_vote",
+                    action=decision["action"],
+                    confidence=decision["confidence"],
+                    reasoning=decision["reasoning"],
+                    matched_song=candidate,
+                    matched_song_name=candidate.canonical_name,
+                    was_applied=candidate.status == "verified",
+                )
+            if candidate.status == "verified":
+                ReviewAudit.objects.create(
+                    station=station,
+                    actor=None,
+                    action="auto_match",
+                    details={
+                        "vote_id": vote.pk,
+                        "song_id": candidate.pk,
+                        "method": "ai"
+                        if decision and decision["reasoning"].startswith("AI shortlist")
+                        else "catalogue",
+                    },
+                )
         total = (
             RawSongTally.objects.filter(
                 station=station, match_key=vote.match_key
