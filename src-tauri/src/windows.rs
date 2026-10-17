@@ -225,7 +225,12 @@ pub fn run() {
             Ok(())
         })
         .on_menu_event(|app, event| match event.id().as_ref() {
-            "connection" => show_setup(app),
+            "connection" => {
+                if let Some(setup) = app.get_webview_window("setup") {
+                    let _ = setup.eval("window.dispatchEvent(new Event('airvote-settings'))");
+                }
+                show_setup(app);
+            },
             "reload" => {
                 if let Some(window) = app.get_webview_window("workspace") {
                     let _ = window.reload();
