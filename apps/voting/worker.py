@@ -3,6 +3,7 @@
 import uuid
 from datetime import timedelta
 import requests
+from django.conf import settings
 from django.db import transaction, connection
 from django.db.models import Q
 from django.utils import timezone
@@ -82,6 +83,10 @@ def ingest(item):
 
 
 def send(item):
+    if item.event.provider == "bird" and getattr(settings, "BIRD_NUMBER_STATIONS", ""):
+        # Old queued replies must not leave the wrong station number after cutover.
+        finish(item, state="failed")
+        return
     from apps.bot.telegram_client import get_client as telegram
     from apps.bot.bird_client import get_client as bird
     from apps.bot.whatsapp_client import get_client as onemsg

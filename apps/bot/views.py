@@ -11,6 +11,7 @@ from django.core.exceptions import RequestDataTooBig
 from django.views.decorators.csrf import csrf_exempt
 from apps.accounts.models import Station
 from apps.voting.models import InboundEvent
+from .routing import bird_station_for_message
 from .parsing import (
     _extract_bird_message,
     _extract_telegram_message,
@@ -66,9 +67,7 @@ def receive(request, provider):
         payload = json.loads(request.body)
         if not isinstance(payload, dict):
             raise ValueError()
-        station = getattr(settings, f"{provider.upper()}_STATION")
-        if station not in Station.values:
-            return JsonResponse({"error": "Invalid station configuration"}, status=503)
+        station = getattr(settings, f"{provider.upper()}_STATION") if provider != "bird" else None
         if provider == "telegram":
             # Only new private messages. Edits, callbacks and channel posts are not votes.
             message = payload.get("message")
@@ -88,6 +87,12 @@ def receive(request, provider):
             # Refuse outbound/self echoes even with a broad subscription.
             if message.get("direction") in {"outgoing", "outbound"}:
                 return JsonResponse({"ok": True, "ignored": True})
+            try:
+                station = bird_station_for_message(message)
+            except ValueError:
+                return JsonResponse({"error": "Invalid Bird number routing configuration"}, status=503)
+            if not station:
+                return JsonResponse({"error": "Unknown or missing Bird destination number"}, status=503)
             sender, text, media = _extract_bird_message(message)
             message_id = message.get("whatsapp_id") or message.get("id") or request.headers.get("webhook-id")
         else:
@@ -95,6 +100,8 @@ def receive(request, provider):
                 return JsonResponse({"ok": True, "ignored": True})
             sender, text, media = _extract_whatsapp_message(payload)
             message_id = payload.get("id") or payload.get("key", {}).get("id")
+        if station not in Station.values:
+            return JsonResponse({"error": "Invalid station configuration"}, status=503)
         if (
             type(sender) not in (str, int)
             or type(message_id) not in (str, int)

@@ -8,6 +8,7 @@ _STATION_LOGOS = {
     Station.CLASSIC_263: "images/classic_263.svg",
     Station.CENTRAL_RADIO: "images/central_radio.svg",
     Station.KHULUMANI_FM: "images/khulumani_fm.svg",
+    Station.LUZIBO_RADIO: "images/airvote/app-icon.png",
 }
 
 _STATION_NAMES = {
@@ -17,6 +18,7 @@ _STATION_NAMES = {
     Station.CLASSIC_263: "Classic 263",
     Station.CENTRAL_RADIO: "Central Radio",
     Station.KHULUMANI_FM: "Khulumani FM",
+    Station.LUZIBO_RADIO: "Luzibo Radio",
 }
 
 

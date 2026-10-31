@@ -211,6 +211,9 @@ OPENAI_MODEL = env.str("OPENAI_MODEL", default="gpt-4o-mini")
 # Each provider account is bound to one station; never trust an inbound station value.
 TELEGRAM_STATION = env.str("TELEGRAM_STATION", default="radio_zimbabwe")
 BIRD_STATION = env.str("BIRD_STATION", default="radio_zimbabwe")
+# Optional, server-owned one-number-per-station map for signed Bird WhatsApp events.
+# With this set, any missing/unmapped inbound destination is rejected.
+BIRD_NUMBER_STATIONS = env.str("BIRD_NUMBER_STATIONS", default="")
 ONEMSG_STATION = env.str("ONEMSG_STATION", default="radio_zimbabwe")
 TELEGRAM_WEBHOOK_SECRET = env.str("TELEGRAM_WEBHOOK_SECRET", default="")
 BIRD_WEBHOOK_SECRET = env.str("BIRD_WEBHOOK_SECRET", default="")

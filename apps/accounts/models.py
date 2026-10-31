@@ -10,6 +10,7 @@ class Station(models.TextChoices):
     CLASSIC_263 = 'classic_263', 'Classic 263'
     CENTRAL_RADIO = 'central_radio', 'Central Radio'
     KHULUMANI_FM = 'khulumani_fm', 'Khulumani FM'
+    LUZIBO_RADIO = 'luzibo_radio', 'Luzibo Radio'
 
 
 class AccountProfile(models.Model):
