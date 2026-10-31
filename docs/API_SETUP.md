@@ -21,7 +21,7 @@ votes already received from a provider. This is real local data, not a demo butt
 3. Fill the required fields for your provider, including its station ID. For
    Bird reception, only BIRD_WEBHOOK_SECRET is required; leave BIRD_CHANNEL_ID
    blank for receive-only mode. Other providers still require their full group. Supported station IDs: `radio_zimbabwe`, `national_fm`,
-   `power_fm`, `classic_263`, `central_radio`, `khulumani_fm`.
+   `power_fm`, `classic_263`, `central_radio`, `khulumani_fm`, `luzibo_radio`.
 4. Run start-connected.cmd. It uses the same local database and worker, but opts
    into the configured provider credentials. It may send real replies when
    authenticated provider events arrive. No sends are performed just by startup.
@@ -43,11 +43,11 @@ DEBUG=False, proper host/proxy settings and supervised workers.
 | Bird WhatsApp | `/webhook/bird/` | Standard Webhooks HMAC headers with a base64/whsec_ key | whatsapp.received with data.from.phone_number and data.text.body; legacy incoming payloads also supported |
 | OneMsg WhatsApp | `/webhook/whatsapp/` | `X-Webhook-Token` equals ONEMSG_WEBHOOK_SECRET | id, sender and payload.conversation / extendedTextMessage |
 
-Bind each provider's station in server configuration; a station value in an
-incoming payload cannot change that binding. This release supports one configured
-account/channel per provider per server. Multiple simultaneous station accounts
-need explicit account-to-station routing; changing a staff station does not
-redirect provider traffic.
+Each Telegram/OneMsg provider remains bound to one station. Bird can receive
+multiple station WhatsApp numbers on one signed webhook when
+`BIRD_NUMBER_STATIONS` is set. Bird uses `data.to.phone_number` from the signed
+event to choose the station; a client-supplied station value is never trusted.
+Changing stations in the Windows client never redirects incoming messages.
 
 For Telegram, register your public HTTPS webhook with setWebhook and the same
 secret_token. Do not run polling and webhooks for the same bot simultaneously.
@@ -82,7 +82,8 @@ to that event at `/webhook/bird/`. Standard Webhooks signature verification
 remains required. A 403 is an authentication failure, not a missing channel ID.
 
 `start-connected.cmd` accepts a signing secret without a channel ID, workspace
-ID or API access key. `BIRD_STATION` selects the destination station. Connections
+ID or API access key. `BIRD_STATION` selects the destination station only when the multi-number map
+is empty. Connections
 shows reception separately from legacy replies. Without all three legacy outbound
 credentials, new inbound events are processed without creating automatic reply
 jobs. Existing queued replies are not removed. This patch does not implement
@@ -96,3 +97,43 @@ verification. The startup script loads the local Django secret automatically;
 starting manage.py directly does not load the same local profile.
 
 Reference: https://bird.com/docs/guides/whatsapp/webhooks/messages
+
+## Seven separate ZBC WhatsApp numbers through Bird
+
+This integration is for **Bird WhatsApp**, not Bird SMS. The seven stations
+are Radio Zimbabwe, National FM, Power FM, Classic 263, Central Radio,
+Khulumani FM and Luzibo Radio.
+
+1. Verify/onboard one WhatsApp Business number for each station in Bird. The
+   numbers must be able to receive incoming WhatsApp messages. Owning or
+   purchasing a number alone is not enough.
+2. Configure a Bird `whatsapp.received` Standard Webhooks subscription to send
+   signed JSON events to `https://YOUR-BACKEND/webhook/bird/`. Set the same
+   signing secret on the server as `BIRD_WEBHOOK_SECRET`.
+3. On both the web and worker server services set one comma-separated mapping:
+
+   ```dotenv
+   BIRD_NUMBER_STATIONS=+2637XXXXXXXX:radio_zimbabwe,+2637XXXXXXXX:national_fm,+2637XXXXXXXX:power_fm,+2637XXXXXXXX:classic_263,+2637XXXXXXXX:central_radio,+2637XXXXXXXX:khulumani_fm,+2637XXXXXXXX:luzibo_radio
+   ```
+
+   Replace **each** `+2637XXXXXXXX` with its **different real number**,
+   including its country code. Do not enter the examples literally.
+   Each station can appear only once, and each number must be unique. The
+   server accepts a signed event only when `data.to.phone_number` matches a
+   configured number. A missing/unknown number returns 503 and is never sent
+   to a default station. Configuration can be rolled out one station at a time.
+4. Restart/redeploy the backend and worker; update the local connected profile
+   using `start-connected.cmd` when testing on Windows.
+5. Test a real vote to each number, then check each station's **Incoming votes**,
+   matching/review queue and chart. Resend the same event ID and ensure the
+   vote is not counted twice. Check the Bird delivery log on failure.
+
+When `BIRD_NUMBER_STATIONS` is non-empty, **automatic Bird replies are
+intentionally disabled**. The current legacy sender supports only one channel
+and could send from the wrong station. Multi-station *inbound* voting works
+without outbound API credentials; outbound per-station messaging needs a
+separate Bird implementation. Old queued Bird replies will not be sent after
+the switch. Never embed Bird access keys or webhook secrets in the desktop app.
+
+Sources: https://bird.com/docs/guides/whatsapp/receiving-whatsapp and
+https://bird.com/docs/guides/whatsapp/events
