@@ -52,6 +52,7 @@ def local_environment(root=ROOT, providers=False):
     for name in (
         "TELEGRAM_BOT_TOKEN", "TELEGRAM_WEBHOOK_SECRET", "BIRD_ACCESS_KEY",
         "BIRD_WORKSPACE_ID", "BIRD_CHANNEL_ID", "BIRD_WEBHOOK_SECRET",
+        "BIRD_NUMBER_STATIONS",
         "ONEMSG_APP_KEY", "ONEMSG_AUTH_KEY", "ONEMSG_WEBHOOK_SECRET",
         "SPOTIFY_CLIENT_ID", "SPOTIFY_CLIENT_SECRET", "OPENAI_API_KEY",
         "GEMINI_API_KEY", "COHERE_API_KEY", "ANTHROPIC_API_KEY",
@@ -66,7 +67,7 @@ def local_environment(root=ROOT, providers=False):
             raise RuntimeError("Create .env.providers from .env.providers.example first.")
         ProviderEnv.read_env(str(path), overwrite=True)
         allowed = {key for key in env if key.startswith(("TELEGRAM_", "BIRD_", "ONEMSG_", "SPOTIFY_", "OPENAI_"))}
-        allowed.update({"TELEGRAM_STATION", "BIRD_STATION", "ONEMSG_STATION", "OPENAI_MODEL", "AUTO_AI_MATCH"})
+        allowed.update({"TELEGRAM_STATION", "BIRD_STATION", "BIRD_NUMBER_STATIONS", "ONEMSG_STATION", "OPENAI_MODEL", "AUTO_AI_MATCH"})
         env.update({key: value for key, value in ProviderEnv.ENVIRON.items() if key in allowed})
         hosts = [host.strip().lower() for host in ProviderEnv.ENVIRON.get("WEBHOOK_PUBLIC_HOSTS", "").split(",") if host.strip()]
         for host in hosts:
