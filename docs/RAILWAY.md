@@ -50,9 +50,9 @@ WEB_THREADS=4
 
 Generate a Railway domain on web, then replace `<web-domain>` with its exact hostname (no scheme in ALLOWED_HOSTS). The healthcheck hostname is required for Railway's deployment probe. `/healthz/` is the only HTTP redirect exception; it returns a generic readiness status after checking database and cache. Staff routes retain HTTPS and authentication. Worker heartbeat/queue status is separate in Connections; a passing web probe does not prove the worker is processing votes.
 
-Add provider variables to BOTH services. For Bird reception: `BIRD_WEBHOOK_SECRET` and `BIRD_STATION`. Sending replies additionally needs `BIRD_ACCESS_KEY`, `BIRD_WORKSPACE_ID`, `BIRD_CHANNEL_ID` for the supported Channels API. Rotate previously shared keys rather than reusing them. Set optional Spotify/AI keys only if enabling those integrations.
+Add provider variables to BOTH services. For Bird single-station reception: `BIRD_WEBHOOK_SECRET` and `BIRD_STATION`. For all seven station numbers: add `BIRD_NUMBER_STATIONS` with the signed WhatsApp recipient-number mapping described in API_SETUP.md. This requires no provider key for receive-only mode. Legacy Bird replies need `BIRD_ACCESS_KEY`, `BIRD_WORKSPACE_ID` and `BIRD_CHANNEL_ID` but are **disabled when multi-number routing is set** until station-specific sending is implemented. Rotate previously shared keys rather than reusing them. Set optional Spotify/AI keys only if enabling those integrations.
 
-Important: current Bird configuration binds one provider account to one station. Two independent station WhatsApp accounts require account-to-station routing work before both can go live on this deployment. Selecting a station in the desktop app does not route inbound provider messages. See API_SETUP.md for supported signatures/payloads and station IDs.
+Important: Bird routing uses `data.to.phone_number` in the **signed** `whatsapp.received` payload. An unregistered or missing recipient number is rejected, not silently assigned to another station. The Windows desktop station selector does not control inbound provider traffic. See API_SETUP.md for setup and acceptance tests.
 
 ## First deployment and data
 
