@@ -280,6 +280,10 @@ def health(request):
                         settings.BIRD_WEBHOOK_SECRET,
                     ),
                     (
+                        "Bird multi-station number routing",
+                        settings.BIRD_WEBHOOK_SECRET and settings.BIRD_NUMBER_STATIONS,
+                    ),
+                    (
                         "Bird legacy replies",
                         settings.BIRD_ACCESS_KEY
                         and settings.BIRD_WORKSPACE_ID
