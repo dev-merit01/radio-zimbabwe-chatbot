@@ -19,6 +19,9 @@ logger = logging.getLogger(__name__)
 
 def replies_configured():
     """Legacy outbound credentials are optional for authenticated reception."""
+    if getattr(settings, "BIRD_NUMBER_STATIONS", ""):
+        # This legacy sender has one channel only; never reply as the wrong station.
+        return False
     return all(getattr(settings, name, "") for name in (
         "BIRD_ACCESS_KEY", "BIRD_WORKSPACE_ID", "BIRD_CHANNEL_ID"
     ))
@@ -179,6 +182,8 @@ def _resolve_credentials() -> tuple[str, str, str]:
 
 def get_client() -> BirdClient:
     """Get or create the Bird client singleton."""
+    if getattr(settings, "BIRD_NUMBER_STATIONS", ""):
+        raise BirdConfigurationError("Multi-number Bird replies need a station-specific sender.")
     global _client_instance
     access_key, workspace_id, channel_id = _resolve_credentials()
 
