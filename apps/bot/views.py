@@ -51,6 +51,25 @@ def authorised(request, provider):
         return False
 
 
+def bird_station_for_message(message):
+    """Find the station from the Bird receiving number, not a station claim."""
+    routes = getattr(settings, "BIRD_NUMBER_STATION_MAP", {})
+    if not routes:
+        return getattr(settings, "BIRD_STATION", "")
+    if not isinstance(routes, dict):
+        return None
+    recipient = message.get("to")
+    if not isinstance(recipient, dict):
+        return None
+    number = recipient.get("phone_number")
+    if not isinstance(number, str):
+        return None
+    number = number.strip().removeprefix("+")
+    if not number or not number.isascii() or not number.isdigit():
+        return None
+    return routes.get(number) or routes.get("+" + number)
+
+
 def receive(request, provider):
     if request.method != "POST":
         return JsonResponse({"error": "POST required"}, status=405)
