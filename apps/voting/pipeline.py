@@ -303,7 +303,7 @@ def process_vote_with_ai(vote):
     from .catalogue_matching import ranked_candidates, automatic_candidate, normalise, variants
 
     # Retried/duplicate work must not purchase additional AI requests.
-    if vote.ai_status in ("approved", "review"):
+    if RawVote.objects.filter(pk=vote.pk, ai_status__in=("approved", "review")).exists():
         return
 
     station = vote.station
