@@ -52,7 +52,7 @@ Generate a Railway domain on web, then replace `<web-domain>` with its exact hos
 
 Add provider variables to BOTH services. For Bird reception: `BIRD_WEBHOOK_SECRET` and `BIRD_STATION`. Sending replies additionally needs `BIRD_ACCESS_KEY`, `BIRD_WORKSPACE_ID`, `BIRD_CHANNEL_ID` for the supported Channels API. Rotate previously shared keys rather than reusing them. Set optional Spotify/AI keys only if enabling those integrations.
 
-Important: current Bird configuration binds one provider account to one station. Two independent station WhatsApp accounts require account-to-station routing work before both can go live on this deployment. Selecting a station in the desktop app does not route inbound provider messages. See API_SETUP.md for supported signatures/payloads and station IDs.
+For multi-number Bird routing, set `BIRD_NUMBER_STATION_MAP` on the web service as JSON, for example `{"263790573340":"national_fm"}`. Every signed inbound WhatsApp message is assigned by its receiving number; unlisted or missing recipients never fall back to `BIRD_STATION`. Add additional numbers to the map after testing. If the map is unset, the original `BIRD_STATION` single-account binding remains. Switching a station in the desktop app does not route incoming votes. See API_SETUP.md for supported signatures/payloads and station IDs.
 
 ## First deployment and data
 
