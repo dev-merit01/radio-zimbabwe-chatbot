@@ -7,7 +7,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         try:
-            call_openai_api("Reply with OK.", "Connection test.")
+            call_openai_api("Return a JSON object with ok=true.", "Connection test. Return JSON only.")
         except Exception as exc:
             raise CommandError("AI connection failed: " + type(exc).__name__) from None
         self.stdout.write("AI connection succeeded.")
