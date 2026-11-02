@@ -372,6 +372,7 @@ class VotingService:
                 match_key=match_key,
                 display_name=display_name,
                 vote_date=today,
+                ai_status="awaiting" if settings.AI_ALL_VOTES else "legacy",
             )
             tally, _ = RawSongTally.objects.get_or_create(
                 station=self.station,

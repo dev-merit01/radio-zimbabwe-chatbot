@@ -73,6 +73,17 @@ class RawVote(models.Model):
         max_length=512
     )  # cleaned "Artist - Song" for display
     vote_date = models.DateField()
+    # Older votes remain 'legacy'. All newly received AI-first votes start
+    # 'awaiting' and are excluded from verified tallies until AI/review approves.
+    ai_status = models.CharField(
+        max_length=16, default="legacy", db_index=True,
+        choices=[
+            ("legacy", "Legacy verified workflow"),
+            ("awaiting", "Awaiting AI"),
+            ("approved", "AI/reviewer approved"),
+            ("review", "Needs human review"),
+        ],
+    )
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

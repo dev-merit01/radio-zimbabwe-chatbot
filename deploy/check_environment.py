@@ -22,6 +22,12 @@ def validate():
         errors.append("DJANGO_ALLOWED_HOSTS must list explicit hostnames")
     if settings.LOCAL_WEBHOOK_HOSTS:
         errors.append("LOCAL_WEBHOOK_HOSTS must be empty on the hosted server")
+    if settings.AI_ALL_VOTES:
+        if not settings.OPENAI_API_KEY:
+            errors.append("AI_ALL_VOTES requires OPENAI_API_KEY in this service")
+        if not settings.OPENAI_MODEL:
+            errors.append("AI_ALL_VOTES requires an OPENAI_MODEL")
+
     if not settings.SECURE_SSL_REDIRECT or not getattr(settings, "SECURE_PROXY_SSL_HEADER", None):
         errors.append("Enable SECURE_SSL_REDIRECT and TRUST_PROXY behind Railway HTTPS")
     if errors:

@@ -207,7 +207,10 @@ ALLOW_REGISTRATION = True
 VOTING_DAILY_LIMIT = env.int("VOTING_DAILY_LIMIT", default=5)
 ALLOW_REPEAT_SONG = env.bool("ALLOW_REPEAT_SONG", default=False)
 AUTO_AI_MATCH = env.bool("AUTO_AI_MATCH", default=False)
-OPENAI_MODEL = env.str("OPENAI_MODEL", default="gpt-4o-mini")
+# Opt-in production mode: every new valid vote must be AI checked before counting.
+AI_ALL_VOTES = env.bool("AI_ALL_VOTES", default=False)
+OPENAI_MODEL = env.str("OPENAI_MODEL", default="gpt-6-luna")
+OPENAI_REASONING_EFFORT = env.str("OPENAI_REASONING_EFFORT", default="none")
 # Each provider account is bound to one station; never trust an inbound station value.
 TELEGRAM_STATION = env.str("TELEGRAM_STATION", default="radio_zimbabwe")
 BIRD_STATION = env.str("BIRD_STATION", default="radio_zimbabwe")
