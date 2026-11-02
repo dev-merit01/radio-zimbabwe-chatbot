@@ -373,10 +373,8 @@ def process_vote_with_ai(vote):
                 target = CleanedSong.objects.filter(
                     station=station, canonical_name__iexact=vote.display_name
                 ).first()
-                # An existing verified catalogue entry must never be used as
-                # a fallback when the current AI call did not approve it.
-                if target and target.status == "verified":
-                    target = None
+                # Existing verified entries can hold a review mapping, but
+                # remain UNCOUNTED because this vote has not passed AI.
             if not target:
                 from .presentation import music_name
                 target = CleanedSong.objects.create(
@@ -423,6 +421,9 @@ def review_song(
         lock_station(station)
         song = CleanedSong.objects.get(pk=song_id, station=station)
         affected = [song.id]
+        review_keys = list(MatchKeyMapping.objects.filter(
+            station=station, cleaned_song=song
+        ).values_list("match_key", flat=True))
         before = {"id": song.id, "name": song.canonical_name, "status": song.status}
         if action == "merge":
             target = CleanedSong.objects.get(
@@ -460,6 +461,13 @@ def review_song(
         else:
             raise ValueError("Unknown review action.")
         song.save()
+        if action in {"verified", "merge"}:
+            # Manual approval resolves reviewed (already AI-checked) votes,
+            # but never silently approves votes whose AI jobs are still queued.
+            RawVote.objects.filter(
+                station=station, match_key__in=review_keys,
+                ai_status="review",
+            ).update(ai_status="approved")
         if action != "edit":
             rebuild_tallies(station, song_ids=affected)
         ReviewAudit.objects.create(
