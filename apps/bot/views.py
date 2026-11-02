@@ -86,6 +86,12 @@ def receive(request, provider):
         if not isinstance(payload, dict):
             raise ValueError()
         station = getattr(settings, f"{provider.upper()}_STATION")
+        if provider == "bird" and getattr(settings, "BIRD_NUMBER_STATION_MAP", {}):
+            message = payload.get("payload", payload.get("data", payload))
+            station = bird_station_for_message(message)
+            if station is None:
+                # Unknown Bird recipients must never affect any station's votes.
+                return JsonResponse({"ok": True, "ignored": True, "reason": "Unmapped Bird destination"})
         if station not in Station.values:
             return JsonResponse({"error": "Invalid station configuration"}, status=503)
         if provider == "telegram":
