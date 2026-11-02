@@ -44,10 +44,15 @@ DEBUG=False, proper host/proxy settings and supervised workers.
 | OneMsg WhatsApp | `/webhook/whatsapp/` | `X-Webhook-Token` equals ONEMSG_WEBHOOK_SECRET | id, sender and payload.conversation / extendedTextMessage |
 
 Bind each provider's station in server configuration; a station value in an
-incoming payload cannot change that binding. This release supports one configured
-account/channel per provider per server. Multiple simultaneous station accounts
-need explicit account-to-station routing; changing a staff station does not
-redirect provider traffic.
+incoming payload cannot change that binding. For Bird, configure `BIRD_NUMBER_STATION_MAP` as a JSON object mapping receiving
+WhatsApp numbers to station IDs, for example
+`{"263790573340":"national_fm"}`. When the map is present, each signed
+`whatsapp.received` event is routed by `data.to.phone_number`. Unknown numbers
+or events missing a receiving number are acknowledged but **not recorded**.
+A station name supplied inside a webhook is never trusted for routing.
+`BIRD_STATION` remains the single-account fallback only when the map is unset.
+Telegram and OneMsg are still single-station providers. Switching the staff
+dashboard station does not redirect provider traffic.
 
 For Telegram, register your public HTTPS webhook with setWebhook and the same
 secret_token. Do not run polling and webhooks for the same bot simultaneously.
