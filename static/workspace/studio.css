@@ -126,17 +126,22 @@ svg {
   margin-top: 4px;
 }
 .station-logo {
-  width: 30px;
-  height: 30px;
+  width: 62px;
+  height: 44px;
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   overflow: hidden;
   border-radius: 7px;
+  background: #fff;
+  border: 1px solid var(--line);
 }
 .station-logo img {
-  max-width: 30px;
-  max-height: 30px;
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 .tiny-dot {
   width: 6px;
