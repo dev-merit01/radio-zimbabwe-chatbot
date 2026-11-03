@@ -12,6 +12,16 @@ _STATION_LOGOS = {
     Station.KHULUMANI_FM: "images/khulumani_fm.svg",
 }
 
+# Identifiable station artwork sourced from public station profiles. These are
+# remote visual assets only; a local station monogram remains available if an
+# external host becomes unavailable. Central Radio has no verified asset yet.
+_STATION_LOGO_IMAGES = {
+    Station.NATIONAL_FM: "https://www.musicinafrica.net/sites/default/files/images/music_professional_profile/201507/nationalfm.jpg",
+    Station.POWER_FM: "https://www.musicinafrica.net/sites/default/files/images/music_professional_profile/201507/powerfm.jpg",
+    Station.CLASSIC_263: "https://mediabuy.africa/948-large_default/classic-263.jpg",
+    Station.KHULUMANI_FM: "https://mediabuy.africa/557-large_default/khulumani-fm.jpg",
+}
+
 _STATION_NAMES = {
     Station.RADIO_ZIMBABWE: "Radio Zimbabwe",
     Station.NATIONAL_FM: "National FM",
