@@ -57,8 +57,12 @@ fn require_setup(window: &WebviewWindow) -> Result<(), String> {
 #[tauri::command]
 fn get_configuration(app: AppHandle, window: WebviewWindow) -> Result<SetupConfiguration, String> {
     require_setup(&window)?;
+    // A clean Windows installation needs no GitHub variable or manual URL entry.
+    // The build variable still allows a trusted alternate server for local testing.
     let fallback = option_env!("VOTING_STUDIO_SERVER_URL")
-        .unwrap_or("")
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .unwrap_or("https://airvote.up.railway.app/")
         .to_string();
     match load_configuration(&config_path(&app)?) {
         Ok(Some(config)) => Ok(SetupConfiguration {
@@ -186,8 +190,17 @@ async fn connect_server(
     Ok(())
 }
 
+// Only user-requested connection settings expose the advanced URL field.
+#[tauri::command]
+fn reveal_setup(window: WebviewWindow) -> Result<(), String> {
+    require_setup(&window)?;
+    window.show().map_err(|_| "Could not show connection recovery.".to_string())?;
+    window.set_focus().map_err(|_| "Could not focus connection recovery.".to_string())
+}
+
 fn show_setup(app: &AppHandle) {
     if let Some(setup) = app.get_webview_window("setup") {
+        let _ = setup.eval("window.airvoteShowSettings?.();");
         let _ = setup.show();
         let _ = setup.unminimize();
         let _ = setup.set_focus();
@@ -306,14 +319,13 @@ pub fn run() {
                 let _ = workspace.unminimize();
                 let _ = workspace.show();
                 let _ = workspace.set_focus();
-            } else {
-                show_setup(app);
             }
+            // During the first connection the setup webview is deliberately hidden.
         }))
         .plugin(tauri_plugin_dialog::init())
         .manage(Connecting::default())
         .manage(Updating::default())
-        .invoke_handler(tauri::generate_handler![get_configuration, connect_server])
+        .invoke_handler(tauri::generate_handler![get_configuration, connect_server, reveal_setup])
         .setup(|app| {
             // The signing public key is injected at compile time by the signed release
             // workflow. An unsigned development build cannot enable auto-updates.

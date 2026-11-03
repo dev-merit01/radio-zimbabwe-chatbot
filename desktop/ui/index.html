@@ -20,7 +20,7 @@
         <p class="intro">
           Review songs, follow live votes and publish your station’s charts.
         </p>
-        <form id="connection-form">
+        <form id="connection-form" hidden>
           <label for="server">Station server</label>
           <input
             id="server"
@@ -40,8 +40,14 @@
             Open AirVote <span aria-hidden="true">→</span>
           </button>
         </form>
+        <div id="recovery" hidden>
+          <p class="recovery-copy">AirVote could not connect to its station server.
+            Check your internet connection and try again.</p>
+          <button id="retry" type="button">Retry connection <span aria-hidden="true">→</span></button>
+          <button id="change-server" class="secondary" type="button">Connection settings</button>
+        </div>
         <div id="status" role="status" aria-live="polite">
-          Sign in with your station account after connecting.
+          Connecting securely to AirVote…
         </div>
       </section>
       <footer>

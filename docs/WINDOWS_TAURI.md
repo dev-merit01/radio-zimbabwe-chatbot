@@ -28,15 +28,18 @@ the central voting system.
 ## Everyday use
 
 1. Extract the Windows build artifact and run its `*-setup.exe`.
-2. Open **AirVote** from Start.
-3. For the local trial, start `start-local.cmd` and enter `http://127.0.0.1:8000`.
-   For a hosted server, enter the HTTPS address
-   supplied by the station administrator once. Sign in with a staff account.
-4. On subsequent launches the saved server opens automatically. If unreachable,
-   the bundled connection screen lets you retry or correct the address.
-5. Use **Application → Connection settings** to change servers or **Reload
-   workspace** after restoring connectivity. Closing the main window exits the
-   app; launching a second copy focuses the existing instance.
+2. Open **AirVote** from Start. The production installer already knows
+   `https://airvote.up.railway.app/`; the connection window stays hidden
+   while the application opens its station workspace. Sign in with your
+   authorised staff account. No backend address entry is required.
+3. If the backend is unreachable, AirVote reveals an offline screen with
+   **Retry connection**. The server field remains hidden unless **Connection
+   settings** is explicitly selected.
+4. For a local trial or an alternate station service, use **Application →
+   Connection settings** to configure its server. The local trial uses
+   `http://127.0.0.1:8000` after starting `start-local.cmd`.
+5. Use **Reload workspace** after restoring connectivity. Closing the main
+   window exits the app; launching a second copy focuses the existing instance.
 6. CSV exports save under unique filenames in the user's Downloads folder and
    show a completion message. Export URLs remain authenticated by the webview's
    staff session. Existing files are not overwritten.
@@ -62,8 +65,9 @@ Use your actual deployed HTTPS origin, not the illustrative address above.
 Output is `src-tauri/target/release/bundle/nsis/*-setup.exe`. The same setup file
 can be copied to the other supported Windows PCs.
 
-For CI, set the optional repository variable `VOTING_STUDIO_SERVER_URL` to the
-real HTTPS origin. Run **Quality checks**; the `windows` job runs Rust tests and
+For CI, the application defaults to `https://airvote.up.railway.app/` even
+if the optional repository variable `VOTING_STUDIO_SERVER_URL` is unset or blank.
+Set that variable only when deliberately building for another trusted server. Run **Quality checks**; the `windows` job runs Rust tests and
 builds the NSIS installer with WebView2, then silently installs it and checks
 native-window startup and single-instance behavior on the Windows runner. The artifact is named
 `AirVote-Windows-x64`, and includes SHA-256 checksums. A successful

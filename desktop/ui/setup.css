@@ -163,3 +163,19 @@ footer {
 
 .mark { object-fit: contain; background: transparent; }
 form { clear: both; }
+
+/* The bundled connection screen is never shown during a healthy launch. */
+[hidden] { display: none !important; }
+.recovery-copy {
+  color: #566987;
+  font-size: 14px;
+  line-height: 1.6;
+  margin: 0 0 18px;
+}
+button.secondary {
+  margin-top: 10px;
+  border: 1px solid #c6d5eb;
+  background: #fff;
+  color: #0649b5;
+}
+button.secondary:hover { background: #edf5ff; }
