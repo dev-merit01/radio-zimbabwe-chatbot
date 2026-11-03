@@ -37,7 +37,10 @@ try {
         if ($app.HasExited) { throw "Application exited before showing a window: $($app.ExitCode)" }
     } while ($app.MainWindowHandle -eq 0 -and (Get-Date) -lt $deadline)
     if ($app.MainWindowHandle -eq 0) { throw 'No application window appeared.' }
-    if ($app.MainWindowTitle -notlike '*AirVote*') { throw 'Unexpected application window.' }
+    # Tauri first creates a hidden local startup WebView and then a separate
+    # native workspace window. Get-Process.MainWindowTitle can briefly return
+    # the hidden startup title, an empty string, or a WebView2 helper title.
+    # Do not reject a healthy launch before the actual Django page is loaded.
     $connected = $false
     foreach ($attempt in 1..60) {
         if ((Test-Path $stderr) -and (Select-String -Path $stderr -Pattern 'GET /accounts/login/' -Quiet)) {
@@ -46,7 +49,13 @@ try {
         }
         Start-Sleep -Milliseconds 500
     }
-    if (!$connected) { throw 'Native app did not load the local Django sign-in page.' }
+    if (!$connected) {
+        throw "Native app did not load the local Django sign-in page. Window title: '$($app.MainWindowTitle)'"
+    }
+    $app.Refresh()
+    if ($app.HasExited) { throw 'AirVote exited after loading the Django sign-in page.' }
+    if ($app.MainWindowHandle -eq 0) { throw 'AirVote has no native main window after connecting.' }
+    Write-Host "Connected to the native Django workspace; process window: '$($app.MainWindowTitle)'"
     $second = Start-Process $executable -PassThru
     if (!$second.WaitForExit(15000)) {
         Stop-Process -Id $second.Id -Force
