@@ -22,7 +22,6 @@ class StationBrandingArtworkTests(SimpleTestCase):
 
     def test_non_radio_zimbabwe_stations_have_correct_logo_sources(self):
         expected = {
-            Station.NATIONAL_FM: "nationalfm.jpg",
             Station.CLASSIC_263: "classic-263.jpg",
             Station.KHULUMANI_FM: "khulumani-fm.jpg",
         }
@@ -34,8 +33,9 @@ class StationBrandingArtworkTests(SimpleTestCase):
                 self.assertEqual(result["active_station"], station)
                 self.assertTrue(result["branding_station_logo_fallback_url"].startswith("/static/images/"))
 
-    def test_supplied_central_and_power_logos_are_locally_hosted(self):
+    def test_supplied_station_logos_are_locally_hosted(self):
         expected = {
+            Station.NATIONAL_FM: "national_fm.webp",
             Station.CENTRAL_RADIO: "central_radio.webp",
             Station.POWER_FM: "power_fm.webp",
         }
@@ -51,7 +51,7 @@ class StationBrandingArtworkTests(SimpleTestCase):
         from pathlib import Path
         from django.contrib.staticfiles import finders
 
-        for filename in ("central_radio.webp", "power_fm.webp"):
+        for filename in ("national_fm.webp", "central_radio.webp", "power_fm.webp"):
             with self.subTest(filename=filename):
                 path = finders.find("images/" + filename)
                 self.assertIsNotNone(path)
