@@ -189,6 +189,28 @@ fn show_setup(app: &AppHandle) {
     }
 }
 
+// The native menu reuses the authorised navigation already present in the
+// station workspace. Do not pass user-supplied values into WebView evaluation.
+fn open_workspace_page(app: &AppHandle, page: &str) {
+    let script = match page {
+        "overview" => r#"document.querySelector('[data-page="overview"]')?.click();"#,
+        "incoming" => r#"document.querySelector('[data-page="incoming"]')?.click();"#,
+        "review" => r#"document.querySelector('[data-page="review"]')?.click();"#,
+        "catalogue" => r#"document.querySelector('[data-page="catalogue"]')?.click();"#,
+        "archives" => r#"document.querySelector('[data-page="archives"]')?.click();"#,
+        "administration" => r#"document.querySelector('[data-page="administration"]')?.click();"#,
+        "activity" => r#"document.querySelector('[data-page="activity"]')?.click();"#,
+        "connections" => r#"document.querySelector('[data-page="connections"]')?.click();"#,
+        _ => return,
+    };
+    if let Some(window) = app.get_webview_window("workspace") {
+        let _ = window.eval(script);
+        let _ = window.set_focus();
+    } else {
+        show_setup(app);
+    }
+}
+
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _, _| {
@@ -216,20 +238,119 @@ pub fn run() {
                 .paste()
                 .select_all()
                 .build()?;
+            let view = SubmenuBuilder::new(app, "View")
+                .text("nav_overview", "Weekly overview")
+                .text("nav_view_incoming", "Incoming votes")
+                .text("nav_view_review", "Review queue")
+                .text("nav_view_catalogue", "Song catalogue")
+                .text("nav_view_archives", "Chart archives")
+                .separator()
+                .text("view_reload", "Refresh workspace")
+                .text("view_fullscreen", "Toggle full screen")
+                .build()?;
+            let stations = SubmenuBuilder::new(app, "Stations")
+                .text("stations_switch", "Switch station…")
+                .separator()
+                .text("planned_stations_manage", "Manage stations")
+                .text("planned_stations_channels", "WhatsApp & SMS numbers")
+                .text("planned_stations_status", "Station connection status")
+                .build()?;
+            let votes = SubmenuBuilder::new(app, "Votes")
+                .text("nav_votes_incoming", "Incoming votes")
+                .text("nav_votes_review", "Review & verify songs")
+                .separator()
+                .text("planned_votes_history", "Search vote history")
+                .text("planned_votes_flagged", "Flagged submissions")
+                .build()?;
+            let songs = SubmenuBuilder::new(app, "Songs")
+                .text("nav_songs_catalogue", "Song catalogue")
+                .separator()
+                .text("planned_songs_import", "Import songs")
+                .text("planned_songs_ai", "AI matching rules")
+                .text("planned_songs_duplicates", "Duplicate management")
+                .build()?;
+            let charts = SubmenuBuilder::new(app, "Charts")
+                .text("nav_charts_live", "Live weekly Top 20")
+                .text("nav_charts_archives", "Chart archives")
+                .separator()
+                .text("planned_charts_finalise", "Finalise a chart")
+                .text("planned_charts_year_end", "Year-end chart")
+                .build()?;
+            let reports = SubmenuBuilder::new(app, "Reports")
+                .text("planned_reports_weekly", "Weekly voting summary")
+                .text("planned_reports_stations", "Compare stations")
+                .text("planned_reports_export", "Export reports")
+                .build()?;
+            let tools = SubmenuBuilder::new(app, "Tools")
+                .text("nav_tools_admin", "Admin control")
+                .text("nav_tools_activity", "Activity log")
+                .text("nav_tools_connections", "Connection dashboard")
+                .separator()
+                .text("planned_tools_integrations", "Integrations (Bird / OpenAI)")
+                .text("planned_tools_users", "Users & permissions")
+                .text("planned_tools_preferences", "Preferences")
+                .build()?;
+            let help = SubmenuBuilder::new(app, "Help")
+                .text("planned_help_guide", "User guide")
+                .text("planned_help_shortcuts", "Keyboard shortcuts")
+                .separator()
+                .text("help_about", "About AirVote")
+                .build()?;
             app.set_menu(
                 MenuBuilder::new(app)
                     .item(&connection)
                     .item(&edit)
+                    .item(&view)
+                    .item(&stations)
+                    .item(&votes)
+                    .item(&songs)
+                    .item(&charts)
+                    .item(&reports)
+                    .item(&tools)
+                    .item(&help)
                     .build()?,
             )?;
             Ok(())
         })
         .on_menu_event(|app, event| match event.id().as_ref() {
             "connection" => show_setup(app),
-            "reload" => {
+            "reload" | "view_reload" => {
                 if let Some(window) = app.get_webview_window("workspace") {
                     let _ = window.reload();
                 }
+            }
+            "view_fullscreen" => {
+                if let Some(window) = app.get_webview_window("workspace") {
+                    if let Ok(fullscreen) = window.is_fullscreen() {
+                        let _ = window.set_fullscreen(!fullscreen);
+                    }
+                }
+            }
+            "nav_overview" | "nav_charts_live" => open_workspace_page(app, "overview"),
+            "nav_view_incoming" | "nav_votes_incoming" => open_workspace_page(app, "incoming"),
+            "nav_view_review" | "nav_votes_review" => open_workspace_page(app, "review"),
+            "nav_view_catalogue" | "nav_songs_catalogue" => open_workspace_page(app, "catalogue"),
+            "nav_view_archives" | "nav_charts_archives" => open_workspace_page(app, "archives"),
+            "nav_tools_admin" => open_workspace_page(app, "administration"),
+            "nav_tools_activity" => open_workspace_page(app, "activity"),
+            "nav_tools_connections" => open_workspace_page(app, "connections"),
+            "stations_switch" => {
+                if let Some(window) = app.get_webview_window("workspace") {
+                    let _ = window.eval("document.getElementById('station-select')?.focus();");
+                    let _ = window.set_focus();
+                } else {
+                    show_setup(app);
+                }
+            }
+            "help_about" => {
+                app.dialog()
+                    .message(format!("AirVote {}\\nMulti-station voting workspace.", env!("CARGO_PKG_VERSION")))
+                    .show(|_| {});
+            }
+            id if id.starts_with("planned_") => {
+                app.dialog()
+                    .message("This command is planned for a future AirVote update. Existing workspace features remain available.")
+                    .show(|_| {});
             }
             "quit" => app.exit(0),
             _ => {}
