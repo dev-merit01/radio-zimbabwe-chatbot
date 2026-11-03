@@ -108,6 +108,8 @@ def station_branding(request):
             "branding_station_logo": _STATION_LOGOS.get(
                 Station.RADIO_ZIMBABWE, "images/radioZim.jpg"
             ),
+            "branding_station_logo_url": static("images/radioZim.jpg"),
+            "branding_station_logo_fallback_url": static("images/radioZim.jpg"),
             "active_station": Station.RADIO_ZIMBABWE,
             "can_switch_station": False,
             "station_choices": [],
