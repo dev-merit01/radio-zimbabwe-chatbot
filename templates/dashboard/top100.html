@@ -81,10 +81,12 @@
         }
 
         .sidebar-logo {
-            width: 40px;
-            height: 40px;
-            border-radius: 14px;
-            object-fit: cover;
+            width: 58px;
+            height: 44px;
+            flex-shrink: 0;
+            border-radius: 8px;
+            object-fit: contain;
+            background: #fff;
             box-shadow: 0 0 0 1px rgba(248, 250, 252, 0.06), 0 12px 30px rgba(0, 0, 0, 0.9);
         }
 
@@ -921,7 +923,7 @@
     <div class="app-shell">
         <aside class="sidebar">
             <div class="sidebar-header">
-                <img src="{% static branding_station_logo %}" alt="{{ branding_station_name }}" class="sidebar-logo" />
+                <img src="{{ branding_station_logo_url }}" data-logo-fallback="{{ branding_station_logo_fallback_url }}" onerror="this.onerror=null;this.src=this.dataset.logoFallback" alt="{{ branding_station_name }} logo" class="sidebar-logo" referrerpolicy="no-referrer" />
                 <div class="sidebar-title">
                     <div class="sidebar-brand">{{ branding_station_name|upper }}</div>
                     <div class="sidebar-season" id="sidebar-season">2026 Season</div>

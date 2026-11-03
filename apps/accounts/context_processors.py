@@ -1,3 +1,5 @@
+from django.templatetags.static import static
+
 from .models import Station, StationAccess
 
 
@@ -8,6 +10,16 @@ _STATION_LOGOS = {
     Station.CLASSIC_263: "images/classic_263.svg",
     Station.CENTRAL_RADIO: "images/central_radio.svg",
     Station.KHULUMANI_FM: "images/khulumani_fm.svg",
+}
+
+# Identifiable station artwork sourced from public station profiles. These are
+# remote visual assets only; a local station monogram remains available if an
+# external host becomes unavailable. Central Radio has no verified asset yet.
+_STATION_LOGO_IMAGES = {
+    Station.NATIONAL_FM: "https://www.musicinafrica.net/sites/default/files/images/music_professional_profile/201507/nationalfm.jpg",
+    Station.POWER_FM: "https://www.musicinafrica.net/sites/default/files/images/music_professional_profile/201507/powerfm.jpg",
+    Station.CLASSIC_263: "https://mediabuy.africa/948-large_default/classic-263.jpg",
+    Station.KHULUMANI_FM: "https://mediabuy.africa/557-large_default/khulumani-fm.jpg",
 }
 
 _STATION_NAMES = {
@@ -70,6 +82,8 @@ def station_branding(request):
         station_logo = _STATION_LOGOS.get(
             station, _STATION_LOGOS[Station.RADIO_ZIMBABWE]
         )
+        fallback_url = static(station_logo)
+        display_url = _STATION_LOGO_IMAGES.get(station, fallback_url)
 
         # Every signed-in station user can request a password-protected switch
         user = getattr(request, "user", None)
@@ -81,6 +95,8 @@ def station_branding(request):
         return {
             "branding_station_name": station_name,
             "branding_station_logo": station_logo,
+            "branding_station_logo_url": display_url,
+            "branding_station_logo_fallback_url": fallback_url,
             "active_station": station,
             "can_switch_station": can_switch_station,
             "station_choices": Station.choices if can_switch_station else [],
@@ -92,6 +108,8 @@ def station_branding(request):
             "branding_station_logo": _STATION_LOGOS.get(
                 Station.RADIO_ZIMBABWE, "images/radioZim.jpg"
             ),
+            "branding_station_logo_url": static("images/radioZim.jpg"),
+            "branding_station_logo_fallback_url": static("images/radioZim.jpg"),
             "active_station": Station.RADIO_ZIMBABWE,
             "can_switch_station": False,
             "station_choices": [],

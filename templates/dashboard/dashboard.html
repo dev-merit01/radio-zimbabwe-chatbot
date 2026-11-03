@@ -78,10 +78,12 @@
         }
 
         .logo {
-            width: 44px;
+            width: 58px;
             height: 44px;
-            border-radius: 12px;
-            object-fit: cover;
+            flex-shrink: 0;
+            border-radius: 8px;
+            object-fit: contain;
+            background: #fff;
         }
 
         .logo-text h1 {
@@ -967,7 +969,7 @@
         <!-- Sidebar -->
         <aside class="sidebar" id="sidebar">
             <div class="sidebar-header">
-                <img src="{% static branding_station_logo %}" alt="{{ branding_station_name }}" class="logo">
+                <img src="{{ branding_station_logo_url }}" data-logo-fallback="{{ branding_station_logo_fallback_url }}" onerror="this.onerror=null;this.src=this.dataset.logoFallback" alt="{{ branding_station_name }} logo" class="logo" referrerpolicy="no-referrer">
                 <div class="logo-text">
                     <h1>{{ branding_station_name|upper }}</h1>
                     <p id="season-year">2026 Season</p>
