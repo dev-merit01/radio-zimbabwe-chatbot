@@ -69,6 +69,15 @@ native-window startup and single-instance behavior on the Windows runner. The ar
 `AirVote-Windows-x64`, and includes SHA-256 checksums. A successful
 artifact upload is required before an installer can be downloaded.
 
+The professional AirVote artwork is stored as `src-tauri/icons/airvote-icon.svg`.
+`npm run desktop:build` generates all Windows icon sizes, including the multi-size
+`.ico` used by the installer, executable and shortcuts, before building the NSIS
+package. The bundled connection screen uses the same artwork. If a Windows PC
+already has an older AirVote installer, download and install a build from the
+new icon commit to replace its native icon; refreshing the Railway workspace
+alone cannot update the installed EXE icon. Icon appearance is independent of
+Authenticode signing and does not bypass Windows SmartScreen.
+
 The Tauri and plugin versions, npm lockfile and generated Cargo lockfile are
 committed. Release builds and Rust tests use `--locked` to prevent unexpected
 dependency resolution changes. Update dependencies deliberately through review.

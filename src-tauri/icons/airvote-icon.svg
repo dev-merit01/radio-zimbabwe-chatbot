@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 512 512" role="img" aria-label="AirVote radio voting icon">
+<defs>
+<linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#137CD7"/><stop offset=".43" stop-color="#0755A5"/><stop offset="1" stop-color="#041C4B"/></linearGradient>
+<linearGradient id="aqua" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#51F5F3"/><stop offset="1" stop-color="#06A7CD"/></linearGradient>
+<linearGradient id="ballot" x1="0" y1="0" x2=".8" y2="1"><stop offset="0" stop-color="#FF5960"/><stop offset="1" stop-color="#D92746"/></linearGradient>
+<linearGradient id="metal" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFF"/><stop offset="1" stop-color="#C9F0FF"/></linearGradient>
+<clipPath id="clip"><rect x="7" y="7" width="498" height="498" rx="102"/></clipPath>
+</defs>
+<g clip-path="url(#clip)">
+<rect x="7" y="7" width="498" height="498" rx="102" fill="url(#bg)"/>
+<path d="M3 12 H509 V166 C402 101 299 174 185 130 C100 96 64 87 3 126 Z" fill="#55D7FC" opacity=".11"/>
+<path d="M-30 465 Q117 362 258 421 T548 416 V538 H-30 Z" fill="#09A5CB" opacity=".19"/>
+<path d="M55 451 Q202 353 328 416 T533 433" stroke="url(#aqua)" stroke-width="19" fill="none" stroke-linecap="round" opacity=".85"/>
+<path d="M80 475 Q228 398 351 445 T519 458" stroke="#A8FDFF" stroke-width="4" fill="none" stroke-linecap="round" opacity=".65"/>
+<path d="M128 240 C126 132 198 91 255 91 C327 91 386 144 384 240" stroke="#D6F2FD" stroke-width="30" stroke-linecap="round" fill="none"/>
+<path d="M131 233 C128 144 190 110 255 110 C322 110 380 155 379 233" stroke="#FFF" stroke-width="13" stroke-linecap="round" fill="none"/>
+<rect x="95" y="221" width="55" height="119" rx="26" fill="url(#metal)"/>
+<rect x="362" y="221" width="55" height="119" rx="26" fill="url(#metal)"/>
+<rect x="154" y="220" width="9" height="98" rx="4" fill="#C3EDF9" opacity=".85"/>
+<rect x="349" y="220" width="9" height="98" rx="4" fill="#C3EDF9" opacity=".85"/>
+<g fill="url(#aqua)">
+<rect x="180" y="217" width="17" height="51" rx="8"/>
+<rect x="205" y="195" width="17" height="81" rx="8"/>
+<rect x="230" y="165" width="17" height="117" rx="8"/>
+<rect x="255" y="190" width="17" height="91" rx="8"/>
+<rect x="280" y="210" width="17" height="64" rx="8"/>
+<rect x="305" y="227" width="17" height="42" rx="8"/>
+</g>
+<path d="M169 306 H345 Q362 306 362 325 V379 Q362 398 343 398 H171 Q151 398 151 379 V325 Q151 306 169 306 Z" fill="#0C376F" opacity=".5" transform="translate(1 8)"/>
+<rect x="151" y="306" width="211" height="91" rx="19" fill="url(#metal)"/>
+<rect x="194" y="306" width="126" height="11" rx="5" fill="#052756"/>
+<g transform="rotate(9 254 281)">
+<rect x="219" y="236" width="81" height="106" rx="9" fill="url(#ballot)"/>
+<path d="M235 281 l16 16 l30 -36" stroke="#FFF" stroke-width="13" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+</g>
+<path d="M149 348 H363" stroke="#FFF" stroke-width="4" opacity=".55"/>
+</g>
+<rect x="9" y="9" width="494" height="494" rx="100" fill="none" stroke="#7DDCFF" stroke-width="5" opacity=".85"/>
+</svg>

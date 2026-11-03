@@ -12,7 +12,7 @@ const path = require("node:path");
     "/setup.js": ["setup.js", "text/javascript"],
     "/setup.css": ["setup.css", "text/css"],
     "/assets/airvote.png": ["assets/airvote.png", "image/png"],
-    "/assets/app-icon.png": ["assets/app-icon.png", "image/png"],
+    "/assets/airvote-icon.svg": ["assets/airvote-icon.svg", "image/svg+xml"],
   };
   const server = http.createServer((req, res) => {
     const asset = files[req.url];
