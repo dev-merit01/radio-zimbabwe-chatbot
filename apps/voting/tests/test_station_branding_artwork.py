@@ -23,7 +23,6 @@ class StationBrandingArtworkTests(SimpleTestCase):
     def test_non_radio_zimbabwe_stations_have_correct_logo_sources(self):
         expected = {
             Station.NATIONAL_FM: "nationalfm.jpg",
-            Station.POWER_FM: "powerfm.jpg",
             Station.CLASSIC_263: "classic-263.jpg",
             Station.KHULUMANI_FM: "khulumani-fm.jpg",
         }
@@ -35,10 +34,30 @@ class StationBrandingArtworkTests(SimpleTestCase):
                 self.assertEqual(result["active_station"], station)
                 self.assertTrue(result["branding_station_logo_fallback_url"].startswith("/static/images/"))
 
-    def test_central_radio_keeps_local_badge_until_authentic_logo_available(self):
-        result = self.get_branding(Station.CENTRAL_RADIO)
-        self.assertEqual(result["branding_station_logo_url"], "/static/images/central_radio.svg")
-        self.assertEqual(result["branding_station_logo_fallback_url"], result["branding_station_logo_url"])
+    def test_supplied_central_and_power_logos_are_locally_hosted(self):
+        expected = {
+            Station.CENTRAL_RADIO: "central_radio.webp",
+            Station.POWER_FM: "power_fm.webp",
+        }
+        for station, filename in expected.items():
+            with self.subTest(station=station):
+                result = self.get_branding(station)
+                local_url = "/static/images/" + filename
+                self.assertEqual(result["branding_station_logo_url"], local_url)
+                self.assertEqual(result["branding_station_logo_fallback_url"], local_url)
+                self.assertEqual(result["active_station"], station)
+
+    def test_supplied_logos_are_valid_webp_static_assets(self):
+        from pathlib import Path
+        from django.contrib.staticfiles import finders
+
+        for filename in ("central_radio.webp", "power_fm.webp"):
+            with self.subTest(filename=filename):
+                path = finders.find("images/" + filename)
+                self.assertIsNotNone(path)
+                data = Path(path).read_bytes()
+                self.assertEqual(data[:4], b"RIFF")
+                self.assertEqual(data[8:12], b"WEBP")
 
     def test_radio_zimbabwe_keeps_existing_logo(self):
         result = self.get_branding(Station.RADIO_ZIMBABWE)
