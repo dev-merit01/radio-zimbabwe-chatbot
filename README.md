@@ -4,7 +4,7 @@ A centrally hosted voting service with an installable Windows staff application.
 
 ## Try everything on one Windows PC
 
-Use the 2.3.0 installer and [same-computer setup instructions](docs/LOCAL_WINDOWS.md).
+Use the latest available installer and [same-computer setup instructions](docs/LOCAL_WINDOWS.md).
 Install Python 3.12, run `setup-local.cmd` once, then `start-local.cmd`. Open the
 installed app and connect to `http://127.0.0.1:8000`. This isolated local mode uses
 SQLite and disables live provider integrations; no hosting is needed.
@@ -28,6 +28,21 @@ Tools with the Windows SDK, then run:
 ```powershell
 .\desktop\build.ps1
 ```
+
+## Automatic desktop updates (AirVote 2.4.0+)
+
+The Windows app checks for newer **signed** desktop releases when it starts.
+A staff member can approve installation or postpone it, and can check manually
+using **Help → Check for updates…**. Updates are downloaded from GitHub Releases
+and signature-verified before installation. The server and vote workers stay
+online while the Windows client updates.
+
+The repository owner must complete the one-time private-key setup documented in
+[Secure Windows update setup](docs/AUTO_UPDATES.md) before the first signed
+version 2.4.0 release can be published. The private signing key must never be
+committed or shared. Existing 2.3.0 desktop installations need one manual
+installer upgrade to obtain the updater. Changes to Railway-hosted dashboard
+pages or the vote processing backend do **not** require a desktop upgrade.
 
 ## Local development
 
