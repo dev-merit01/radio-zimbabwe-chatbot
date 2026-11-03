@@ -5,7 +5,7 @@ from .models import Station, StationAccess
 
 _STATION_LOGOS = {
     Station.RADIO_ZIMBABWE: "images/radioZim.jpg",
-    Station.NATIONAL_FM: "images/national_fm.svg",
+    Station.NATIONAL_FM: "images/national_fm.webp",
     Station.POWER_FM: "images/power_fm.webp",
     Station.CLASSIC_263: "images/classic_263.svg",
     Station.CENTRAL_RADIO: "images/central_radio.webp",
@@ -14,9 +14,8 @@ _STATION_LOGOS = {
 
 # Identifiable station artwork sourced from public station profiles. These are
 # remote visual assets only; local image assets are preferred where available.
-# Central Radio and Power FM use the supplied artwork hosted in this repository.
+# National FM, Central Radio and Power FM use the supplied artwork hosted locally.
 _STATION_LOGO_IMAGES = {
-    Station.NATIONAL_FM: "https://www.musicinafrica.net/sites/default/files/images/music_professional_profile/201507/nationalfm.jpg",
     Station.CLASSIC_263: "https://mediabuy.africa/948-large_default/classic-263.jpg",
     Station.KHULUMANI_FM: "https://mediabuy.africa/557-large_default/khulumani-fm.jpg",
 }
