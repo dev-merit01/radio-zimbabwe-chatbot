@@ -1,3 +1,5 @@
+from django.templatetags.static import static
+
 from .models import Station, StationAccess
 
 
