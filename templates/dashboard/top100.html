@@ -921,7 +921,7 @@
     <div class="app-shell">
         <aside class="sidebar">
             <div class="sidebar-header">
-                <img src="{% static branding_station_logo %}" alt="{{ branding_station_name }}" class="sidebar-logo" />
+                <img src="{{ branding_station_logo_url }}" data-logo-fallback="{{ branding_station_logo_fallback_url }}" onerror="this.onerror=null;this.src=this.dataset.logoFallback" alt="{{ branding_station_name }} logo" class="sidebar-logo" referrerpolicy="no-referrer" />
                 <div class="sidebar-title">
                     <div class="sidebar-brand">{{ branding_station_name|upper }}</div>
                     <div class="sidebar-season" id="sidebar-season">2026 Season</div>
