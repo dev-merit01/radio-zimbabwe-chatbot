@@ -61,6 +61,9 @@ jobs:
     runs-on: windows-latest
     env:
       VOTING_STUDIO_SERVER_URL: ${{ vars.VOTING_STUDIO_SERVER_URL }}
+      AIRVOTE_UPDATER_PUBLIC_KEY: ${{ vars.AIRVOTE_UPDATER_PUBLIC_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+      TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -73,9 +76,17 @@ jobs:
           workspaces: src-tauri
       - run: npm ci
       - run: npm run desktop:check
-      - run: cargo test --locked --manifest-path src-tauri/Cargo.toml
+      - run: cargo test --manifest-path src-tauri/Cargo.toml
       - name: Build Tauri Windows installer with WebView2
-        run: npm run desktop:build
+        shell: pwsh
+        run: |
+          if (![string]::IsNullOrWhiteSpace($env:AIRVOTE_UPDATER_PUBLIC_KEY) -and
+              ![string]::IsNullOrWhiteSpace($env:TAURI_SIGNING_PRIVATE_KEY)) {
+            npm run desktop:build
+          } else {
+            Write-Host 'Updater signing is not configured: CI validation installer only.'
+            npm run desktop:build -- --config src-tauri/tauri.unsigned.conf.json
+          }
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -93,11 +104,17 @@ jobs:
             $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLower()
             "$hash  $($_.Name)" | Out-File -Encoding ascii "$($_.FullName).sha256"
           }
+          if (![string]::IsNullOrWhiteSpace($env:AIRVOTE_UPDATER_PUBLIC_KEY) -and
+              ![string]::IsNullOrWhiteSpace($env:TAURI_SIGNING_PRIVATE_KEY)) {
+            $signatures = @(Get-ChildItem src-tauri/target/release/bundle/nsis/*-setup.exe.sig)
+            if (!$signatures.Count) { throw 'Signed installer is missing its Tauri update signature.' }
+          }
       - uses: actions/upload-artifact@v4
         with:
           name: AirVote-Windows-x64
           path: |
             src-tauri/target/release/bundle/nsis/*-setup.exe
+            src-tauri/target/release/bundle/nsis/*-setup.exe.sig
             src-tauri/target/release/bundle/nsis/*.sha256
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
@@ -108,7 +125,8 @@ jobs:
           if-no-files-found: warn
 
   release:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # Without the public key variable, do not publish an unsigned auto-update.
+    if: (github.event_name == 'push' || github.event_name == 'workflow_dispatch') && github.ref == 'refs/heads/main' && vars.AIRVOTE_UPDATER_PUBLIC_KEY != ''
     needs: [backend, windows]
     runs-on: ubuntu-latest
     permissions:
@@ -119,19 +137,25 @@ jobs:
         with:
           name: AirVote-Windows-x64
           path: release-assets
-      - name: Publish AirVote 2.3.0 release
+      - name: Publish signed Windows installer and updater manifest
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          test "$(node -p 'require("./src-tauri/tauri.conf.json").version')" = "2.3.0"
-          test -f release-assets/AirVote_2.3.0_x64-setup.exe
-          (cd release-assets && sha256sum -c AirVote_2.3.0_x64-setup.exe.sha256)
-          git archive --format=zip --prefix=AirVote-2.3.0-source/ --output=release-assets/AirVote-2.3.0-source.zip "$GITHUB_SHA"
-          (cd release-assets && sha256sum AirVote-2.3.0-source.zip > AirVote-2.3.0-source.zip.sha256)
-          if gh release view v2.3.0 >/dev/null 2>&1; then
-            echo 'AirVote 2.3.0 already published; preserving the existing release.'
+          version="$(node -p 'require("./src-tauri/tauri.conf.json").version')"
+          test "$version" = "$(sed -n 's/^version = "\(.*\)"/\1/p' src-tauri/Cargo.toml | head -n 1)"
+          installer="AirVote_${version}_x64-setup.exe"
+          test -s "release-assets/$installer"
+          test -s "release-assets/$installer.sig" || { echo 'Missing updater signature: set TAURI_SIGNING_PRIVATE_KEY in repository secrets.'; exit 1; }
+          (cd release-assets && sha256sum -c "$installer.sha256")
+          if gh release view "v$version" >/dev/null 2>&1; then
+            echo "AirVote $version already published. Bump the app version for the next desktop release."
             exit 0
           fi
-          gh release create v2.3.0 release-assets/* --target "$GITHUB_SHA" --title "AirVote 2.3.0" --notes-file docs/RELEASE_2.3.0.md --prerelease
+          signature="$(tr -d '\r\n' < "release-assets/$installer.sig")"
+          url="https://github.com/${GH_REPO}/releases/download/v${version}/${installer}"
+          jq -n --arg version "$version" --arg url "$url" --arg signature "$signature" --arg notes "Signed desktop updates and expanded native menus."             '{version: $version, notes: $notes, platforms: {"windows-x86_64": {signature: $signature, url: $url}}}'             > release-assets/latest.json
+          git archive --format=zip --prefix="AirVote-${version}-source/" --output="release-assets/AirVote-${version}-source.zip" "$GITHUB_SHA"
+          (cd release-assets && sha256sum "AirVote-${version}-source.zip" > "AirVote-${version}-source.zip.sha256")
+          gh release create "v$version" release-assets/* --target "$GITHUB_SHA"             --title "AirVote $version" --notes "Signed Windows update checking and installation; professional desktop menus." --latest
