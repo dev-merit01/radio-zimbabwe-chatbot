@@ -82,6 +82,8 @@ def station_branding(request):
         station_logo = _STATION_LOGOS.get(
             station, _STATION_LOGOS[Station.RADIO_ZIMBABWE]
         )
+        fallback_url = static(station_logo)
+        display_url = _STATION_LOGO_IMAGES.get(station, fallback_url)
 
         # Every signed-in station user can request a password-protected switch
         user = getattr(request, "user", None)
