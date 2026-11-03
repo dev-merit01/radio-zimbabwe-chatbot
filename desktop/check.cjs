@@ -25,6 +25,13 @@ assert.deepEqual(capability.permissions, [
   "allow-connect-server",
 ]);
 assert.equal(config.bundle.windows.webviewInstallMode.type, "offlineInstaller");
+assert.equal(config.bundle.createUpdaterArtifacts, true);
+assert.deepEqual(config.plugins.updater.endpoints, [
+  "https://github.com/dev-merit01/radio-zimbabwe-chatbot/releases/latest/download/latest.json",
+]);
+assert.equal(config.plugins.updater.windows.installMode, "passive");
+// Never grant the remote workspace JavaScript installer/update privileges.
+assert.equal(JSON.stringify(capability).includes("updater:"), false);
 assert.equal(config.bundle.windows.nsis.installMode, "currentUser");
 for (const icon of config.bundle.icon)
   assert.ok(fs.existsSync(path.join(root, "src-tauri", icon)));
