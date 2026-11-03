@@ -35,6 +35,10 @@ assert.equal(JSON.stringify(capability).includes("updater:"), false);
 assert.equal(config.bundle.windows.nsis.installMode, "currentUser");
 for (const icon of config.bundle.icon)
   assert.ok(fs.existsSync(path.join(root, "src-tauri", icon)));
+const vectorIcon = fs.readFileSync(path.join(root, "src-tauri/icons/airvote-icon.svg"), "utf8");
+assert.equal(vectorIcon, fs.readFileSync(path.join(root, "desktop/ui/assets/airvote-icon.svg"), "utf8"));
+assert.ok(vectorIcon.includes('viewBox="0 0 512 512"'));
+assert.ok(fs.readFileSync(path.join(root, "desktop/ui/index.html"), "utf8").includes('src="assets/airvote-icon.svg"'));
 const server = process.env.VOTING_STUDIO_SERVER_URL;
 if (server) {
   assert.ok(
