@@ -15,8 +15,14 @@ npm ci
 if ($LASTEXITCODE -ne 0) { throw 'Dependency installation failed.' }
 npm run desktop:check
 if ($LASTEXITCODE -ne 0) { throw 'Desktop configuration check failed.' }
-cargo test --locked --manifest-path src-tauri/Cargo.toml
+cargo test --manifest-path src-tauri/Cargo.toml
 if ($LASTEXITCODE -ne 0) { throw 'Desktop policy tests failed.' }
-npm run desktop:build
+if (![string]::IsNullOrWhiteSpace($env:AIRVOTE_UPDATER_PUBLIC_KEY) -and
+    ![string]::IsNullOrWhiteSpace($env:TAURI_SIGNING_PRIVATE_KEY)) {
+    npm run desktop:build
+} else {
+    Write-Host 'Signing is not configured; building an unsigned developer installer (not eligible for automatic updates).'
+    npm run desktop:build -- --config src-tauri/tauri.unsigned.conf.json
+}
 if ($LASTEXITCODE -ne 0) { throw 'Windows installer build failed.' }
 Write-Host 'Installer: src-tauri/target/release/bundle/nsis/*-setup.exe'
