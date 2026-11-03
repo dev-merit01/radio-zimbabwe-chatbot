@@ -95,6 +95,8 @@ def station_branding(request):
         return {
             "branding_station_name": station_name,
             "branding_station_logo": station_logo,
+            "branding_station_logo_url": display_url,
+            "branding_station_logo_fallback_url": fallback_url,
             "active_station": station,
             "can_switch_station": can_switch_station,
             "station_choices": Station.choices if can_switch_station else [],
