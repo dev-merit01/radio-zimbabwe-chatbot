@@ -9,11 +9,16 @@ use tauri::{
     webview::{DownloadEvent, NewWindowResponse},
     AppHandle, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder,
 };
-use tauri_plugin_dialog::DialogExt;
+use tauri_plugin_dialog::{DialogExt, MessageDialogButtons};
+use tauri_plugin_updater::UpdaterExt;
 use airvote::{allowed_navigation, load_configuration, save_configuration, validate_server};
 
 #[derive(Default)]
 struct Connecting(AtomicBool);
+
+// Prevent overlapping automatic and user-initiated checks/installations.
+#[derive(Default)]
+struct Updating(AtomicBool);
 
 struct ConnectionGuard<'a>(&'a AtomicBool);
 impl Drop for ConnectionGuard<'_> {
@@ -211,6 +216,89 @@ fn open_workspace_page(app: &AppHandle, page: &str) {
     }
 }
 
+// Checks run only in trusted native Rust; remote station pages get no updater IPC permissions.
+fn check_for_updates(app: &AppHandle, manual: bool) {
+    if option_env!("AIRVOTE_UPDATER_PUBLIC_KEY")
+        .map(str::trim)
+        .filter(|key| !key.is_empty())
+        .is_none()
+    {
+        if manual {
+            app.dialog()
+                .message("Secure updates have not been configured for this AirVote build.")
+                .show(|_| {});
+        }
+        return;
+    }
+
+    if app
+        .state::<Updating>()
+        .0
+        .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+        .is_err()
+    {
+        if manual {
+            app.dialog().message("An update check is already in progress.").show(|_| {});
+        }
+        return;
+    }
+
+    let handle = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let result = async {
+            let updater = handle.updater().map_err(|error| error.to_string())?;
+            updater.check().await.map_err(|error| error.to_string())
+        }
+        .await;
+
+        match result {
+            Ok(Some(update)) => {
+                let dialog_handle = handle.clone();
+                handle.dialog()
+                    .message(format!(
+                        "AirVote {} is available. Install the signed update now? The application will close during installation.",
+                        update.version
+                    ))
+                    .buttons(MessageDialogButtons::OkCancelCustom(
+                        "Install update".into(),
+                        "Later".into(),
+                    ))
+                    .show(move |approved| {
+                        if !approved {
+                            dialog_handle.state::<Updating>().0.store(false, Ordering::Release);
+                            return;
+                        }
+                        let install_handle = dialog_handle.clone();
+                        tauri::async_runtime::spawn(async move {
+                            // Tauri verifies the signature before launching the Windows installer.
+                            // On Windows the updater itself closes the running application.
+                            if let Err(_error) = update.download_and_install(|_, _| {}, || {}).await {
+                                install_handle.state::<Updating>().0.store(false, Ordering::Release);
+                                install_handle.dialog()
+                                    .message("The AirVote update could not be installed. Your existing version is unchanged; use Help > Check for updates to retry.")
+                                    .show(|_| {});
+                            }
+                        });
+                    });
+            }
+            Ok(None) => {
+                handle.state::<Updating>().0.store(false, Ordering::Release);
+                if manual {
+                    handle.dialog().message("AirVote is up to date.").show(|_| {});
+                }
+            }
+            Err(_) => {
+                handle.state::<Updating>().0.store(false, Ordering::Release);
+                if manual {
+                    handle.dialog()
+                        .message("Could not check for AirVote updates. Check your internet connection and try again.")
+                        .show(|_| {});
+                }
+            }
+        }
+    });
+}
+
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _, _| {
@@ -224,8 +312,17 @@ pub fn run() {
         }))
         .plugin(tauri_plugin_dialog::init())
         .manage(Connecting::default())
+        .manage(Updating::default())
         .invoke_handler(tauri::generate_handler![get_configuration, connect_server])
         .setup(|app| {
+            // The signing public key is injected at compile time by the signed release
+            // workflow. An unsigned development build cannot enable auto-updates.
+            if let Some(key) = option_env!("AIRVOTE_UPDATER_PUBLIC_KEY")
+                .map(str::trim)
+                .filter(|key| !key.is_empty())
+            {
+                app.handle().plugin(tauri_plugin_updater::Builder::new().pubkey(key).build())?;
+            }
             let connection = SubmenuBuilder::new(app, "Application")
                 .text("connection", "Connection settings…")
                 .text("reload", "Reload workspace")
@@ -291,6 +388,8 @@ pub fn run() {
                 .text("planned_tools_preferences", "Preferences")
                 .build()?;
             let help = SubmenuBuilder::new(app, "Help")
+                .text("check_updates", "Check for updates…")
+                .separator()
                 .text("planned_help_guide", "User guide")
                 .text("planned_help_shortcuts", "Keyboard shortcuts")
                 .separator()
@@ -310,10 +409,12 @@ pub fn run() {
                     .item(&help)
                     .build()?,
             )?;
+            check_for_updates(app.handle(), false);
             Ok(())
         })
         .on_menu_event(|app, event| match event.id().as_ref() {
             "connection" => show_setup(app),
+            "check_updates" => check_for_updates(app, true),
             "reload" | "view_reload" => {
                 if let Some(window) = app.get_webview_window("workspace") {
                     let _ = window.reload();
