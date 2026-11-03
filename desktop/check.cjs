@@ -23,7 +23,9 @@ assert.equal(capability.remote, undefined);
 assert.deepEqual(capability.permissions, [
   "allow-get-configuration",
   "allow-connect-server",
+  "allow-reveal-setup",
 ]);
+assert.equal(config.app.windows.find((window) => window.label === "setup").visible, false);
 assert.equal(config.bundle.windows.webviewInstallMode.type, "offlineInstaller");
 assert.equal(config.bundle.createUpdaterArtifacts, true);
 assert.deepEqual(config.plugins.updater.endpoints, [
@@ -39,6 +41,11 @@ const vectorIcon = fs.readFileSync(path.join(root, "src-tauri/icons/airvote-icon
 assert.equal(vectorIcon, fs.readFileSync(path.join(root, "desktop/ui/assets/airvote-icon.svg"), "utf8"));
 assert.ok(vectorIcon.includes('viewBox="0 0 512 512"'));
 assert.ok(fs.readFileSync(path.join(root, "desktop/ui/index.html"), "utf8").includes('src="assets/airvote-icon.svg"'));
+assert.ok(
+  fs.readFileSync(path.join(root, "src-tauri/src/windows.rs"), "utf8")
+    .includes('unwrap_or("https://airvote.up.railway.app/")'),
+  "A clean install must have the production Railway origin preconfigured",
+);
 const server = process.env.VOTING_STUDIO_SERVER_URL;
 if (server) {
   assert.ok(
