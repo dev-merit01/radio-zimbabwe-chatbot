@@ -1,4 +1,7 @@
 #!/bin/sh
 set -eu
 python deploy/check_environment.py
+# Never serve updated models against an older database schema.
+# This also protects deployments where the platform pre-deploy hook is skipped.
+python manage.py migrate --noinput
 exec gunicorn radio_zimbabwe.wsgi:application --bind "0.0.0.0:${PORT:-8000}" --workers "${WEB_CONCURRENCY:-1}" --threads "${WEB_THREADS:-4}" --timeout 60 --access-logfile - --error-logfile -
