@@ -10,6 +10,7 @@ _STATION_LOGOS = {
     Station.CLASSIC_263: "images/classic_263.svg",
     Station.CENTRAL_RADIO: "images/central_radio.webp",
     Station.KHULUMANI_FM: "images/khulumani_fm.svg",
+    Station.LUZIBO_RADIO: "images/luzibo_radio.svg",
 }
 
 # Identifiable station artwork sourced from public station profiles. These are
