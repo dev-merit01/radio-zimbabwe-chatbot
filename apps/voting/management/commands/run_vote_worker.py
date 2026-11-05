@@ -1,10 +1,13 @@
 import os
 import socket
 import time
+
+from django.core.management import call_command
 from django.core.management.base import BaseCommand, CommandError
 from django.db import connection
 from django.utils import timezone
-from apps.voting.models import InboundEvent, VoteJob, OutboundMessage, WorkerHeartbeat
+
+from apps.voting.models import InboundEvent, OutboundMessage, VoteJob, WorkerHeartbeat
 from apps.voting.worker import run_one
 
 
@@ -23,6 +26,7 @@ class Command(BaseCommand):
             raise CommandError(
                 "Production workers require PostgreSQL. Use --allow-sqlite for local single-worker development."
             )
+        call_command("retry_catalogue_votes", stdout=self.stdout)
         name = f"{socket.gethostname()}:{os.getpid()}"
         queues = {
             "intake": InboundEvent,

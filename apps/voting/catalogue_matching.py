@@ -8,6 +8,7 @@ import heapq
 import re
 import unicodedata
 from difflib import SequenceMatcher
+
 from .models import CleanedSong
 
 
@@ -26,8 +27,6 @@ def variants(value):
 
 def ranked_candidates(station, artist, title, limit=8):
     artist, title = normalise(artist), normalise(title)
-    if artist == "unknown artist":
-        return []
 
     def scored():
         songs = (
@@ -38,6 +37,35 @@ def ranked_candidates(station, artist, title, limit=8):
         for song in songs:
             a, t = normalise(song.artist), normalise(song.title)
             if variants(title) != variants(t):
+                continue
+            if artist == "unknown artist":
+                # No separator: compare complete artist/title partitions in either
+                # order. Never use substring matches that discard extra words.
+                words = title.split()
+                pairs = [
+                    (" ".join(words[:i]), " ".join(words[i:]))
+                    for i in range(1, len(words))
+                ]
+                pairs += [(right, left) for left, right in pairs]
+                scores = [
+                    (
+                        SequenceMatcher(None, left, a, autojunk=False).ratio(),
+                        SequenceMatcher(None, right, t, autojunk=False).ratio(),
+                    )
+                    for left, right in pairs
+                ]
+                scores = [(aa, tt) for aa, tt in scores if aa >= 0.75 and tt >= 0.75]
+                if title == t:
+                    scores.append((1.0, 1.0))
+                if not scores:
+                    continue
+                artist_score, title_score = max(scores, key=lambda row: sum(row))
+                yield (
+                    (artist_score + title_score) / 2,
+                    artist_score,
+                    title_score,
+                    song,
+                )
                 continue
             artist_score = SequenceMatcher(None, artist, a, autojunk=False).ratio()
             if artist_score < 0.75:
@@ -68,6 +96,10 @@ def automatic_candidate(ranked, artist, title):
     if normalise(artist) == normalise(song.artist) and normalise(title) == normalise(
         song.title
     ):
+        return song
+    # Exact short title plus a near-exact artist is strong evidence too.
+    # This also covers an unambiguous title-only vote after AI confirmation.
+    if t == 1.0 and a >= 0.90:
         return song
     if min(len(normalise(title)), len(normalise(song.title))) < 6:
         return None

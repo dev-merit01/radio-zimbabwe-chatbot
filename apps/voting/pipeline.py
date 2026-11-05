@@ -1,21 +1,25 @@
 """One authoritative station-scoped review and reconciliation pipeline."""
 
+import logging
 from itertools import islice
-from .presentation import music_name
-from django.db import transaction
-from django.db.models import OuterRef, Subquery, Sum, Count
+
 from django.conf import settings
+from django.db import transaction
+from django.db.models import Count, OuterRef, Subquery, Sum
+
 from .models import (
-    StationState,
     CleanedSong,
+    CleanedSongTally,
+    LLMDecisionLog,
     MatchKeyMapping,
     RawSongTally,
-    CleanedSongTally,
-    ReviewAudit,
     RawVote,
-    LLMDecisionLog,
+    ReviewAudit,
+    StationState,
 )
+from .presentation import music_name
 
+logger = logging.getLogger(__name__)
 
 def lock_station(station):
     obj, _ = StationState.objects.get_or_create(station=station)
@@ -162,6 +166,7 @@ def update_song_tally(station, song_id, date):
 
 def process_vote(vote):
     from django.conf import settings
+
     from .ai import match_vote_with_llm
 
     # No catalogue auto-match, cached mapping or prior listener can bypass AI
@@ -176,7 +181,7 @@ def process_vote(vote):
     candidate = None
     decision = None
     if not mapping:
-        from .catalogue_matching import ranked_candidates, automatic_candidate
+        from .catalogue_matching import automatic_candidate, ranked_candidates
 
         ranked = ranked_candidates(
             station, vote.artist_normalized, vote.song_normalized
@@ -293,6 +298,21 @@ def process_vote(vote):
 
 
 
+def unresolved_mapping(mapping):
+    """Only untouched machine-created pending entries may be reconsidered."""
+    if not mapping or mapping.cleaned_song.status != "pending":
+        return False
+    from django.db.models import Q
+    song_id = mapping.cleaned_song_id
+    reviewed = ReviewAudit.objects.filter(station=mapping.station).filter(
+        Q(details__before__id=song_id) | Q(details__song_id=song_id)
+    ).exclude(action__in=("auto_match", "ai_remap"))
+    return not reviewed.exists() and not RawVote.objects.filter(
+        station=mapping.station, match_key=mapping.match_key,
+        ai_status__in=("approved", "legacy"),
+    ).exists()
+
+
 def process_vote_with_ai(vote):
     """Verify EVERY queued valid vote with OpenAI before publishing any tally.
 
@@ -300,7 +320,12 @@ def process_vote_with_ai(vote):
     Unknown/mismatched responses are saved for review, never auto-counted.
     """
     from .ai import match_vote_with_llm
-    from .catalogue_matching import ranked_candidates, automatic_candidate, normalise, variants
+    from .catalogue_matching import (
+        automatic_candidate,
+        normalise,
+        ranked_candidates,
+        variants,
+    )
 
     # Retried/duplicate work must not purchase additional AI requests.
     if RawVote.objects.filter(pk=vote.pk, ai_status__in=("approved", "review")).exists():
@@ -332,8 +357,8 @@ def process_vote_with_ai(vote):
             and type(chosen_id) is int):
         selected = next((song for song in shortlist if song.pk == chosen_id), None)
         if selected and selected.status == "verified":
-            if mapping:
-                # Never override an existing mapping with AI output.
+            if mapping and not unresolved_mapping(mapping):
+                # Never override a reviewed, rejected or verified mapping.
                 if mapping.cleaned_song_id == selected.pk:
                     chosen = selected
             elif ranked and selected.pk == ranked[0][3].pk:
@@ -365,8 +390,24 @@ def process_vote_with_ai(vote):
                 pk=chosen.pk, station=station, status="verified",
                 artist=chosen.artist, title=chosen.title,
             ).first()
-        if mapping and (not chosen or mapping.cleaned_song_id != chosen.pk):
-            chosen = None
+        if mapping and chosen and mapping.cleaned_song_id != chosen.pk:
+            if unresolved_mapping(mapping):
+                previous = mapping.cleaned_song
+                mapping.cleaned_song = chosen
+                mapping.is_auto_mapped = True
+                mapping.save(update_fields=["cleaned_song", "is_auto_mapped"])
+                ReviewAudit.objects.create(
+                    station=station, action="ai_remap",
+                    details={"vote_id": vote.pk, "from_song_id": previous.pk,
+                             "song_id": chosen.pk},
+                )
+                # Retain the old placeholder for audit, remove it from review.
+                if not MatchKeyMapping.objects.filter(cleaned_song=previous).exists():
+                    previous.status = "rejected"
+                    previous.save(update_fields=["status"])
+                rebuild_tallies(station, song_ids=[previous.pk, chosen.pk])
+            else:
+                chosen = None
         if not mapping:
             target = chosen
             if not target:
@@ -412,6 +453,12 @@ def process_vote_with_ai(vote):
         ).aggregate(n=Sum("count"))["n"] or 0)
         MatchKeyMapping.objects.filter(pk=mapping.pk).update(vote_count=total)
         update_song_tally(station, mapping.cleaned_song_id, vote.vote_date)
+        tally = CleanedSongTally.objects.filter(
+            station=station, cleaned_song_id=mapping.cleaned_song_id,
+            date=vote.vote_date,
+        ).values_list("count", flat=True).first() or 0
+        logger.info("AI vote result station=%s vote_id=%s status=%s song_id=%s day_count=%s",
+                    station, current.pk, current.ai_status, mapping.cleaned_song_id, tally)
 
 
 def review_song(
