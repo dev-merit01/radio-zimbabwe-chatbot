@@ -54,18 +54,33 @@ def ranked_candidates(station, artist, title, limit=8):
                     )
                     for left, right in pairs
                 ]
-                scores = [(aa, tt) for aa, tt in scores if aa >= 0.75 and tt >= 0.75]
-                if title == t:
-                    scores.append((1.0, 1.0))
-                if not scores:
-                    continue
-                artist_score, title_score = max(scores, key=lambda row: sum(row))
-                yield (
-                    (artist_score + title_score) / 2,
-                    artist_score,
-                    title_score,
-                    song,
+                # A no-separator vote can be the *whole title*, not an
+                # artist/title pair. Compare it to the verified title as well.
+                # Only accept small typos in longer multi-word titles: never
+                # discard extra words or guess from a short fuzzy title.
+                candidates = [
+                    ((aa + tt) / 2, aa, tt)
+                    for aa, tt in scores if aa >= 0.75 and tt >= 0.75
+                ]
+                title_similarity = SequenceMatcher(
+                    None, title, t, autojunk=False
+                ).ratio()
+                title_only = title == t or (
+                    min(len(title), len(t)) >= 10
+                    and len(title.split()) == len(t.split())
+                    and len(t.split()) >= 2
+                    and title_similarity >= 0.94
                 )
+                if title_only:
+                    # Artist score 0 denotes a title-only candidate; do not
+                    # misrepresent the absent artist as a perfect artist match.
+                    candidates.append((title_similarity, 0.0, title_similarity))
+                if not candidates:
+                    continue
+                score, artist_score, title_score = max(
+                    candidates, key=lambda row: row[0]
+                )
+                yield (score, artist_score, title_score, song)
                 continue
             artist_score = SequenceMatcher(None, artist, a, autojunk=False).ratio()
             if artist_score < 0.75:
@@ -93,6 +108,16 @@ def automatic_candidate(ranked, artist, title):
     # Non-exact matches require a substantial runner-up gap.
     if len(ranked) > 1 and score - ranked[1][0] < 0.08:
         return None
+    if normalise(artist) == "unknown artist" and a == 0.0:
+        # Complete title matches (even short titles) must be unique. A typo
+        # without an artist is only safe for a distinctive multi-word title,
+        # with a clear lead over the runner-up. AI must still approve the vote.
+        if t == 1.0:
+            return song
+        return song if (
+            t >= 0.94 and min(len(normalise(title)), len(normalise(song.title))) >= 10
+            and len(normalise(title).split()) >= 2
+        ) else None
     if normalise(artist) == normalise(song.artist) and normalise(title) == normalise(
         song.title
     ):

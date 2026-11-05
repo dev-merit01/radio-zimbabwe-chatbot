@@ -93,6 +93,135 @@ class FreeformCatalogueTests(TestCase):
             self.assertEqual(vote.ai_status, "review")
         self.assertFalse(CleanedSongTally.objects.exists())
 
+    def test_classic_263_misspelled_full_title_is_offered_to_ai(self):
+        song = CleanedSong.objects.create(
+            station="classic_263",
+            artist="Oriyano",
+            title="Jolai Nengirozi",
+            canonical_name="Oriyano - Jolai Nengirozi",
+            status="verified",
+        )
+        response = VotingService(
+            "whatsapp", "classic-listener", "classic_263"
+        ).handle_incoming_text("Jola Nengirozi")
+        self.assertIn("Submission received", response)
+        vote = RawVote.objects.get(station="classic_263")
+        with patch(
+            "apps.voting.ai.match_vote_with_llm",
+            return_value={
+                "matched": True, "matched_song_id": song.pk,
+                "confidence": "high", "reasoning": "One clear title typo",
+            },
+        ) as ai:
+            process_vote(vote)
+        self.assertIn(song.pk, [row["id"] for row in ai.call_args.args[2]])
+        vote.refresh_from_db()
+        self.assertEqual(vote.ai_status, "approved")
+        self.assertEqual(
+            MatchKeyMapping.objects.get(station="classic_263").cleaned_song, song
+        )
+        self.assertEqual(
+            CleanedSongTally.objects.get(cleaned_song=song).count, 1
+        )
+        self.assertFalse(
+            CleanedSong.objects.filter(station="classic_263", status="pending").exists()
+        )
+
+    def test_classic_263_pending_title_typo_is_retried_and_reconciled(self):
+        song = CleanedSong.objects.create(
+            station="classic_263",
+            artist="Oriyano",
+            title="Jolai Nengirozi",
+            canonical_name="Oriyano - Jolai Nengirozi",
+            status="verified",
+        )
+        VotingService(
+            "whatsapp", "classic-old-listener", "classic_263"
+        ).handle_incoming_text("Jola Nengirozi")
+        vote = RawVote.objects.get(station="classic_263")
+        with patch(
+            "apps.voting.ai.match_vote_with_llm",
+            return_value={"matched": False, "confidence": "none",
+                          "reasoning": "Old model decision"},
+        ):
+            process_vote(vote)
+        placeholder = MatchKeyMapping.objects.get(
+            station="classic_263"
+        ).cleaned_song
+        self.assertEqual(vote.ai_status, "awaiting")  # stale model instance
+        vote.refresh_from_db()
+        self.assertEqual(vote.ai_status, "review")
+        self.assertEqual(placeholder.status, "pending")
+        self.assertFalse(CleanedSongTally.objects.exists())
+        call_command("retry_catalogue_votes", stdout=StringIO())
+        vote.refresh_from_db()
+        self.assertEqual(vote.ai_status, "awaiting")
+        with patch(
+            "apps.voting.ai.match_vote_with_llm",
+            return_value={
+                "matched": True, "matched_song_id": song.pk,
+                "confidence": "high", "reasoning": "Distinctive verified title",
+            },
+        ):
+            process_vote(vote)
+        vote.refresh_from_db()
+        placeholder.refresh_from_db()
+        self.assertEqual(vote.ai_status, "approved")
+        self.assertEqual(placeholder.status, "rejected")
+        self.assertEqual(
+            MatchKeyMapping.objects.get(station="classic_263").cleaned_song, song
+        )
+        self.assertEqual(CleanedSongTally.objects.get(cleaned_song=song).count, 1)
+        self.assertEqual(RawVote.objects.filter(station="classic_263").count(), 1)
+
+    def test_close_competing_full_titles_require_human_review(self):
+        first = CleanedSong.objects.create(
+            station="classic_263", artist="Oriyano", title="Jolai Nengirozi",
+            canonical_name="Oriyano - Jolai Nengirozi", status="verified",
+        )
+        CleanedSong.objects.create(
+            station="classic_263", artist="Second Artist",
+            title="Jolai Nengirozi",
+            canonical_name="Second Artist - Jolai Nengirozi", status="verified",
+        )
+        VotingService("whatsapp", "ambiguous", "classic_263").handle_incoming_text(
+            "Jola Nengirozi"
+        )
+        vote = RawVote.objects.get(station="classic_263")
+        with patch(
+            "apps.voting.ai.match_vote_with_llm",
+            return_value={
+                "matched": True, "matched_song_id": first.pk,
+                "confidence": "high", "reasoning": "Guess",
+            },
+        ):
+            process_vote(vote)
+        vote.refresh_from_db()
+        self.assertEqual(vote.ai_status, "review")
+        self.assertFalse(CleanedSongTally.objects.exists())
+
+    def test_extra_words_are_not_accepted_as_a_title_typo(self):
+        song = CleanedSong.objects.create(
+            station="classic_263", artist="Oriyano", title="Jolai Nengirozi",
+            canonical_name="Oriyano - Jolai Nengirozi", status="verified",
+        )
+        VotingService("whatsapp", "extras", "classic_263").handle_incoming_text(
+            "Jola Nengirozi Bonus"
+        )
+        vote = RawVote.objects.get(station="classic_263")
+        with patch(
+            "apps.voting.ai.match_vote_with_llm",
+            return_value={
+                "matched": True, "matched_song_id": song.pk,
+                "confidence": "high", "reasoning": "Guess",
+            },
+        ) as ai:
+            process_vote(vote)
+        self.assertNotIn(song.pk, [row["id"] for row in ai.call_args.args[2]])
+        vote.refresh_from_db()
+        self.assertEqual(vote.ai_status, "review")
+        self.assertFalse(CleanedSongTally.objects.exists())
+
     def pending(self):
         vote = self.vote("jnr spraga daka")
         with patch(

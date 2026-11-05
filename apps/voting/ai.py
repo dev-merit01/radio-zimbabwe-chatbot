@@ -85,7 +85,10 @@ RULES:
    is "Unknown Artist", the title field contains the original unseparated text:
    it may be artist then song, song then artist, or a title-only vote. Resolve
    it against the candidates; "jnr spraga daka" can mean "Jnr Spragga - Daka".
-   A title-only vote is valid only when exactly one candidate has that title.
+   A title-only vote is valid only when exactly one candidate clearly matches
+   that full title, including a small typo in a distinctive multi-word title.
+   For example, "Jola Nengirozi" can refer to "Jolai Nengirozi" when the
+   shortlist has one clear verified title; do not invent an artist or song.
 2. You will receive a list of verified songs to match against
 3. Match ONLY if artist and song clearly identify one verified catalogue entry
 4. Handle common variations:
