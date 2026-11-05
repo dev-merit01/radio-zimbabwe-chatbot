@@ -28,6 +28,7 @@ _STATION_NAMES = {
     Station.CLASSIC_263: "Classic 263",
     Station.CENTRAL_RADIO: "Central Radio",
     Station.KHULUMANI_FM: "Khulumani FM",
+    Station.LUZIBO_RADIO: "Luzibo Radio",
 }
 
 
