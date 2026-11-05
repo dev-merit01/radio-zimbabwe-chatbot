@@ -12,7 +12,9 @@ from apps.voting.catalogue_matching import automatic_candidate, ranked_candidate
 from apps.voting.models import MatchKeyMapping, RawVote, ReviewAudit, VoteJob
 from apps.voting.pipeline import lock_station, unresolved_mapping
 
-BATCH = "freeform-catalogue-retry-2026-11-05"
+# New matching logic requires a fresh one-time recovery pass for previously
+# reviewed votes, including title typos submitted without an artist.
+BATCH = "title-only-typo-retry-2026-11-05"
 
 
 class Command(BaseCommand):
