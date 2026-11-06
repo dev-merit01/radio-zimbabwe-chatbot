@@ -87,7 +87,6 @@ class ChartShow(models.Model):
         """Always use the receipt time, never the eventual worker processing time."""
         if not self.is_enabled or self.is_archived or self.kind == "legacy":
             return False
-        from datetime import datetime, timedelta
         from zoneinfo import ZoneInfo
         from django.conf import settings
         from django.utils import timezone
