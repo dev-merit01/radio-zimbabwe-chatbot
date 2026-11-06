@@ -16,7 +16,7 @@
   const num = (v) => Number(v || 0).toLocaleString();
   let reader, toastTimer;
   let chartSize = 20, chartPeriod = "weekly";
-  let selectedShowId = null, showsCache = [];
+  let selectedShowId = null, showsCache = [], showPolicyEnabled = false;
   let page = "overview",
     pagination = 1,
     query = "",
@@ -115,6 +115,7 @@
       const showsData = await read("workspace/shows");
       if (current !== generation) return;
       showsCache = showsData.shows;
+      showPolicyEnabled = showsData.require_codes;
       if (!showsCache.some((show) => show.id === selectedShowId))
         selectedShowId = showsCache.find((show) => show.kind === "legacy")?.id;
       const selectedShow = showsCache.find((show) => show.id === selectedShowId);
@@ -428,6 +429,60 @@
   }
   const field = (label, name, value = "", type = "text") =>
     `<label class="field">${label}<input required maxlength="240" name="${name}" type="${type}" value="${esc(value)}"></label>`;
+  const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+  const showSelectField = (label, name, options, current) =>
+    '<label class="field">' + esc(label) + '<select name="' + name + '">' +
+    options.map((option) => '<option value="' + esc(option[0]) + '"' +
+      (String(option[0]) === String(current) ? " selected" : "") + '>' +
+      esc(option[1]) + '</option>').join("") +
+    '</select></label>';
+  function showFields(show = {}) {
+    const weekdays = days.map((day, index) => [index, day]);
+    const input = (label, name, value, type = "text", required = true) =>
+      '<label class="field">' + esc(label) + '<input name="' + name + '" type="' +
+      type + '" value="' + esc(value ?? "") + '"' +
+      (required ? " required" : "") + '></label>';
+    return input("Programme name", "name", show.name || "") +
+      input("Voting code (2–16 letters/numbers)", "code", show.code || "") +
+      showSelectField("Chart type", "kind",
+        [["weekly", "Regular weekly show"], ["year_end", "Separate end-of-year Top 50"]], show.kind || "weekly") +
+      showSelectField("Default chart size", "chart_size",
+        [[20, "Top 20"], [50, "Top 50"]], show.chart_size || 20) +
+      input("Daily votes allowed per listener", "daily_limit", show.daily_limit || 5, "number") +
+      showSelectField("Voting schedule", "schedule_mode",
+        [["weekly", "Repeating weekly"], ["manual", "Manually open and close"],
+         ["campaign", "Exact date range"]], show.schedule_mode || "weekly") +
+      showSelectField("Broadcast day", "broadcast_weekday", weekdays, show.broadcast_weekday ?? 5) +
+      '<h3>Weekly voting window (Zimbabwe time)</h3>' +
+      showSelectField("Opens on", "opens_weekday", weekdays, show.opens_weekday ?? 0) +
+      input("Opens at", "opens_time", show.opens_time || "08:00", "time") +
+      showSelectField("Closes on", "closes_weekday", weekdays, show.closes_weekday ?? 5) +
+      input("Closes at", "closes_time", show.closes_time || "18:00", "time") +
+      '<h3>Campaign dates (Zimbabwe time, if selected)</h3>' +
+      input("Campaign starts", "campaign_start",
+        (show.campaign_start || "").slice(0,16), "datetime-local", false) +
+      input("Campaign ends", "campaign_end",
+        (show.campaign_end || "").slice(0,16), "datetime-local", false) +
+      '<label class="field"><input type="checkbox" name="is_enabled" ' +
+      (show.is_enabled ? "checked " : "") + '> Enable this programme</label>' +
+      '<label class="field"><input type="checkbox" name="manual_open" ' +
+      (show.manual_open ? "checked " : "") + '> Accept votes in manual mode</label>' +
+      '<p class="hint">Schedule changes affect future incoming votes only. Previous votes and published charts retain their original programme IDs. Annual shows require Top 50 and an exact campaign window.</p>';
+  }
+  const showPayload = (fields, id = null) => ({
+    id,
+    name: fields.get("name"), code: fields.get("code"),
+    kind: fields.get("kind"), schedule_mode: fields.get("schedule_mode"),
+    chart_size: Number(fields.get("chart_size")),
+    daily_limit: Number(fields.get("daily_limit")),
+    broadcast_weekday: Number(fields.get("broadcast_weekday")),
+    opens_weekday: Number(fields.get("opens_weekday")),
+    closes_weekday: Number(fields.get("closes_weekday")),
+    opens_time: fields.get("opens_time"), closes_time: fields.get("closes_time"),
+    campaign_start: fields.get("campaign_start") || null,
+    campaign_end: fields.get("campaign_end") || null,
+    is_enabled: fields.has("is_enabled"), manual_open: fields.has("manual_open"),
+  });
   document.addEventListener("click", async (e) => {
     const nav = e.target.closest("[data-page]");
     if (nav) {
@@ -438,6 +493,59 @@
     if (!b) return;
     const action = b.dataset.action,
       id = b.dataset.id;
+    if (action === "show-select") {
+      selectedShowId = Number(id);
+      chartPeriod = "weekly";
+      navigate("overview");
+      return;
+    }
+    if (action === "show-new" || action === "show-edit" || action === "show-duplicate") {
+      const source = showsCache.find((item) => item.id === Number(id));
+      const edit = action === "show-edit";
+      const initial = action === "show-new" ? {} :
+        action === "show-duplicate"
+          ? {...source, name: "Copy of " + source.name, code: "", is_enabled: false,
+             manual_open: false}
+          : source;
+      if (edit && !source) return;
+      modal(edit ? "Edit chart show" :
+            action === "show-duplicate" ? "Duplicate chart show settings" : "Create chart show",
+            showFields(initial),
+            (fields) => api("workspace/shows/save",
+              showPayload(fields, edit ? Number(id) : null)));
+      return;
+    }
+    if (action === "show-archive") {
+      const show = showsCache.find((item) => item.id === Number(id));
+      if (!show) return;
+      modal("Archive " + show.name,
+        "<p>This will stop new voting for the programme and hide it from the active list. All votes and published chart archives remain permanently intact.</p>",
+        () => api("workspace/shows/archive", {id: Number(id)}));
+      return;
+    }
+    if (action === "show-policy") {
+      modal(showPolicyEnabled ? "Disable mandatory voting codes" : "Enable mandatory voting codes",
+        "<p>When codes are required, unrecognised messages will be held for review with no WhatsApp reply. Announce the voting codes before enabling this rule.</p>",
+        () => api("workspace/shows/routing", {require_codes: !showPolicyEnabled}));
+      return;
+    }
+    if (action === "show-assign") {
+      const item = (window.studioUnassigned || []).find((row) => row.id === Number(id));
+      if (!item) return;
+      const options = showsCache.filter((show) =>
+        show.kind !== "legacy" && !show.is_archived
+      ).map((show) => [show.id, show.name + " (" + show.code + ")"]);
+      if (!options.length) { toast("Create a chart show first."); return; }
+      modal("Assign unrecognised vote",
+        '<p class="hint">Review the exact song before assigning. Only shows open when this message was received can accept it.</p>' +
+        showSelectField("Chart show", "show_id", options, options[0][0]) +
+        field("Song vote (remove incorrect code)", "vote_text", item.text),
+        (fields) => api("workspace/unassigned/assign", {
+          id: Number(id), show_id: Number(fields.get("show_id")),
+          vote_text: fields.get("vote_text"),
+        }));
+      return;
+    }
     if (action === "next" || action === "previous") {
       pagination += action === "next" ? 1 : -1;
       render();
