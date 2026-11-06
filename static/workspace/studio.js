@@ -16,6 +16,7 @@
   const num = (v) => Number(v || 0).toLocaleString();
   let reader, toastTimer;
   let chartSize = 20, chartPeriod = "weekly";
+  let selectedShowId = null, showsCache = [];
   let page = "overview",
     pagination = 1,
     query = "",
@@ -25,6 +26,7 @@
     timer;
   const titles = {
     overview: "Voting overview",
+    shows: "Chart shows",
     administration: "Admin control",
     incoming: "Incoming votes",
     review: "Review queue",
@@ -110,12 +112,18 @@
     clearTimeout(timer);
     try {
       let html = "";
-      const overview = await read("workspace/overview");
+      const showsData = await read("workspace/shows");
+      if (current !== generation) return;
+      showsCache = showsData.shows;
+      if (!showsCache.some((show) => show.id === selectedShowId))
+        selectedShowId = showsCache.find((show) => show.kind === "legacy")?.id;
+      const selectedShow = showsCache.find((show) => show.id === selectedShowId);
+      const overview = await read("workspace/overview?show_id=" + selectedShowId);
       if (current !== generation) return;
       permissions = overview;
       $("nav-pending").textContent = num(overview.pending_songs);
       if (page === "overview") {
-        const data = await read(`chart/today?limit=${chartSize}&period=${chartPeriod}`);
+        const data = await read(`chart/today?limit=${chartSize}&period=${selectedShow?.kind === "year_end" ? "year_end" : chartPeriod}&show_id=${selectedShowId}`);
         html = `<div class="metrics">${[
           ["Received this week", overview.received],
           ["Verified votes", overview.verified_votes],
@@ -143,7 +151,7 @@
       } else if (["review", "catalogue", "incoming"].includes(page)) {
         const incoming = page === "incoming";
         const d = await read(
-          `workspace/${incoming ? "incoming" : "songs"}?status=${page === "review" ? "pending" : "all"}&page=${pagination}&q=${encodeURIComponent(query)}`,
+          `workspace/${incoming ? "incoming" : "songs"}?status=${page === "review" ? "pending" : "all"}&page=${pagination}&q=${encodeURIComponent(query)}${incoming ? "&show_id=" + selectedShowId : ""}`,
         );
         let rows = d.items.map((r) =>
           incoming
@@ -175,8 +183,8 @@
         }
       } else if (page === "archives") {
         const d = await read(
-          "chart/archives" +
-            (query ? "?year=" + encodeURIComponent(query) : ""),
+          "chart/archives?show_id=" + selectedShowId +
+            (query ? "&year=" + encodeURIComponent(query) : ""),
         );
         html = panel(
           "Chart archives",
@@ -247,6 +255,12 @@
       if (current !== generation) return;
       if (permissions.is_admin && ["activity", "connections"].includes(page)) {
         html = '<div class="workspace-tools"><button class="button secondary" data-page="administration">← Admin control</button></div>' + html;
+      }
+      if (["overview", "incoming", "archives"].includes(page)) {
+        html = '<div class="workspace-tools"><label>Chart show <select id="chart-show-select">' +
+          showsCache.filter((show) => !show.is_archived || show.id === selectedShowId)
+            .map((show) => '<option value="' + show.id + '"' + (show.id === selectedShowId ? ' selected' : '') + '>' + esc(show.name) + (show.is_archived ? " (archived)" : "") + '</option>').join("") +
+          '</select></label></div>' + html;
       }
       $("page-content").innerHTML = html;
       status(true);
@@ -328,7 +342,8 @@
       incoming: "Listener submissions in the order they reached your station.",
       review: "Check artist names and titles before approving chart entries.",
       catalogue: "Search, edit and manage your station’s music.",
-      archives: "Saturday and December charts, preserved as published.",
+      archives: "Immutable published charts for the selected programme.",
+      shows: "Programmes, voting codes, schedules and per-show settings.",
       administration: "Manage accounts and oversee voting across every station.",
       activity: "A record of catalogue changes and chart publications.",
       connections: "Provider setup, background workers and processing queues.",
