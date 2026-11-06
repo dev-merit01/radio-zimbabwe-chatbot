@@ -4,6 +4,7 @@ import re
 from django.utils import timezone
 
 from apps.voting.models import ChartShow, StationVotingConfig
+from apps.accounts.context_processors import get_active_station
 
 
 CODE_VOTE = re.compile(r"^([A-Za-z0-9]{2,16})(?:\s*[:|]\s*|\s+)(.+)$", re.S)
@@ -15,9 +16,7 @@ def legacy_show(station):
 
 def get_selected_show(request):
     """Only station-scoped shows may be read; never accept arbitrary station IDs."""
-    station = __import__(
-        "apps.accounts.context_processors", fromlist=["get_active_station"]
-    ).get_active_station(request)
+    station = get_active_station(request)
     raw = request.GET.get("show_id") or request.POST.get("show_id")
     if raw is None or raw == "":
         return legacy_show(station)
