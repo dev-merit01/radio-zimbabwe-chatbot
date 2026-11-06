@@ -16,6 +16,7 @@
   const num = (v) => Number(v || 0).toLocaleString();
   let reader, toastTimer;
   let chartSize = 20, chartPeriod = "weekly";
+  let selectedShowId = null, showsCache = [], showPolicyEnabled = false;
   let page = "overview",
     pagination = 1,
     query = "",
@@ -25,6 +26,7 @@
     timer;
   const titles = {
     overview: "Voting overview",
+    shows: "Chart shows",
     administration: "Admin control",
     incoming: "Incoming votes",
     review: "Review queue",
@@ -110,12 +112,19 @@
     clearTimeout(timer);
     try {
       let html = "";
-      const overview = await read("workspace/overview");
+      const showsData = await read("workspace/shows");
+      if (current !== generation) return;
+      showsCache = showsData.shows;
+      showPolicyEnabled = showsData.require_codes;
+      if (!showsCache.some((show) => show.id === selectedShowId))
+        selectedShowId = showsCache.find((show) => show.kind === "legacy")?.id;
+      const selectedShow = showsCache.find((show) => show.id === selectedShowId);
+      const overview = await read("workspace/overview?show_id=" + selectedShowId);
       if (current !== generation) return;
       permissions = overview;
       $("nav-pending").textContent = num(overview.pending_songs);
       if (page === "overview") {
-        const data = await read(`chart/today?limit=${chartSize}&period=${chartPeriod}`);
+        const data = await read(`chart/today?limit=${chartSize}&period=${selectedShow?.kind === "year_end" ? "year_end" : chartPeriod}&show_id=${selectedShowId}`);
         html = `<div class="metrics">${[
           ["Received this week", overview.received],
           ["Verified votes", overview.verified_votes],
@@ -132,7 +141,7 @@
           panel(
             chartPeriod === "year_end" ? "Year-to-date Top " + chartSize : "Live weekly Top " + chartSize,
             `<form id="chart-options" class="toolbar"><label>Period <select name="period"><option value="weekly" ${chartPeriod === "weekly" ? "selected" : ""}>Sunday–Saturday</option><option value="year_end" ${chartPeriod === "year_end" ? "selected" : ""}>Year to date</option></select></label><label>Chart size <select name="size"><option value="20" ${chartSize === 20 ? "selected" : ""}>Top 20</option><option value="50" ${chartSize === 50 ? "selected" : ""}>Top 50</option></select></label><button class="button secondary">Show chart</button></form><p class="hint">${esc(data.week_start)} to ${esc(data.week_end)} · Verified votes only</p>` + chart(data.top100),
-            `<a class="button secondary" href="/api/workspace/export?limit=${chartSize}&period=${chartPeriod}">Export CSV</a>`,
+            `<a class="button secondary" href="/api/workspace/export?limit=${chartSize}&period=${chartPeriod}&show_id=${selectedShowId}">Export CSV</a>`,
           ) +
           '</div><aside class="side-stack"><section class="panel activity-card"><h2>Votes this week</h2><p>Received votes by day, including songs awaiting review.</p><canvas id="timeline" width="520" height="250" aria-label="Daily vote counts" role="img"></canvas><p id="timeline-summary" class="sr-only"></p></section><section class="review-callout"><h3>' +
           num(overview.pending_songs) +
@@ -143,7 +152,7 @@
       } else if (["review", "catalogue", "incoming"].includes(page)) {
         const incoming = page === "incoming";
         const d = await read(
-          `workspace/${incoming ? "incoming" : "songs"}?status=${page === "review" ? "pending" : "all"}&page=${pagination}&q=${encodeURIComponent(query)}`,
+          `workspace/${incoming ? "incoming" : "songs"}?status=${page === "review" ? "pending" : "all"}&page=${pagination}&q=${encodeURIComponent(query)}${incoming ? "&show_id=" + selectedShowId : ""}`,
         );
         let rows = d.items.map((r) =>
           incoming
@@ -173,10 +182,52 @@
         if (incoming && d.submissions?.length) {
           html += `<section class="panel"><div class="panel-heading"><h2>Recent submissions</h2></div><div class="table-wrap"><table><thead><tr><th>Vote</th><th>Processing</th><th>Result</th></tr></thead><tbody>${d.submissions.map(s => `<tr><td>${esc(s.text)}</td><td>${esc(s.state)}</td><td>${esc(s.reply || "Waiting for the voting worker")}</td></tr>`).join("")}</tbody></table></div></section>`;
         }
+      } else if (page === "shows") {
+        window.studioShows = showsCache;
+        const cards = showsCache.map((show) =>
+          '<article class="panel settings-section">' +
+            '<div class="settings-row"><div><strong>' + esc(show.name) + '</strong>' +
+            '<p class="hint">' + (show.kind === "legacy" ? "Historical station votes" :
+              'Voting code: ' + esc(show.code) + ' · ' +
+              (show.kind === "year_end" ? "Annual Top 50" : "Top " + show.chart_size)) +
+              '</p></div><span class="access-badge ' + (show.accepting ? "" : "pending") + '">' +
+              (show.accepting ? "Accepting votes" : show.is_archived ? "Archived" :
+               show.kind === "legacy" ? "Historical" : show.is_enabled ? "Outside voting period" : "Disabled") +
+              '</span></div><div class="row-actions">' +
+              btn("View chart", "show-select", show.id) +
+              (showsData.is_admin && show.kind !== "legacy" && !show.is_archived
+                ? btn("Edit", "show-edit", show.id) +
+                  btn("Duplicate settings", "show-duplicate", show.id) +
+                  btn("Archive", "show-archive", show.id)
+                : "") + '</div></article>'
+        ).join("");
+        html = panel("Programmes for this station",
+          '<p class="hint">One WhatsApp number per station. Each chart show has its own code, voting period and independent ranking. The historical chart remains unchanged.</p>' +
+          cards,
+          showsData.is_admin ? btn("Create chart show", "show-new") : "");
+        if (showsData.is_admin) {
+          html += panel("Code-only voting",
+            '<p>When enabled, messages without a recognised active show code are held for review instead of going into the historical chart. Enable this only after you have announced the codes to listeners.</p>' +
+            '<div class="settings-row"><strong>Require programme codes</strong><span>' +
+            (showsData.require_codes ? "Enabled" : "Not enabled — legacy votes still accepted") +
+            '</span></div>', btn(showsData.require_codes ? "Disable code requirement" : "Enable code requirement", "show-policy"));
+          const waiting = await read("workspace/unassigned");
+          window.studioUnassigned = waiting.items;
+          html += panel("Unassigned incoming votes",
+            '<p class="hint">Wrong or missing programme codes never count toward a chart until reviewed.</p>' +
+            (waiting.items.length ? table(
+              ["Received", "Message", "Reason", "Action"],
+              waiting.items.map((item) =>
+                '<tr><td>' + esc(new Date(item.received_at).toLocaleString()) +
+                '</td><td>' + esc(item.text) + '</td><td>' + esc(item.reason) +
+                '</td><td>' + btn("Assign to show", "show-assign", item.id) + btn("Dismiss", "show-dismiss", item.id) + '</td></tr>'
+              )
+            ) : '<p class="hint">No unassigned votes.</p>'));
+        }
       } else if (page === "archives") {
         const d = await read(
-          "chart/archives" +
-            (query ? "?year=" + encodeURIComponent(query) : ""),
+          "chart/archives?show_id=" + selectedShowId +
+            (query ? "&year=" + encodeURIComponent(query) : ""),
         );
         html = panel(
           "Chart archives",
@@ -191,7 +242,7 @@
                 )
               : empty),
           permissions.can_publish
-            ? btn("Save Saturday chart", "publish") + btn("Save December Top 50", "publish-year")
+            ? btn(selectedShow?.kind === "year_end" ? "Publish year-end Top 50" : selectedShow?.kind === "legacy" ? "Save Saturday chart" : "Publish this chart", "publish") + (selectedShow?.kind === "legacy" ? btn("Save December Top 50", "publish-year") : "")
             : "",
         );
       } else if (page === "administration") {
@@ -208,7 +259,7 @@
         ${panel("Accounts & access", `<div class="admin-section-intro"><p>Approve access for the station shown. Account management includes station assignments, password resets and deactivation.</p></div>` + table(["Team member", "Assigned station", "Access", "Action"], d.accounts.map(u => `<tr><td><strong>${esc(u.name || u.username)}</strong><br><small>@${esc(u.username)}</small></td><td>${esc(u.station)}</td><td><span class="access-badge ${u.active ? "" : "pending"}">${u.active ? "Active" : "Awaiting activation"}</span></td><td>${u.active ? '<a class="account-link" href="/admin/auth/user/' + u.id + '/change/">Manage account →</a>' : btn("Approve access", "approve-account", u.id)}</td></tr>`)), '<a class="button secondary" href="/admin/auth/user/">Manage accounts</a>')}
         </div><aside class="admin-aside">
         <section class="admin-station-focus"><span class="studio-kicker">CURRENT WORKSPACE</span><h2>${esc(selected?.name)}</h2><p>These controls apply to this station.</p></section>
-        ${panel("Voting & publication", `<div class="admin-action-list"><button data-page="review"><strong>Review music <span>→</span></strong><small>Edit, verify, reject or merge songs.</small></button><button data-action="publish"><strong>Save Saturday chart <span>→</span></strong><small>Publish a permanent Top 20 or Top 50.</small></button><button data-action="publish-year"><strong>December Top 50 <span>→</span></strong><small>Save the year-end countdown.</small></button><button data-page="archives"><strong>Chart archives <span>→</span></strong><small>Revisit and export saved editions.</small></button></div>`)}
+        ${panel("Voting & publication", `<div class="admin-action-list"><button data-page="review"><strong>Review music <span>→</span></strong><small>Edit, verify, reject or merge songs.</small></button><button data-action="publish"><strong>Publish selected chart <span>→</span></strong><small>Publish a permanent Top 20 or Top 50.</small></button><button data-page="shows"><strong>Manage chart shows <span>→</span></strong><small>Choose the year-end chart show before publishing.</small></button><button data-page="archives"><strong>Chart archives <span>→</span></strong><small>Revisit and export saved editions.</small></button></div>`)}
         ${panel("Station operations", `<div class="admin-action-list"><button data-action="station-password"><strong>Station password <span>→</span></strong><small>Manage access when switching stations.</small></button><button data-page="connections"><strong>Connections & queues <span>→</span></strong><small>Check providers and retry failed jobs.</small></button><button data-page="activity"><strong>Activity history <span>→</span></strong><small>Review recorded administrative actions.</small></button></div>`)}
         </aside></div>`;
       } else if (page === "activity") {
@@ -247,6 +298,12 @@
       if (current !== generation) return;
       if (permissions.is_admin && ["activity", "connections"].includes(page)) {
         html = '<div class="workspace-tools"><button class="button secondary" data-page="administration">← Admin control</button></div>' + html;
+      }
+      if (["overview", "incoming", "archives"].includes(page)) {
+        html = '<div class="workspace-tools"><label>Chart show <select id="chart-show-select">' +
+          showsCache.filter((show) => !show.is_archived || show.id === selectedShowId)
+            .map((show) => '<option value="' + show.id + '"' + (show.id === selectedShowId ? ' selected' : '') + '>' + esc(show.name) + (show.is_archived ? " (archived)" : "") + '</option>').join("") +
+          '</select></label></div>' + html;
       }
       $("page-content").innerHTML = html;
       status(true);
@@ -328,7 +385,8 @@
       incoming: "Listener submissions in the order they reached your station.",
       review: "Check artist names and titles before approving chart entries.",
       catalogue: "Search, edit and manage your station’s music.",
-      archives: "Saturday and December charts, preserved as published.",
+      archives: "Immutable published charts for the selected programme.",
+      shows: "Programmes, voting codes, schedules and per-show settings.",
       administration: "Manage accounts and oversee voting across every station.",
       activity: "A record of catalogue changes and chart publications.",
       connections: "Provider setup, background workers and processing queues.",
@@ -371,6 +429,60 @@
   }
   const field = (label, name, value = "", type = "text") =>
     `<label class="field">${label}<input required maxlength="240" name="${name}" type="${type}" value="${esc(value)}"></label>`;
+  const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+  const showSelectField = (label, name, options, current) =>
+    '<label class="field">' + esc(label) + '<select name="' + name + '">' +
+    options.map((option) => '<option value="' + esc(option[0]) + '"' +
+      (String(option[0]) === String(current) ? " selected" : "") + '>' +
+      esc(option[1]) + '</option>').join("") +
+    '</select></label>';
+  function showFields(show = {}) {
+    const weekdays = days.map((day, index) => [index, day]);
+    const input = (label, name, value, type = "text", required = true) =>
+      '<label class="field">' + esc(label) + '<input name="' + name + '" type="' +
+      type + '" value="' + esc(value ?? "") + '"' +
+      (required ? " required" : "") + '></label>';
+    return input("Programme name", "name", show.name || "") +
+      input("Voting code (2–16 letters/numbers)", "code", show.code || "") +
+      showSelectField("Chart type", "kind",
+        [["weekly", "Regular weekly show"], ["year_end", "Separate end-of-year Top 50"]], show.kind || "weekly") +
+      showSelectField("Default chart size", "chart_size",
+        [[20, "Top 20"], [50, "Top 50"]], show.chart_size || 20) +
+      input("Daily votes allowed per listener", "daily_limit", show.daily_limit || 5, "number") +
+      showSelectField("Voting schedule", "schedule_mode",
+        [["weekly", "Repeating weekly"], ["manual", "Manually open and close"],
+         ["campaign", "Exact date range"]], show.schedule_mode || "weekly") +
+      showSelectField("Broadcast day", "broadcast_weekday", weekdays, show.broadcast_weekday ?? 5) +
+      '<h3>Weekly voting window (Zimbabwe time)</h3>' +
+      showSelectField("Opens on", "opens_weekday", weekdays, show.opens_weekday ?? 0) +
+      input("Opens at", "opens_time", show.opens_time || "08:00", "time") +
+      showSelectField("Closes on", "closes_weekday", weekdays, show.closes_weekday ?? 5) +
+      input("Closes at", "closes_time", show.closes_time || "18:00", "time") +
+      '<h3>Campaign dates (Zimbabwe time, if selected)</h3>' +
+      input("Campaign starts", "campaign_start",
+        (show.campaign_start || "").slice(0,16), "datetime-local", false) +
+      input("Campaign ends", "campaign_end",
+        (show.campaign_end || "").slice(0,16), "datetime-local", false) +
+      '<label class="field"><input type="checkbox" name="is_enabled" ' +
+      (show.is_enabled ? "checked " : "") + '> Enable this programme</label>' +
+      '<label class="field"><input type="checkbox" name="manual_open" ' +
+      (show.manual_open ? "checked " : "") + '> Accept votes in manual mode</label>' +
+      '<p class="hint">Schedule changes affect future incoming votes only. Previous votes and published charts retain their original programme IDs. Annual shows require Top 50 and an exact campaign window.</p>';
+  }
+  const showPayload = (fields, id = null) => ({
+    id,
+    name: fields.get("name"), code: fields.get("code"),
+    kind: fields.get("kind"), schedule_mode: fields.get("schedule_mode"),
+    chart_size: Number(fields.get("chart_size")),
+    daily_limit: Number(fields.get("daily_limit")),
+    broadcast_weekday: Number(fields.get("broadcast_weekday")),
+    opens_weekday: Number(fields.get("opens_weekday")),
+    closes_weekday: Number(fields.get("closes_weekday")),
+    opens_time: fields.get("opens_time"), closes_time: fields.get("closes_time"),
+    campaign_start: fields.get("campaign_start") || null,
+    campaign_end: fields.get("campaign_end") || null,
+    is_enabled: fields.has("is_enabled"), manual_open: fields.has("manual_open"),
+  });
   document.addEventListener("click", async (e) => {
     const nav = e.target.closest("[data-page]");
     if (nav) {
@@ -381,6 +493,67 @@
     if (!b) return;
     const action = b.dataset.action,
       id = b.dataset.id;
+    if (action === "show-select") {
+      selectedShowId = Number(id);
+      chartPeriod = "weekly";
+      navigate("overview");
+      return;
+    }
+    if (action === "show-new" || action === "show-edit" || action === "show-duplicate") {
+      const source = showsCache.find((item) => item.id === Number(id));
+      const edit = action === "show-edit";
+      const initial = action === "show-new" ? {} :
+        action === "show-duplicate"
+          ? {...source, name: "Copy of " + source.name, code: "", is_enabled: false,
+             manual_open: false}
+          : source;
+      if (edit && !source) return;
+      modal(edit ? "Edit chart show" :
+            action === "show-duplicate" ? "Duplicate chart show settings" : "Create chart show",
+            showFields(initial),
+            (fields) => api("workspace/shows/save",
+              showPayload(fields, edit ? Number(id) : null)));
+      return;
+    }
+    if (action === "show-archive") {
+      const show = showsCache.find((item) => item.id === Number(id));
+      if (!show) return;
+      modal("Archive " + show.name,
+        "<p>This will stop new voting for the programme and hide it from the active list. All votes and published chart archives remain permanently intact.</p>",
+        () => api("workspace/shows/archive", {id: Number(id)}));
+      return;
+    }
+    if (action === "show-policy") {
+      modal(showPolicyEnabled ? "Disable mandatory voting codes" : "Enable mandatory voting codes",
+        "<p>When codes are required, unrecognised messages will be held for review with no WhatsApp reply. Announce the voting codes before enabling this rule.</p>",
+        () => api("workspace/shows/routing", {require_codes: !showPolicyEnabled}));
+      return;
+    }
+    if (action === "show-dismiss") {
+      const item = (window.studioUnassigned || []).find((row) => row.id === Number(id));
+      if (!item) return;
+      modal("Dismiss unassigned vote",
+        "<p>This message will not count in any chart. The action will be recorded in the audit log.</p>",
+        () => api("workspace/unassigned/dismiss", {id: Number(id)}));
+      return;
+    }
+    if (action === "show-assign") {
+      const item = (window.studioUnassigned || []).find((row) => row.id === Number(id));
+      if (!item) return;
+      const options = showsCache.filter((show) =>
+        show.kind !== "legacy" && !show.is_archived
+      ).map((show) => [show.id, show.name + " (" + show.code + ")"]);
+      if (!options.length) { toast("Create a chart show first."); return; }
+      modal("Assign unrecognised vote",
+        '<p class="hint">Review the exact song before assigning. Only shows open when this message was received can accept it.</p>' +
+        showSelectField("Chart show", "show_id", options, options[0][0]) +
+        field("Song vote (remove incorrect code)", "vote_text", item.text),
+        (fields) => api("workspace/unassigned/assign", {
+          id: Number(id), show_id: Number(fields.get("show_id")),
+          vote_text: fields.get("vote_text"),
+        }));
+      return;
+    }
     if (action === "next" || action === "previous") {
       pagination += action === "next" ? 1 : -1;
       render();
@@ -412,13 +585,14 @@
       return;
     }
     if (action === "publish" || action === "publish-year") {
-      const annual = action === "publish-year";
+      const show = showsCache.find((item) => item.id === selectedShowId);
+      const annual = action === "publish-year" || show?.kind === "year_end";
       modal(
-        annual ? "Save December Top 50" : "Save Saturday chart",
-        field(annual ? "Publication date (December)" : "Chart date (Saturday)", "chart_date", "", "date") +
+        annual ? "Save December Top 50" : show?.kind === "legacy" ? "Save Saturday chart" : "Publish chart show",
+        field(annual ? "Publication date (December)" : "Chart broadcast date", "chart_date", "", "date") +
           (annual ? '<input type="hidden" name="size" value="50">' : '<label class="field">Chart size<select name="size"><option>20</option><option>50</option></select></label>') +
           `<p class="hint">${annual ? "Counts verified votes from January 1 through the chosen December date." : "Counts verified votes from Sunday through the chosen Saturday."} Saving today includes votes processed so far. Finish reviewing and processing votes first. This permanent snapshot cannot be overwritten; later votes and edits will not change it.</p>`,
-        (f) => api("workspace/publish", {...Object.fromEntries(f), kind: annual ? "year_end" : "weekly"}),
+        (f) => api("workspace/publish", {...Object.fromEntries(f), show_id: selectedShowId, kind: annual ? "year_end" : "weekly"}),
       );
       return;
     }
@@ -427,7 +601,7 @@
       modal("Record a listener vote",
         field("Listener reference", "listener") + field("Artist - Song", "text") +
         '<p class="hint">Use the same reference for the same listener. Daily limits and duplicate rules apply. This creates a real manual vote for the selected station. New songs need review before charting.</p>',
-        f => api("workspace/votes", {...Object.fromEntries(f), request_id: requestId}));
+        f => api("workspace/votes", {...Object.fromEntries(f), show_id: selectedShowId, request_id: requestId}));
       return;
     }
     if (action === "station-password") {
@@ -507,6 +681,14 @@
       `<p>${esc(song?.artist)} – ${esc(song?.title)}</p><p>This updates the current totals and creates an audit record.</p>`,
       () => api(`workspace/songs/${id}/review`, { action }),
     );
+  });
+  document.addEventListener("change", (e) => {
+    if (e.target.id === "chart-show-select") {
+      selectedShowId = Number(e.target.value);
+      chartPeriod = "weekly";
+      pagination = 1;
+      render();
+    }
   });
   document.addEventListener("submit", (e) => {
     if (e.target.id === "chart-options") {

@@ -304,9 +304,13 @@ class VotingService:
             raise ValueError("Unknown station")
         self.channel, self.user_ref, self.station = channel, user_ref, station
 
-    def handle_incoming_text(self, text: str, vote_date=None) -> str:
-        """Record a vote and durable processing job. No external I/O on this path."""
+    def handle_incoming_text(self, text: str, vote_date=None, chart_show=None, submitted_code="") -> str:
+        """Record a vote in exactly one chart show; AI matching remains station-shared."""
         from django.conf import settings
+        from apps.charts.routing import legacy_show
+        chart_show = chart_show or legacy_show(self.station)
+        if chart_show.station != self.station:
+            raise ValueError("Chart show does not belong to this station.")
         from django.db.models import F
         from .models import VoteJob, CleanedSong
 
@@ -337,7 +341,8 @@ class VotingService:
         match_key = create_match_key(artist, title)
         display_name = make_display_name(artist, title)
         today = vote_date or timezone.localdate()
-        limit = settings.VOTING_DAILY_LIMIT
+        limit = (settings.VOTING_DAILY_LIMIT
+                 if chart_show.kind == "legacy" else chart_show.daily_limit)
         # Lock the voter row before counting: different requests for one voter cannot
         # both use the final slot. Production requires PostgreSQL row locking.
         with transaction.atomic():
@@ -351,7 +356,8 @@ class VotingService:
             )
             user = User.objects.select_for_update().get(pk=user.pk)
             votes = RawVote.objects.filter(
-                user=user, station=self.station, vote_date=today
+                user=user, station=self.station, vote_date=today,
+                chart_show=chart_show,
             )
             if not settings.ALLOW_REPEAT_SONG:
                 if self._already_voted(votes, match_key, artist, title):
@@ -372,15 +378,18 @@ class VotingService:
                 match_key=match_key,
                 display_name=display_name,
                 vote_date=today,
+                chart_show=chart_show,
+                submitted_code=submitted_code,
                 ai_status="awaiting" if settings.AI_ALL_VOTES else "legacy",
             )
-            tally, _ = RawSongTally.objects.get_or_create(
-                station=self.station,
-                date=today,
-                match_key=match_key,
-                defaults={"display_name": display_name, "count": 0},
-            )
-            RawSongTally.objects.filter(pk=tally.pk).update(count=F("count") + 1)
+            # Legacy tallies are kept separate; show-specific results aggregate
+            # approved RawVote rows by chart_show and never pollute old charts.
+            if chart_show.kind == "legacy":
+                tally, _ = RawSongTally.objects.get_or_create(
+                    station=self.station, date=today, match_key=match_key,
+                    defaults={"display_name": display_name, "count": 0},
+                )
+                RawSongTally.objects.filter(pk=tally.pk).update(count=F("count") + 1)
             VoteJob.objects.create(vote=vote)
         remaining = limit - count - 1
         return f"✅ Submission received! Song verification is required before it counts on the chart.\n\n🎵 {display_name}\n\nYou have {remaining} vote{'s' if remaining != 1 else ''} remaining today."

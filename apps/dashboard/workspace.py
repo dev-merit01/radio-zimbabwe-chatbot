@@ -11,6 +11,8 @@ from django.http import JsonResponse, HttpResponse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 from apps.accounts.context_processors import get_active_station
+from apps.charts.routing import get_selected_show, station_show
+from apps.charts.show_rankings import counts_for_show
 from apps.voting.models import (
     RawVote,
     CleanedSong,
@@ -79,6 +81,42 @@ def overview(request):
     station = get_active_station(request)
     today = timezone.localdate()
     from apps.charts.periods import week_dates
+    show = get_selected_show(request)
+    if show.kind != "legacy":
+        if show.kind == "year_end":
+            start = show.campaign_start.date() if show.campaign_start else date(today.year, 1, 1)
+        else:
+            chart_day = today + timedelta(days=(show.broadcast_weekday - today.weekday()) % 7)
+            start = chart_day - timedelta(days=6)
+        votes = RawVote.objects.filter(
+            station=station, chart_show=show, vote_date__range=(start, today)
+        )
+        totals = counts_for_show(show, start, today)
+        daily = dict(
+            votes.values("vote_date").annotate(n=Count("id"))
+            .values_list("vote_date", "n")
+        )
+        return JsonResponse({
+            "is_admin": request.user.is_superuser,
+            "version": settings.APP_VERSION, "station": station,
+            "chart_show_id": show.pk, "chart_show": show.name,
+            "today": str(today),
+            "can_record_vote": request.user.has_perm("voting.add_rawvote"),
+            "can_review": request.user.is_superuser,
+            "can_add": request.user.is_superuser,
+            "can_publish": request.user.is_superuser,
+            "received": votes.count(), "verified_votes": sum(totals.values()),
+            "listeners": votes.values("user_id").distinct().count(),
+            "pending_songs": CleanedSong.objects.filter(
+                station=station, status="pending"
+            ).count(),
+            "timeline": [
+                {"date": str(today - timedelta(days=6-i)),
+                 "count": daily.get(today - timedelta(days=6-i), 0)}
+                for i in range(7)
+            ],
+            "updated_at": timezone.now().isoformat(),
+        })
     start, _ = week_dates(today)
     votes = RawVote.objects.filter(
         station=station, vote_date__gte=start, vote_date__lte=today
@@ -212,8 +250,9 @@ def add_song(request):
 @api_access()
 def incoming(request):
     station = get_active_station(request)
+    show = get_selected_show(request)
     qs = (
-        RawVote.objects.filter(station=station)
+        RawVote.objects.filter(station=station, chart_show=show)
         .select_related("user")
         .order_by("-created_at", "-id")
     )
@@ -224,7 +263,7 @@ def incoming(request):
     return JsonResponse(
         {
             **meta,
-            "submissions": list(InboundEvent.objects.filter(station=station, provider="manual")
+            "submissions": list(InboundEvent.objects.filter(station=station, chart_show=show, provider="manual")
                 .order_by("-received_at", "-id").values("id", "state", "reply", "text")[:10]),
             "items": [
                 {
@@ -363,12 +402,15 @@ def publish(request):
     from apps.charts.publishing import publish_edition
 
     data = json.loads(request.body)
+    station = get_active_station(request)
+    show = station_show(station, data.get("show_id"))
     chart, created = publish_edition(
-        get_active_station(request),
+        station,
         date.fromisoformat(data["chart_date"]),
         request.user,
         int(data.get("size", 20)),
         kind=data.get("kind", "weekly"),
+        chart_show=show,
     )
     return JsonResponse({"ok": True, "id": chart.id, "created": created})
 
@@ -453,11 +495,23 @@ def submit_vote(request):
     except ValueError as error:
         raise ValueError("Invalid submission identifier. Open the form again.") from error
     station = get_active_station(request)
+    show = station_show(station, data.get("show_id"))
+    from apps.voting.models import StationVotingConfig
+    if show.kind == "legacy" and StationVotingConfig.objects.filter(
+        station=station, require_codes=True
+    ).exists():
+        raise ValueError("Select an active chart show to record this vote.")
+    if show.kind != "legacy" and not show.accepts_at(timezone.now()):
+        raise ValueError("This chart show is not currently accepting votes.")
     with transaction.atomic():
         event, created = InboundEvent.objects.get_or_create(provider="manual", station=station,
             message_id=f"staff:{request.user.pk}:{request_id}",
-            defaults={"sender": listener.strip(), "text": text.strip()})
-        if not created and (event.sender != listener.strip() or event.text != text.strip()):
+            defaults={
+                "sender": listener.strip(), "text": text.strip(),
+                "vote_text": text.strip(), "chart_show": show,
+                "submitted_code": show.code,
+            })
+        if not created and (event.sender != listener.strip() or event.text != text.strip() or event.chart_show_id != show.pk):
             return JsonResponse({"error": "This submission was already used. Open a new form."}, status=409)
         if created:
             ReviewAudit.objects.create(station=station, actor=request.user,

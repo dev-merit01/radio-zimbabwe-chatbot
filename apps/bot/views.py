@@ -6,6 +6,7 @@ import hmac
 import json
 import time
 from django.conf import settings
+from django.utils import timezone
 from django.http import JsonResponse
 from django.core.exceptions import RequestDataTooBig
 from django.views.decorators.csrf import csrf_exempt
@@ -149,17 +150,46 @@ def receive(request, provider):
         if not text and not media:
             return JsonResponse({"ok": True, "ignored": True})
         from apps.voting.services import validate_submission
-        valid, reason = validate_submission(text)
-        if media or not valid:
-            # Acknowledge delivery so providers do not retry rejected content.
-            # No inbound/outbound row or raw vote is created for rubbish/media.
-            return JsonResponse({"ok": True, "ignored": True, "reason":
-                "Text votes only." if media else reason})
+        from apps.charts.routing import route_vote
+        from apps.voting.models import UnassignedVote
+        if media:
+            return JsonResponse({"ok": True, "ignored": True, "reason": "Text votes only."})
+        # Freeze the original routing decision on provider retries, even when
+        # an administrator has since changed a code or voting period.
+        if InboundEvent.objects.filter(
+            provider=provider, station=station, message_id=message_id
+        ).exists():
+            return JsonResponse({"ok": True, "duplicate": True})
+        if UnassignedVote.objects.filter(
+            provider=provider, station=station, message_id=message_id
+        ).exists():
+            return JsonResponse({"ok": True, "duplicate": True, "unassigned": True})
+        received_at = timezone.now()
+        chart_show, vote_text, submitted_code, route_error = route_vote(
+            station, text, received_at
+        )
+        if route_error:
+            UnassignedVote.objects.get_or_create(
+                provider=provider, station=station, message_id=message_id,
+                defaults={
+                    "sender": sender, "text": text, "reason": route_error,
+                    "received_at": received_at,
+                },
+            )
+            # Safe acknowledgement to Bird itself; never reply to the listener.
+            return JsonResponse({"ok": True, "unassigned": True}, status=202)
+        valid, reason = validate_submission(vote_text)
+        if not valid:
+            return JsonResponse({"ok": True, "ignored": True, "reason": reason})
         _, created = InboundEvent.objects.get_or_create(
             provider=provider,
             station=station,
             message_id=message_id,
-            defaults={"sender": sender, "text": text, "media_type": media or ""},
+            defaults={
+                "sender": sender, "text": text, "vote_text": vote_text,
+                "submitted_code": submitted_code, "chart_show": chart_show,
+                "received_at": received_at, "media_type": "",
+            },
         )
         return JsonResponse(
             {"ok": True, "duplicate": not created}, status=202 if created else 200

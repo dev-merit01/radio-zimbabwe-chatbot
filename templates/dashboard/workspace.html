@@ -20,6 +20,7 @@
 {% if can_switch_station %}<form id="station-switch-form" class="station-switch" method="post" action="{% url 'accounts:switch_station' %}" data-admin="{{ request.user.is_superuser|yesno:'true,false' }}" data-current="{{ active_station }}">{% csrf_token %}<label class="sr-only" for="station-select">Switch station</label><select id="station-select" name="station">{% for value,label in station_choices %}<option value="{{ value }}" {% if value == active_station %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></form>{% endif %}
 <div class="nav-label">WORKSPACE</div><nav aria-label="Main navigation">
 <button class="nav-item active" data-page="overview"><svg><use href="#i-grid"/></svg>Overview</button>
+<button class="nav-item" data-page="shows"><svg><use href="#i-music"/></svg>Chart shows</button>
 <button class="nav-item" data-page="incoming"><svg><use href="#i-wave"/></svg>Incoming votes</button>
 <button class="nav-item" data-page="review"><svg><use href="#i-check"/></svg>Review queue<span id="nav-pending" class="nav-count">0</span></button>
 <button class="nav-item" data-page="catalogue"><svg><use href="#i-music"/></svg>Song catalogue</button>

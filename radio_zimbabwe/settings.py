@@ -216,6 +216,8 @@ TELEGRAM_STATION = env.str("TELEGRAM_STATION", default="radio_zimbabwe")
 BIRD_STATION = env.str("BIRD_STATION", default="radio_zimbabwe")
 # Route signed Bird WhatsApp messages by receiving phone number when configured.
 BIRD_NUMBER_STATION_MAP = env.json("BIRD_NUMBER_STATION_MAP", default={})
+# When enabled on both Railway services, no Bird WhatsApp replies are sent.
+BIRD_SILENT_VOTING = env.bool("BIRD_SILENT_VOTING", default=False)
 ONEMSG_STATION = env.str("ONEMSG_STATION", default="radio_zimbabwe")
 TELEGRAM_WEBHOOK_SECRET = env.str("TELEGRAM_WEBHOOK_SECRET", default="")
 BIRD_WEBHOOK_SECRET = env.str("BIRD_WEBHOOK_SECRET", default="")
