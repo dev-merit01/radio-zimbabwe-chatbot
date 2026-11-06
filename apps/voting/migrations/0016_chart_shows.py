@@ -97,7 +97,7 @@ class Migration(migrations.Migration):
                 ("station", models.CharField(max_length=32, choices=[
                     ("radio_zimbabwe", "Radio Zimbabwe"), ("national_fm", "National FM"),
                     ("power_fm", "Power FM"), ("classic_263", "Classic 263"),
-                    ("central_radio", "Central Radio"), ("khulumanifm", "Khulumani FM"),
+                    ("central_radio", "Central Radio"), ("khulumani_fm", "Khulumani FM"),
                     ("luzibo_radio", "Luzibo Radio"),
                 ])),
                 ("provider", models.CharField(max_length=16)),
