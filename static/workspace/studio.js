@@ -140,7 +140,7 @@
           panel(
             chartPeriod === "year_end" ? "Year-to-date Top " + chartSize : "Live weekly Top " + chartSize,
             `<form id="chart-options" class="toolbar"><label>Period <select name="period"><option value="weekly" ${chartPeriod === "weekly" ? "selected" : ""}>Sunday–Saturday</option><option value="year_end" ${chartPeriod === "year_end" ? "selected" : ""}>Year to date</option></select></label><label>Chart size <select name="size"><option value="20" ${chartSize === 20 ? "selected" : ""}>Top 20</option><option value="50" ${chartSize === 50 ? "selected" : ""}>Top 50</option></select></label><button class="button secondary">Show chart</button></form><p class="hint">${esc(data.week_start)} to ${esc(data.week_end)} · Verified votes only</p>` + chart(data.top100),
-            `<a class="button secondary" href="/api/workspace/export?limit=${chartSize}&period=${chartPeriod}">Export CSV</a>`,
+            `<a class="button secondary" href="/api/workspace/export?limit=${chartSize}&period=${chartPeriod}&show_id=${selectedShowId}">Export CSV</a>`,
           ) +
           '</div><aside class="side-stack"><section class="panel activity-card"><h2>Votes this week</h2><p>Received votes by day, including songs awaiting review.</p><canvas id="timeline" width="520" height="250" aria-label="Daily vote counts" role="img"></canvas><p id="timeline-summary" class="sr-only"></p></section><section class="review-callout"><h3>' +
           num(overview.pending_songs) +
@@ -199,7 +199,7 @@
                 )
               : empty),
           permissions.can_publish
-            ? btn("Save Saturday chart", "publish") + btn("Save December Top 50", "publish-year")
+            ? btn(selectedShow?.kind === "year_end" ? "Publish year-end Top 50" : "Publish this chart", "publish") + (selectedShow?.kind === "legacy" ? btn("Save December Top 50", "publish-year") : "")
             : "",
         );
       } else if (page === "administration") {
@@ -427,13 +427,14 @@
       return;
     }
     if (action === "publish" || action === "publish-year") {
-      const annual = action === "publish-year";
+      const show = showsCache.find((item) => item.id === selectedShowId);
+      const annual = action === "publish-year" || show?.kind === "year_end";
       modal(
-        annual ? "Save December Top 50" : "Save Saturday chart",
-        field(annual ? "Publication date (December)" : "Chart date (Saturday)", "chart_date", "", "date") +
+        annual ? "Save December Top 50" : "Publish chart show",
+        field(annual ? "Publication date (December)" : "Chart broadcast date", "chart_date", "", "date") +
           (annual ? '<input type="hidden" name="size" value="50">' : '<label class="field">Chart size<select name="size"><option>20</option><option>50</option></select></label>') +
           `<p class="hint">${annual ? "Counts verified votes from January 1 through the chosen December date." : "Counts verified votes from Sunday through the chosen Saturday."} Saving today includes votes processed so far. Finish reviewing and processing votes first. This permanent snapshot cannot be overwritten; later votes and edits will not change it.</p>`,
-        (f) => api("workspace/publish", {...Object.fromEntries(f), kind: annual ? "year_end" : "weekly"}),
+        (f) => api("workspace/publish", {...Object.fromEntries(f), show_id: selectedShowId, kind: annual ? "year_end" : "weekly"}),
       );
       return;
     }
@@ -442,7 +443,7 @@
       modal("Record a listener vote",
         field("Listener reference", "listener") + field("Artist - Song", "text") +
         '<p class="hint">Use the same reference for the same listener. Daily limits and duplicate rules apply. This creates a real manual vote for the selected station. New songs need review before charting.</p>',
-        f => api("workspace/votes", {...Object.fromEntries(f), request_id: requestId}));
+        f => api("workspace/votes", {...Object.fromEntries(f), show_id: selectedShowId, request_id: requestId}));
       return;
     }
     if (action === "station-password") {
