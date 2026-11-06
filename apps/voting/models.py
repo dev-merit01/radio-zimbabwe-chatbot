@@ -31,6 +31,122 @@ def make_display_name(artist: str, song: str) -> str:
     return f"{music_name(artist)} - {music_name(song)}"
 
 
+class ChartShow(models.Model):
+    """A permanent programme identity, independent from its editable display name/code."""
+
+    KIND_CHOICES = [
+        ("legacy", "Legacy station chart"),
+        ("weekly", "Regular chart show"),
+        ("year_end", "End-of-year campaign"),
+    ]
+    MODE_CHOICES = [
+        ("weekly", "Weekly schedule"),
+        ("manual", "Manual"),
+        ("campaign", "Date range"),
+    ]
+    station = models.CharField(max_length=32, choices=Station.choices, db_index=True)
+    name = models.CharField(max_length=120)
+    code = models.CharField(max_length=16, blank=True)
+    kind = models.CharField(max_length=16, choices=KIND_CHOICES, default="weekly")
+    schedule_mode = models.CharField(max_length=16, choices=MODE_CHOICES, default="weekly")
+    is_enabled = models.BooleanField(default=False)
+    manual_open = models.BooleanField(default=False)
+    broadcast_weekday = models.PositiveSmallIntegerField(default=5)
+    opens_weekday = models.PositiveSmallIntegerField(default=0)
+    closes_weekday = models.PositiveSmallIntegerField(default=5)
+    opens_time = models.TimeField(default="08:00")
+    closes_time = models.TimeField(default="18:00")
+    campaign_start = models.DateTimeField(null=True, blank=True)
+    campaign_end = models.DateTimeField(null=True, blank=True)
+    chart_size = models.PositiveSmallIntegerField(default=20)
+    daily_limit = models.PositiveSmallIntegerField(default=5)
+    is_archived = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["station", "code"],
+                condition=~models.Q(code=""),
+                name="unique_station_show_code",
+            ),
+            models.UniqueConstraint(
+                fields=["station"],
+                condition=models.Q(kind="legacy"),
+                name="unique_legacy_show_per_station",
+            ),
+        ]
+        ordering = ["station", "kind", "name", "id"]
+        indexes = [models.Index(fields=["station", "is_enabled"])]
+
+    def __str__(self):
+        return f"{self.get_station_display()}: {self.name}"
+
+    def accepts_at(self, instant):
+        """Always use the receipt time, never the eventual worker processing time."""
+        if not self.is_enabled or self.is_archived or self.kind == "legacy":
+            return False
+        from datetime import datetime, timedelta
+        from zoneinfo import ZoneInfo
+        from django.conf import settings
+        from django.utils import timezone
+
+        when = timezone.localtime(instant, ZoneInfo(settings.TIME_ZONE))
+        if self.schedule_mode == "manual":
+            return self.manual_open
+        if self.schedule_mode == "campaign":
+            return bool(
+                self.campaign_start and self.campaign_end
+                and self.campaign_start <= instant < self.campaign_end
+            )
+        if self.schedule_mode != "weekly":
+            return False
+        # Compare within a repeating seven-day interval, including a window
+        # spanning midnight/week boundaries (e.g. Friday to next Monday).
+        start_minutes = self.opens_weekday * 1440 + self.opens_time.hour * 60 + self.opens_time.minute
+        end_minutes = self.closes_weekday * 1440 + self.closes_time.hour * 60 + self.closes_time.minute
+        if end_minutes <= start_minutes:
+            end_minutes += 7 * 1440
+        current_minutes = when.weekday() * 1440 + when.hour * 60 + when.minute
+        return (start_minutes <= current_minutes < end_minutes
+                or start_minutes <= current_minutes + 7 * 1440 < end_minutes)
+
+
+class StationVotingConfig(models.Model):
+    station = models.CharField(max_length=32, choices=Station.choices, unique=True)
+    # Until explicitly activated, old code-free votes continue to the legacy chart.
+    require_codes = models.BooleanField(default=False)
+    updated_at = models.DateTimeField(auto_now=True)
+
+
+class UnassignedVote(models.Model):
+    """Authentic inbound messages that cannot safely be assigned to a show."""
+
+    station = models.CharField(max_length=32, choices=Station.choices)
+    provider = models.CharField(max_length=16)
+    message_id = models.CharField(max_length=200)
+    sender = models.CharField(max_length=64)
+    text = models.CharField(max_length=2048)
+    reason = models.CharField(max_length=40)
+    state = models.CharField(max_length=16, default="pending")
+    received_at = models.DateTimeField()
+    resolved_show = models.ForeignKey(
+        ChartShow, null=True, blank=True, on_delete=models.PROTECT,
+        related_name="resolved_unassigned_votes",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["provider", "station", "message_id"],
+                name="unique_unassigned_message",
+            )
+        ]
+        indexes = [models.Index(fields=["station", "state", "-received_at"])]
+
+
 class User(models.Model):
     CHANNEL_CHOICES = (
         ("telegram", "Telegram"),
@@ -61,6 +177,11 @@ class RawVote(models.Model):
         default=Station.RADIO_ZIMBABWE,
         db_index=True,
     )
+    chart_show = models.ForeignKey(
+        ChartShow, on_delete=models.PROTECT, null=True, blank=True,
+        related_name="raw_votes", db_index=True,
+    )
+    submitted_code = models.CharField(max_length=16, blank=True)
     raw_input = models.CharField(max_length=512)  # exactly what user typed
     artist_raw = models.CharField(max_length=256)  # artist part before normalization
     song_raw = models.CharField(max_length=256)  # song part before normalization
@@ -629,6 +750,10 @@ class WeeklyChart(models.Model):
         db_index=True,
     )
 
+    chart_show = models.ForeignKey(
+        ChartShow, null=True, blank=True, on_delete=models.PROTECT,
+        related_name="published_charts",
+    )
     chart_date = models.DateField(null=True, blank=True, help_text="Saturday broadcast or December year-end publication date; blank for legacy archives")
 
     # Week identification
@@ -660,7 +785,7 @@ class WeeklyChart(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
-        unique_together = ("station", "year", "week_number", "is_year_end")
+        unique_together = ("chart_show", "year", "week_number", "is_year_end")
         ordering = ["-year", "-week_number"]
         verbose_name = "Weekly Chart"
         verbose_name_plural = "Weekly Charts"
@@ -754,6 +879,12 @@ class InboundEvent(WorkItem):
     provider = models.CharField(max_length=16)
     station = models.CharField(max_length=32, choices=Station.choices)
     message_id = models.CharField(max_length=200)
+    chart_show = models.ForeignKey(
+        ChartShow, null=True, blank=True, on_delete=models.PROTECT,
+        related_name="inbound_events",
+    )
+    vote_text = models.CharField(max_length=2048, blank=True)
+    submitted_code = models.CharField(max_length=16, blank=True)
     sender = models.CharField(max_length=64)
     text = models.CharField(max_length=2048, blank=True)
     media_type = models.CharField(max_length=32, blank=True)
