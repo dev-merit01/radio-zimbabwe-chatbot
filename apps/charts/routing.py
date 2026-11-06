@@ -11,7 +11,11 @@ CODE_VOTE = re.compile(r"^([A-Za-z0-9]{2,16})(?:\s*[:|]\s*|\s+)(.+)$", re.S)
 
 
 def legacy_show(station):
-    return ChartShow.objects.get(station=station, kind="legacy")
+    show, _ = ChartShow.objects.get_or_create(
+        station=station, kind="legacy",
+        defaults={"name": "Historical station chart", "code": "", "is_enabled": False},
+    )
+    return show
 
 
 def get_selected_show(request):
