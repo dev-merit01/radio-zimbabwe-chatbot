@@ -2,7 +2,7 @@
 from datetime import date, timedelta
 
 from django.db import transaction
-from django.db.models import Min, Sum
+from django.db.models import Min, Sum, Q
 from django.utils import timezone
 
 from apps.charts.routing import legacy_show
@@ -92,14 +92,20 @@ def _publish(station, start, end, actor, size, chart_date=None, year_end=False, 
                 "An unfinished archive exists for this show and period. Review it first."
             )
         unfinished = ["queued", "running", "failed"]
+        event_scope = Q(chart_show=show)
+        job_scope = Q(vote__chart_show=show)
+        if show.kind == "legacy":
+            # Historical or manually created events may predate the show FK.
+            event_scope |= Q(chart_show__isnull=True)
+            job_scope |= Q(vote__chart_show__isnull=True)
         if (
             InboundEvent.objects.filter(
-                station=station, chart_show=show,
+                event_scope, station=station,
                 received_at__date__range=(start, end),
                 state__in=unfinished,
             ).exists()
             or VoteJob.objects.filter(
-                vote__station=station, vote__chart_show=show,
+                job_scope, vote__station=station,
                 vote__vote_date__range=(start, end),
                 state__in=unfinished,
             ).exists()
