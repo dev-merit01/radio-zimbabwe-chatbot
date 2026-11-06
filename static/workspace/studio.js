@@ -492,35 +492,77 @@
   function showFields(show = {}) {
     const weekdays = days.map((day, index) => [index, day]);
     const input = (label, name, value, type = "text", required = true) =>
-      '<label class="field">' + esc(label) + '<input name="' + name + '" type="' +
-      type + '" value="' + esc(value ?? "") + '"' +
+      '<label class="field">' + esc(label) +
+      '<input name="' + name + '" type="' + type + '" value="' + esc(value ?? "") + '"' +
+      (name === "code" ? ' maxlength="16"' : name === "name" ? ' maxlength="120"' : "") +
+      (type === "number" ? ' min="1" max="100"' : "") +
       (required ? " required" : "") + '></label>';
-    return input("Programme name", "name", show.name || "") +
-      input("Voting code (2–16 letters/numbers)", "code", show.code || "") +
-      showSelectField("Chart type", "kind",
-        [["weekly", "Regular weekly show"], ["year_end", "Separate end-of-year Top 50"]], show.kind || "weekly") +
-      showSelectField("Default chart size", "chart_size",
-        [[20, "Top 20"], [50, "Top 50"]], show.chart_size || 20) +
-      input("Daily votes allowed per listener", "daily_limit", show.daily_limit || 5, "number") +
-      showSelectField("Voting schedule", "schedule_mode",
-        [["weekly", "Repeating weekly"], ["manual", "Manually open and close"],
-         ["campaign", "Exact date range"]], show.schedule_mode || "weekly") +
-      showSelectField("Broadcast day", "broadcast_weekday", weekdays, show.broadcast_weekday ?? 5) +
-      '<h3>Weekly voting window (Zimbabwe time)</h3>' +
-      showSelectField("Opens on", "opens_weekday", weekdays, show.opens_weekday ?? 0) +
-      input("Opens at", "opens_time", show.opens_time || "08:00", "time") +
-      showSelectField("Closes on", "closes_weekday", weekdays, show.closes_weekday ?? 5) +
-      input("Closes at", "closes_time", show.closes_time || "18:00", "time") +
-      '<h3>Campaign dates (Zimbabwe time, if selected)</h3>' +
-      input("Campaign starts", "campaign_start",
-        (show.campaign_start || "").slice(0,16), "datetime-local", false) +
-      input("Campaign ends", "campaign_end",
-        (show.campaign_end || "").slice(0,16), "datetime-local", false) +
-      '<label class="field"><input type="checkbox" name="is_enabled" ' +
-      (show.is_enabled ? "checked " : "") + '> Enable this programme</label>' +
-      '<label class="field"><input type="checkbox" name="manual_open" ' +
-      (show.manual_open ? "checked " : "") + '> Accept votes in manual mode</label>' +
-      '<p class="hint">Schedule changes affect future incoming votes only. Previous votes and published charts retain their original programme IDs. Annual shows require Top 50 and an exact campaign window.</p>';
+    return '<div class="show-form">' +
+      '<p class="show-form-help">Programme codes must be unique within this station. Changes to a show do not move existing votes or rewrite saved charts.</p>' +
+      '<fieldset class="show-form-section"><legend>Programme details</legend>' +
+        '<div class="show-form-grid">' +
+        input("Programme name", "name", show.name || "") +
+        input("Voting code", "code", show.code || "") +
+        showSelectField("Chart type", "kind",
+          [["weekly", "Regular weekly show"], ["year_end", "End-of-year Top 50"]], show.kind || "weekly") +
+        showSelectField("Chart size", "chart_size",
+          [[20, "Top 20"], [50, "Top 50"]], show.chart_size || 20) +
+        input("Daily vote limit per listener", "daily_limit", show.daily_limit ?? 5, "number") +
+        showSelectField("Voting schedule", "schedule_mode",
+          [["weekly", "Repeating weekly"], ["manual", "Manual open / close"],
+           ["campaign", "Fixed date range"]], show.schedule_mode || "weekly") +
+        '</div>' +
+      '</fieldset>' +
+      '<fieldset class="show-form-section" data-show-mode="weekly">' +
+        '<legend>Weekly voting hours</legend>' +
+        '<p class="show-form-caption">Times use Zimbabwe local time.</p>' +
+        '<div class="show-form-grid">' +
+        showSelectField("Broadcast day", "broadcast_weekday", weekdays, show.broadcast_weekday ?? 5) +
+        showSelectField("Opens on", "opens_weekday", weekdays, show.opens_weekday ?? 0) +
+        input("Opening time", "opens_time", show.opens_time || "08:00", "time") +
+        showSelectField("Closes on", "closes_weekday", weekdays, show.closes_weekday ?? 5) +
+        input("Closing time", "closes_time", show.closes_time || "18:00", "time") +
+        '</div>' +
+      '</fieldset>' +
+      '<fieldset class="show-form-section" data-show-mode="campaign">' +
+        '<legend>Campaign voting dates</legend>' +
+        '<p class="show-form-caption">Select the exact opening and closing dates, using Zimbabwe local time.</p>' +
+        '<div class="show-form-grid">' +
+        input("Campaign starts", "campaign_start",
+          (show.campaign_start || "").slice(0, 16), "datetime-local", false) +
+        input("Campaign ends", "campaign_end",
+          (show.campaign_end || "").slice(0, 16), "datetime-local", false) +
+        '</div>' +
+      '</fieldset>' +
+      '<fieldset class="show-form-section" data-show-mode="manual">' +
+        '<legend>Manual voting</legend>' +
+        '<label class="show-form-check"><input type="checkbox" name="manual_open" ' +
+        (show.manual_open ? "checked" : "") + '> Allow votes while this programme is manually open</label>' +
+      '</fieldset>' +
+      '<fieldset class="show-form-section show-form-activation">' +
+        '<legend>Programme availability</legend>' +
+        '<label class="show-form-check"><input type="checkbox" name="is_enabled" ' +
+        (show.is_enabled ? "checked" : "") + '> Enable this programme to receive votes</label>' +
+      '</fieldset>' +
+      '</div>';
+  }
+  function syncShowFormVisibility() {
+    const form = document.querySelector("#modal-content .show-form");
+    if (!form) return;
+    const kind = form.querySelector('[name="kind"]');
+    const size = form.querySelector('[name="chart_size"]');
+    const mode = form.querySelector('[name="schedule_mode"]');
+    if (kind.value === "year_end") {
+      size.value = "50";
+      mode.value = "campaign";
+    }
+    size.querySelector('option[value="20"]').disabled = kind.value === "year_end";
+    for (const option of mode.options) {
+      option.disabled = kind.value === "year_end" && option.value !== "campaign";
+    }
+    form.querySelectorAll("[data-show-mode]").forEach((section) => {
+      section.hidden = section.dataset.showMode !== mode.value;
+    });
   }
   const showPayload = (fields, id = null) => ({
     id,
@@ -566,6 +608,7 @@
             showFields(initial),
             (fields) => api("workspace/shows/save",
               showPayload(fields, edit ? Number(id) : null)));
+      syncShowFormVisibility();
       return;
     }
     if (action === "show-archive") {
@@ -736,6 +779,10 @@
     );
   });
   document.addEventListener("change", (e) => {
+    if (e.target.closest("#modal-content .show-form") &&
+        ["kind", "schedule_mode"].includes(e.target.name)) {
+      syncShowFormVisibility();
+    }
     if (e.target.id === "chart-show-select") {
       selectedShowId = Number(e.target.value);
       chartPeriod = "weekly";
