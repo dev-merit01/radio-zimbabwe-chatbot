@@ -11,6 +11,7 @@ urlpatterns = [
     path("workspace/shows/routing", show_management.set_routing_policy),
     path("workspace/unassigned", show_management.unassigned_list),
     path("workspace/unassigned/assign", show_management.assign_unassigned),
+    path("workspace/unassigned/dismiss", show_management.dismiss_unassigned),
     path("workspace/administration", workspace.administration),
     path("workspace/accounts/<int:user_id>/approve", workspace.approve_account),
     path("workspace/station-password", workspace.station_password),
