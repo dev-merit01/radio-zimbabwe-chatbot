@@ -242,7 +242,7 @@
                 )
               : empty),
           permissions.can_publish
-            ? btn(selectedShow?.kind === "year_end" ? "Publish year-end Top 50" : "Publish this chart", "publish") + (selectedShow?.kind === "legacy" ? btn("Save December Top 50", "publish-year") : "")
+            ? btn(selectedShow?.kind === "year_end" ? "Publish year-end Top 50" : selectedShow?.kind === "legacy" ? "Save Saturday chart" : "Publish this chart", "publish") + (selectedShow?.kind === "legacy" ? btn("Save December Top 50", "publish-year") : "")
             : "",
         );
       } else if (page === "administration") {
@@ -588,7 +588,7 @@
       const show = showsCache.find((item) => item.id === selectedShowId);
       const annual = action === "publish-year" || show?.kind === "year_end";
       modal(
-        annual ? "Save December Top 50" : "Publish chart show",
+        annual ? "Save December Top 50" : show?.kind === "legacy" ? "Save Saturday chart" : "Publish chart show",
         field(annual ? "Publication date (December)" : "Chart broadcast date", "chart_date", "", "date") +
           (annual ? '<input type="hidden" name="size" value="50">' : '<label class="field">Chart size<select name="size"><option>20</option><option>50</option></select></label>') +
           `<p class="hint">${annual ? "Counts verified votes from January 1 through the chosen December date." : "Counts verified votes from Sunday through the chosen Saturday."} Saving today includes votes processed so far. Finish reviewing and processing votes first. This permanent snapshot cannot be overwritten; later votes and edits will not change it.</p>`,
