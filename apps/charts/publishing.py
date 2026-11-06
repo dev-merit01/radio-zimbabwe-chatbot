@@ -8,7 +8,7 @@ from django.utils import timezone
 from apps.charts.routing import legacy_show
 from apps.charts.show_rankings import counts_for_show, ranked_songs
 from apps.voting.models import (
-    ChartShow, CleanedSong, InboundEvent, ReviewAudit, VoteJob,
+    CleanedSong, InboundEvent, ReviewAudit, VoteJob,
     WeeklyChart, WeeklyChartEntry,
 )
 from apps.voting.pipeline import lock_station, rebuild_tallies
