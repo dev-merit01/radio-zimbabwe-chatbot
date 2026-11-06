@@ -38,6 +38,7 @@ class MultiChartShowTests(TestCase):
             username="chart-admin", password="Only-For-Testing-637!"
         )
         self.client.force_login(self.admin)
+        self.client.post("/accounts/switch-station/", {"station": "national_fm"})
         self.saturday = ChartShow.objects.create(
             station="national_fm", name="Saturday Top 20", code="SAT",
             kind="weekly", schedule_mode="manual", manual_open=True,
