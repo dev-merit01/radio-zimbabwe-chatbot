@@ -184,46 +184,99 @@
         }
       } else if (page === "shows") {
         window.studioShows = showsCache;
-        const cards = showsCache.map((show) =>
-          '<article class="panel settings-section">' +
-            '<div class="settings-row"><div><strong>' + esc(show.name) + '</strong>' +
-            '<p class="hint">' + (show.kind === "legacy" ? "Historical station votes" :
-              'Voting code: ' + esc(show.code) + ' · ' +
-              (show.kind === "year_end" ? "Annual Top 50" : "Top " + show.chart_size)) +
-              '</p></div><span class="access-badge ' + (show.accepting ? "" : "pending") + '">' +
-              (show.accepting ? "Accepting votes" : show.is_archived ? "Archived" :
-               show.kind === "legacy" ? "Historical" : show.is_enabled ? "Outside voting period" : "Disabled") +
-              '</span></div><div class="row-actions">' +
-              btn("View chart", "show-select", show.id) +
-              (showsData.is_admin && show.kind !== "legacy" && !show.is_archived
-                ? btn("Edit", "show-edit", show.id) +
-                  btn("Duplicate settings", "show-duplicate", show.id) +
+        const programmeShows = showsCache.filter((show) => show.kind !== "legacy");
+        const liveCount = programmeShows.filter((show) => show.accepting).length;
+        const cardMarkup = showsCache.map((show) => {
+          const historical = show.kind === "legacy";
+          const archived = show.is_archived;
+          const status = show.accepting ? "Accepting votes"
+            : archived ? "Archived"
+            : historical ? "Historical"
+            : show.is_enabled ? "Outside voting hours" : "Disabled";
+          const statusStyle = show.accepting ? "live"
+            : historical ? "historical" : archived ? "archived"
+            : show.is_enabled ? "scheduled" : "disabled";
+          const typeLabel = historical ? "STATION ARCHIVE"
+            : show.kind === "year_end" ? "ANNUAL COUNTDOWN" : "WEEKLY PROGRAMME";
+          const code = historical ? '<span class="show-code legacy-code">No code required</span>'
+            : '<span class="show-code">' + esc(show.code) + '</span>';
+          const detail = historical ? "Existing station-wide votes and saved charts"
+            : show.kind === "year_end" ? "Separate Top 50 campaign"
+            : "Top " + show.chart_size + " · " + esc(days[show.broadcast_weekday] || "Saturday") + " broadcast";
+          return '<article class="show-card' + (archived ? " is-archived" : "") + '">' +
+            '<div class="show-card-top">' +
+              '<span class="show-type">' + typeLabel + '</span>' +
+              '<span class="show-status show-status--' + statusStyle + '">' + status + '</span>' +
+            '</div>' +
+            '<h3 class="show-card-title">' + esc(show.name) + '</h3>' +
+            '<p class="show-card-description">' + detail + '</p>' +
+            '<div class="show-code-block"><span class="show-code-label">VOTING CODE</span>' +
+              code + '</div>' +
+            '<div class="show-card-actions">' +
+              btn("View results", "show-select", show.id) +
+              (showsData.is_admin && !historical && !archived
+                ? btn("Edit settings", "show-edit", show.id) +
+                  btn("Duplicate", "show-duplicate", show.id) +
                   btn("Archive", "show-archive", show.id)
-                : "") + '</div></article>'
-        ).join("");
-        html = panel("Programmes for this station",
-          '<p class="hint">One WhatsApp number per station. Each chart show has its own code, voting period and independent ranking. The historical chart remains unchanged.</p>' +
-          cards,
-          showsData.is_admin ? btn("Create chart show", "show-new") : "");
+                : "") +
+            '</div>' +
+          '</article>';
+        }).join("");
+        html = '<div class="show-page">' +
+          '<div class="show-summary" aria-label="Programme overview">' +
+            '<div class="show-summary-item"><span>Chart shows</span><strong>' +
+              num(programmeShows.length) + '</strong></div>' +
+            '<div class="show-summary-item"><span>Accepting votes now</span><strong>' +
+              num(liveCount) + '</strong></div>' +
+            '<div class="show-summary-item"><span>Voting codes</span><strong>' +
+              (showsData.require_codes ? "Required" : "Optional") + '</strong></div>' +
+          '</div>' +
+          '<section class="panel show-directory" aria-labelledby="show-directory-title">' +
+            '<div class="show-directory-head">' +
+              '<div><h2 id="show-directory-title">Programmes for this station</h2>' +
+                '<p>Manage each programme independently. Previous station votes remain preserved.</p></div>' +
+              (showsData.is_admin ? btn("+ Create chart show", "show-new") : "") +
+            '</div>' +
+            '<div class="show-grid">' + cardMarkup + '</div>' +
+          '</section>';
         if (showsData.is_admin) {
-          html += panel("Code-only voting",
-            '<p>When enabled, messages without a recognised active show code are held for review instead of going into the historical chart. Enable this only after you have announced the codes to listeners.</p>' +
-            '<div class="settings-row"><strong>Require programme codes</strong><span>' +
-            (showsData.require_codes ? "Enabled" : "Not enabled — legacy votes still accepted") +
-            '</span></div>', btn(showsData.require_codes ? "Disable code requirement" : "Enable code requirement", "show-policy"));
           const waiting = await read("workspace/unassigned");
+          if (current !== generation) return;
           window.studioUnassigned = waiting.items;
-          html += panel("Unassigned incoming votes",
-            '<p class="hint">Wrong or missing programme codes never count toward a chart until reviewed.</p>' +
-            (waiting.items.length ? table(
-              ["Received", "Message", "Reason", "Action"],
-              waiting.items.map((item) =>
-                '<tr><td>' + esc(new Date(item.received_at).toLocaleString()) +
-                '</td><td>' + esc(item.text) + '</td><td>' + esc(item.reason) +
-                '</td><td>' + btn("Assign to show", "show-assign", item.id) + btn("Dismiss", "show-dismiss", item.id) + '</td></tr>'
-              )
-            ) : '<p class="hint">No unassigned votes.</p>'));
+          html += '<div class="show-settings-grid">' +
+            '<section class="panel show-settings-panel" aria-labelledby="show-code-policy-title">' +
+              '<div class="show-settings-head"><h2 id="show-code-policy-title">Voting code settings</h2>' +
+                '<span class="show-status show-status--' + (showsData.require_codes ? "live" : "scheduled") + '">' +
+                (showsData.require_codes ? "Codes required" : "Compatibility mode") +
+                '</span></div>' +
+              '<p>' + (showsData.require_codes
+                ? "Listeners must include an active programme code. Unknown codes go to the review queue."
+                : "Votes without a code still go to the historical chart. Enable mandatory codes after announcing them to listeners.") +
+              '</p>' +
+              btn(showsData.require_codes ? "Make codes optional" : "Require programme codes", "show-policy") +
+            '</section>' +
+            '<section class="panel show-settings-panel" aria-labelledby="show-unassigned-title">' +
+              '<div class="show-settings-head"><h2 id="show-unassigned-title">Unassigned votes</h2>' +
+                '<span class="show-queue-count">' + num(waiting.items.length) + ' awaiting review</span></div>' +
+              '<p>Messages with missing, unknown or closed-show codes are never added to a chart automatically.</p>' +
+              (waiting.items.length
+                ? '<div class="show-queue-table">' + table(
+                    ["Received", "Vote text", "Reason", "Actions"],
+                    waiting.items.map((item) =>
+                      '<tr><td>' + esc(new Date(item.received_at).toLocaleString()) +
+                      '</td><td class="show-queue-text">' + esc(item.text) +
+                      '</td><td>' + esc(item.reason.replaceAll("_", " ")) +
+                      '</td><td><div class="show-queue-actions">' +
+                      btn("Assign", "show-assign", item.id) +
+                      btn("Dismiss", "show-dismiss", item.id) +
+                      '</div></td></tr>'
+                    )
+                  ) + '</div>'
+                : '<p class="show-queue-empty">No unassigned votes at this station.</p>') +
+            '</section>' +
+          '</div>';
         }
+        html += '</div>';
       } else if (page === "archives") {
         const d = await read(
           "chart/archives?show_id=" + selectedShowId +
