@@ -154,6 +154,16 @@ def receive(request, provider):
         from apps.voting.models import UnassignedVote
         if media:
             return JsonResponse({"ok": True, "ignored": True, "reason": "Text votes only."})
+        # Freeze the original routing decision on provider retries, even when
+        # an administrator has since changed a code or voting period.
+        if InboundEvent.objects.filter(
+            provider=provider, station=station, message_id=message_id
+        ).exists():
+            return JsonResponse({"ok": True, "duplicate": True})
+        if UnassignedVote.objects.filter(
+            provider=provider, station=station, message_id=message_id
+        ).exists():
+            return JsonResponse({"ok": True, "duplicate": True, "unassigned": True})
         received_at = timezone.now()
         chart_show, vote_text, submitted_code, route_error = route_vote(
             station, text, received_at
