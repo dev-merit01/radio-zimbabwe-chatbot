@@ -4,7 +4,7 @@ import hashlib
 import hmac
 import json
 import time
-from datetime import date, timedelta
+from datetime import timedelta
 
 from django.contrib.auth import get_user_model
 from django.test import Client, TestCase, override_settings
@@ -15,7 +15,7 @@ from apps.charts.publishing import publish_edition
 from apps.charts.routing import route_vote
 from apps.charts.show_rankings import counts_for_show
 from apps.voting.models import (
-    ChartShow, CleanedSong, InboundEvent, MatchKeyMapping, OutboundMessage,
+    ChartShow, CleanedSong, InboundEvent, OutboundMessage,
     RawSongTally, RawVote, StationVotingConfig, UnassignedVote, VoteJob,
 )
 from apps.voting.pipeline import review_song
@@ -199,7 +199,7 @@ class MultiChartShowTests(TestCase):
     def test_edit_show_code_retains_old_vote_and_archive(self):
         self.assertEqual(self.bird("SAT River Artist - Morning Song", "before").status_code, 202)
         self.consume()
-        song = self.verify_song()
+        self.verify_song()
         today = timezone.localdate()
         # Archiving an existing completed edition must never be overwritten.
         chart_date = today - timedelta(days=(today.weekday() - 5) % 7)
