@@ -68,13 +68,18 @@ def ingest(item):
                     event.sender,
                     event.station,
                 )
+                from apps.charts.routing import legacy_show
+                show = event.chart_show or legacy_show(event.station)
                 event.reply = service.handle_incoming_text(
-                    event.text, vote_date=timezone.localdate(event.received_at)
+                    event.vote_text or event.text,
+                    vote_date=timezone.localdate(event.received_at),
+                    chart_show=show, submitted_code=event.submitted_code,
                 )
             event.save(update_fields=["reply"])
-        if event.provider != "manual" and (
-            event.provider != "bird" or bird_replies_configured()
-        ):
+        from django.conf import settings
+        if event.provider != "manual" and not (
+            event.provider == "bird" and settings.BIRD_SILENT_VOTING
+        ) and (event.provider != "bird" or bird_replies_configured()):
             OutboundMessage.objects.get_or_create(
                 event=event, defaults={"text": event.reply}
             )
@@ -82,6 +87,11 @@ def ingest(item):
 
 
 def send(item):
+    from django.conf import settings
+    # Existing queued Bird replies must also be suppressed on silent deployment.
+    if item.event.provider == "bird" and settings.BIRD_SILENT_VOTING:
+        finish(item, state="done")
+        return
     from apps.bot.telegram_client import get_client as telegram
     from apps.bot.bird_client import get_client as bird
     from apps.bot.whatsapp_client import get_client as onemsg
