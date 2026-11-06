@@ -28,6 +28,34 @@ def preserve_legacy_data(apps, schema_editor):
                 "chart_size": 20,
             },
         )
+        # Ready-to-edit examples for each station, deliberately disabled until
+        # its codes and voting windows are announced and approved.
+        ChartShow.objects.get_or_create(
+            station=station, code="SAT20",
+            defaults={
+                "name": "Saturday Top 20", "kind": "weekly",
+                "schedule_mode": "weekly", "chart_size": 20,
+                "broadcast_weekday": 5, "opens_weekday": 6, "closes_weekday": 5,
+                "is_enabled": False,
+            },
+        )
+        ChartShow.objects.get_or_create(
+            station=station, code="GOS20",
+            defaults={
+                "name": "Sunday Gospel Top 20", "kind": "weekly",
+                "schedule_mode": "weekly", "chart_size": 20,
+                "broadcast_weekday": 6, "opens_weekday": 0, "closes_weekday": 6,
+                "is_enabled": False,
+            },
+        )
+        ChartShow.objects.get_or_create(
+            station=station, code="EOY",
+            defaults={
+                "name": "End-of-Year Top 50", "kind": "year_end",
+                "schedule_mode": "campaign", "chart_size": 50,
+                "is_enabled": False,
+            },
+        )
         Config.objects.get_or_create(station=station, defaults={"require_codes": False})
         RawVote.objects.filter(station=station, chart_show__isnull=True).update(chart_show=legacy)
         InboundEvent.objects.filter(station=station, chart_show__isnull=True).update(chart_show=legacy)
