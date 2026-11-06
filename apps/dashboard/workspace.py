@@ -263,7 +263,7 @@ def incoming(request):
     return JsonResponse(
         {
             **meta,
-            "submissions": list(InboundEvent.objects.filter(station=station, provider="manual")
+            "submissions": list(InboundEvent.objects.filter(station=station, chart_show=show, provider="manual")
                 .order_by("-received_at", "-id").values("id", "state", "reply", "text")[:10]),
             "items": [
                 {
@@ -511,7 +511,7 @@ def submit_vote(request):
                 "vote_text": text.strip(), "chart_show": show,
                 "submitted_code": show.code,
             })
-        if not created and (event.sender != listener.strip() or event.text != text.strip()):
+        if not created and (event.sender != listener.strip() or event.text != text.strip() or event.chart_show_id != show.pk):
             return JsonResponse({"error": "This submission was already used. Open a new form."}, status=409)
         if created:
             ReviewAudit.objects.create(station=station, actor=request.user,
