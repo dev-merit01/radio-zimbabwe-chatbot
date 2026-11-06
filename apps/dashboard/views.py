@@ -7,6 +7,8 @@ from django.contrib.auth.decorators import login_required
 from datetime import timedelta, date
 from apps.voting.models import CleanedSongTally, CleanedSong, WeeklyChart
 from apps.accounts.context_processors import get_active_station
+from apps.charts.routing import get_selected_show
+from apps.charts.show_rankings import counts_for_show, ranked_songs
 
 
 def get_current_week_dates():
@@ -19,12 +21,66 @@ def get_week_dates_for_date(target_date):
     return week_dates(target_date)
 
 
+def chart_today_for_show(show, limit):
+    """Live Top 20/50 from this show only, with previous programme-specific ranks."""
+    today = timezone.localdate()
+    if show.kind == "year_end":
+        start = show.campaign_start.date() if show.campaign_start else date(today.year, 1, 1)
+        end = today
+        kind = "year_end"
+    else:
+        end = today + timedelta(days=(show.broadcast_weekday - today.weekday()) % 7)
+        start = end - timedelta(days=6)
+        kind = "weekly"
+    previous = (
+        WeeklyChart.objects.filter(
+            station=show.station, chart_show=show,
+            week_start=start - timedelta(days=7),
+            is_finalized=True, is_year_end=False,
+        ).first() if kind == "weekly" else None
+    )
+    previous_ranks = (
+        {row.cleaned_song_id: row.rank for row in previous.entries.all()}
+        if previous else {}
+    )
+    ranked = ranked_songs(show, start, end, limit)
+    data = []
+    for rank, (song, count) in enumerate(ranked, 1):
+        old = previous_ranks.get(song.pk)
+        difference = old - rank if old else None
+        movement = ("new" if difference is None else
+                    "=" if difference == 0 else
+                    f"+{difference}" if difference > 0 else str(difference))
+        data.append({
+            "rank": rank, "title": music_name(song.title),
+            "artists": music_name(song.artist),
+            "display_name": f"{music_name(song.artist)} - {music_name(song.title)}",
+            "album": song.album or "", "image_url": song.image_url or "",
+            "spotify_track_id": song.spotify_track_id or "",
+            "count": count, "previous_rank": old,
+            "movement": movement, "is_verified": True,
+        })
+    totals = counts_for_show(show, start, end)
+    return JsonResponse({
+        "date": str(today), "week_start": str(start), "week_end": str(end),
+        "week_number": end.isocalendar()[1], "year": end.year,
+        "updated_at": timezone.now().isoformat(),
+        "total_songs": len(data), "total_votes": sum(totals.values()),
+        "chart_type": kind, "chart_show": show.name, "chart_show_id": show.pk,
+        "limit": limit, "top100": data,
+    })
+
+
 @login_required
 def chart_today(request):
     """API endpoint returning the current week's chart (expandable to 50)."""
     today = timezone.localdate()
     week_start, week_end = get_current_week_dates()
     station = get_active_station(request)
+    try:
+        show = get_selected_show(request)
+    except ValueError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
     period = request.GET.get("period", "weekly")
     if period not in {"weekly", "year_end"}:
         return JsonResponse({"error": "Invalid chart period"}, status=400)
@@ -36,6 +92,9 @@ def chart_today(request):
         limit = max(1, min(int(request.GET.get("limit", 20)), 100))
     except ValueError:
         return JsonResponse({"error": "Invalid limit"}, status=400)
+
+    if show.kind != "legacy":
+        return chart_today_for_show(show, limit)
 
     # Get previous week's chart for movement calculation
     prev_week_start = week_start - timedelta(days=7)
@@ -141,8 +200,12 @@ def chart_archives(request):
         return JsonResponse({"error": "Invalid year"}, status=400)
     station = get_active_station(request)
 
+    try:
+        show = get_selected_show(request)
+    except ValueError as exc:
+        return JsonResponse({"error": str(exc)}, status=400)
     charts = WeeklyChart.objects.filter(
-        station=station, year=year, is_finalized=True
+        station=station, chart_show=show, year=year, is_finalized=True
     ).order_by("-week_end", "-is_year_end")
 
     data = []
@@ -157,6 +220,8 @@ def chart_archives(request):
                 "is_year_end": chart.is_year_end,
                 "chart_date": str(chart.chart_date) if chart.chart_date else None,
                 "chart_size": chart.chart_size,
+                "chart_show_id": chart.chart_show_id,
+                "chart_show": chart.chart_show.name if chart.chart_show else "",
                 "total_votes": chart.total_votes,
                 "unique_songs": chart.unique_songs,
                 "finalized_at": chart.finalized_at.isoformat()
@@ -167,7 +232,7 @@ def chart_archives(request):
 
     # Get available years (station-scoped)
     available_years = (
-        WeeklyChart.objects.filter(station=station, is_finalized=True)
+        WeeklyChart.objects.filter(station=station, chart_show=show, is_finalized=True)
         .values_list("year", flat=True)
         .distinct()
         .order_by("-year")
