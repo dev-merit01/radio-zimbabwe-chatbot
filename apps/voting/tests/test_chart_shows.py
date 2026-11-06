@@ -4,7 +4,7 @@ import hashlib
 import hmac
 import json
 import time
-from datetime import timedelta
+from datetime import date, timedelta
 
 from django.contrib.auth import get_user_model
 from django.test import Client, TestCase, override_settings
@@ -249,3 +249,61 @@ class MultiChartShowTests(TestCase):
             "Other Artist - Different Song", chart_show=self.saturday
         ))
         self.assertEqual(RawVote.objects.count(), 2)
+
+    def test_retried_bad_code_remains_unassigned_after_admin_changes_policy(self):
+        self.assertEqual(
+            self.bird("BADCODE River Artist - Morning Song", "immutable").status_code, 202
+        )
+        self.assertEqual(UnassignedVote.objects.count(), 1)
+        StationVotingConfig.objects.filter(station="national_fm").update(
+            require_codes=False
+        )
+        self.assertEqual(
+            self.bird("BADCODE River Artist - Morning Song", "immutable").status_code, 200
+        )
+        self.assertEqual(UnassignedVote.objects.count(), 1)
+        self.assertFalse(InboundEvent.objects.exists())
+
+    def test_worker_uses_receipt_time_show_even_when_show_is_later_paused(self):
+        self.assertEqual(
+            self.bird("SAT River Artist - Morning Song", "before-pause").status_code, 202
+        )
+        self.saturday.is_enabled = False
+        self.saturday.save(update_fields=["is_enabled"])
+        self.consume()
+        vote = RawVote.objects.get()
+        self.assertEqual(vote.chart_show_id, self.saturday.pk)
+        self.assertEqual(vote.submitted_code, "SAT")
+        self.assertEqual(OutboundMessage.objects.count(), 0)
+
+    def test_annual_campaign_only_counts_annual_votes(self):
+        from datetime import datetime
+        from unittest.mock import patch
+
+        self.assertEqual(
+            self.bird("SAT River Artist - Morning Song", "weekly-vote").status_code, 202
+        )
+        self.consume()
+        self.verify_song()
+        annual = ChartShow.objects.get(
+            station="national_fm", code="EOY"
+        )
+        annual.campaign_start = timezone.make_aware(datetime(2026, 12, 1, 0, 0))
+        annual.campaign_end = timezone.make_aware(datetime(2027, 1, 1, 0, 0))
+        annual.save()
+        # Programme-specific year-end votes, recorded on a December day.
+        VotingService("whatsapp", "annual-listener", "national_fm").handle_incoming_text(
+            "River Artist - Morning Song", vote_date=date(2026, 12, 20),
+            chart_show=annual, submitted_code="EOY",
+        )
+        self.assertTrue(run_one(VoteJob))
+        with patch("apps.charts.publishing.timezone.localdate", return_value=date(2026, 12, 31)):
+            chart, created = publish_edition(
+                "national_fm", date(2026, 12, 31), self.admin,
+                50, kind="year_end", chart_show=annual,
+            )
+        self.assertTrue(created)
+        self.assertEqual(chart.total_votes, 1)
+        self.assertEqual(chart.entries.first().vote_count, 1)
+        self.assertEqual(chart.chart_show_id, annual.pk)
+        self.assertEqual(chart.chart_size, 50)
