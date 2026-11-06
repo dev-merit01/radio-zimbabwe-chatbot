@@ -184,46 +184,99 @@
         }
       } else if (page === "shows") {
         window.studioShows = showsCache;
-        const cards = showsCache.map((show) =>
-          '<article class="panel settings-section">' +
-            '<div class="settings-row"><div><strong>' + esc(show.name) + '</strong>' +
-            '<p class="hint">' + (show.kind === "legacy" ? "Historical station votes" :
-              'Voting code: ' + esc(show.code) + ' · ' +
-              (show.kind === "year_end" ? "Annual Top 50" : "Top " + show.chart_size)) +
-              '</p></div><span class="access-badge ' + (show.accepting ? "" : "pending") + '">' +
-              (show.accepting ? "Accepting votes" : show.is_archived ? "Archived" :
-               show.kind === "legacy" ? "Historical" : show.is_enabled ? "Outside voting period" : "Disabled") +
-              '</span></div><div class="row-actions">' +
-              btn("View chart", "show-select", show.id) +
-              (showsData.is_admin && show.kind !== "legacy" && !show.is_archived
-                ? btn("Edit", "show-edit", show.id) +
-                  btn("Duplicate settings", "show-duplicate", show.id) +
+        const programmeShows = showsCache.filter((show) => show.kind !== "legacy");
+        const liveCount = programmeShows.filter((show) => show.accepting).length;
+        const cardMarkup = showsCache.map((show) => {
+          const historical = show.kind === "legacy";
+          const archived = show.is_archived;
+          const status = show.accepting ? "Accepting votes"
+            : archived ? "Archived"
+            : historical ? "Historical"
+            : show.is_enabled ? "Outside voting hours" : "Disabled";
+          const statusStyle = show.accepting ? "live"
+            : historical ? "historical" : archived ? "archived"
+            : show.is_enabled ? "scheduled" : "disabled";
+          const typeLabel = historical ? "STATION ARCHIVE"
+            : show.kind === "year_end" ? "ANNUAL COUNTDOWN" : "WEEKLY PROGRAMME";
+          const code = historical ? '<span class="show-code legacy-code">No code required</span>'
+            : '<span class="show-code">' + esc(show.code) + '</span>';
+          const detail = historical ? "Existing station-wide votes and saved charts"
+            : show.kind === "year_end" ? "Separate Top 50 campaign"
+            : "Top " + show.chart_size + " · " + esc(days[show.broadcast_weekday] || "Saturday") + " broadcast";
+          return '<article class="show-card' + (archived ? " is-archived" : "") + '">' +
+            '<div class="show-card-top">' +
+              '<span class="show-type">' + typeLabel + '</span>' +
+              '<span class="show-status show-status--' + statusStyle + '">' + status + '</span>' +
+            '</div>' +
+            '<h3 class="show-card-title">' + esc(show.name) + '</h3>' +
+            '<p class="show-card-description">' + detail + '</p>' +
+            '<div class="show-code-block"><span class="show-code-label">VOTING CODE</span>' +
+              code + '</div>' +
+            '<div class="show-card-actions">' +
+              btn("View results", "show-select", show.id) +
+              (showsData.is_admin && !historical && !archived
+                ? btn("Edit settings", "show-edit", show.id) +
+                  btn("Duplicate", "show-duplicate", show.id) +
                   btn("Archive", "show-archive", show.id)
-                : "") + '</div></article>'
-        ).join("");
-        html = panel("Programmes for this station",
-          '<p class="hint">One WhatsApp number per station. Each chart show has its own code, voting period and independent ranking. The historical chart remains unchanged.</p>' +
-          cards,
-          showsData.is_admin ? btn("Create chart show", "show-new") : "");
+                : "") +
+            '</div>' +
+          '</article>';
+        }).join("");
+        html = '<div class="show-page">' +
+          '<div class="show-summary" aria-label="Programme overview">' +
+            '<div class="show-summary-item"><span>Chart shows</span><strong>' +
+              num(programmeShows.length) + '</strong></div>' +
+            '<div class="show-summary-item"><span>Accepting votes now</span><strong>' +
+              num(liveCount) + '</strong></div>' +
+            '<div class="show-summary-item"><span>Voting codes</span><strong>' +
+              (showsData.require_codes ? "Required" : "Optional") + '</strong></div>' +
+          '</div>' +
+          '<section class="panel show-directory" aria-labelledby="show-directory-title">' +
+            '<div class="show-directory-head">' +
+              '<div><h2 id="show-directory-title">Programmes for this station</h2>' +
+                '<p>Manage each programme independently. Previous station votes remain preserved.</p></div>' +
+              (showsData.is_admin ? btn("+ Create chart show", "show-new") : "") +
+            '</div>' +
+            '<div class="show-grid">' + cardMarkup + '</div>' +
+          '</section>';
         if (showsData.is_admin) {
-          html += panel("Code-only voting",
-            '<p>When enabled, messages without a recognised active show code are held for review instead of going into the historical chart. Enable this only after you have announced the codes to listeners.</p>' +
-            '<div class="settings-row"><strong>Require programme codes</strong><span>' +
-            (showsData.require_codes ? "Enabled" : "Not enabled — legacy votes still accepted") +
-            '</span></div>', btn(showsData.require_codes ? "Disable code requirement" : "Enable code requirement", "show-policy"));
           const waiting = await read("workspace/unassigned");
+          if (current !== generation) return;
           window.studioUnassigned = waiting.items;
-          html += panel("Unassigned incoming votes",
-            '<p class="hint">Wrong or missing programme codes never count toward a chart until reviewed.</p>' +
-            (waiting.items.length ? table(
-              ["Received", "Message", "Reason", "Action"],
-              waiting.items.map((item) =>
-                '<tr><td>' + esc(new Date(item.received_at).toLocaleString()) +
-                '</td><td>' + esc(item.text) + '</td><td>' + esc(item.reason) +
-                '</td><td>' + btn("Assign to show", "show-assign", item.id) + btn("Dismiss", "show-dismiss", item.id) + '</td></tr>'
-              )
-            ) : '<p class="hint">No unassigned votes.</p>'));
+          html += '<div class="show-settings-grid">' +
+            '<section class="panel show-settings-panel" aria-labelledby="show-code-policy-title">' +
+              '<div class="show-settings-head"><h2 id="show-code-policy-title">Voting code settings</h2>' +
+                '<span class="show-status show-status--' + (showsData.require_codes ? "live" : "scheduled") + '">' +
+                (showsData.require_codes ? "Codes required" : "Compatibility mode") +
+                '</span></div>' +
+              '<p>' + (showsData.require_codes
+                ? "Listeners must include an active programme code. Unknown codes go to the review queue."
+                : "Votes without a code still go to the historical chart. Enable mandatory codes after announcing them to listeners.") +
+              '</p>' +
+              btn(showsData.require_codes ? "Make codes optional" : "Require programme codes", "show-policy") +
+            '</section>' +
+            '<section class="panel show-settings-panel" aria-labelledby="show-unassigned-title">' +
+              '<div class="show-settings-head"><h2 id="show-unassigned-title">Unassigned votes</h2>' +
+                '<span class="show-queue-count">' + num(waiting.items.length) + ' awaiting review</span></div>' +
+              '<p>Messages with missing, unknown or closed-show codes are never added to a chart automatically.</p>' +
+              (waiting.items.length
+                ? '<div class="show-queue-table">' + table(
+                    ["Received", "Vote text", "Reason", "Actions"],
+                    waiting.items.map((item) =>
+                      '<tr><td>' + esc(new Date(item.received_at).toLocaleString()) +
+                      '</td><td class="show-queue-text">' + esc(item.text) +
+                      '</td><td>' + esc(item.reason.replaceAll("_", " ")) +
+                      '</td><td><div class="show-queue-actions">' +
+                      btn("Assign", "show-assign", item.id) +
+                      btn("Dismiss", "show-dismiss", item.id) +
+                      '</div></td></tr>'
+                    )
+                  ) + '</div>'
+                : '<p class="show-queue-empty">No unassigned votes at this station.</p>') +
+            '</section>' +
+          '</div>';
         }
+        html += '</div>';
       } else if (page === "archives") {
         const d = await read(
           "chart/archives?show_id=" + selectedShowId +
@@ -439,35 +492,77 @@
   function showFields(show = {}) {
     const weekdays = days.map((day, index) => [index, day]);
     const input = (label, name, value, type = "text", required = true) =>
-      '<label class="field">' + esc(label) + '<input name="' + name + '" type="' +
-      type + '" value="' + esc(value ?? "") + '"' +
+      '<label class="field">' + esc(label) +
+      '<input name="' + name + '" type="' + type + '" value="' + esc(value ?? "") + '"' +
+      (name === "code" ? ' maxlength="16"' : name === "name" ? ' maxlength="120"' : "") +
+      (type === "number" ? ' min="1" max="100"' : "") +
       (required ? " required" : "") + '></label>';
-    return input("Programme name", "name", show.name || "") +
-      input("Voting code (2–16 letters/numbers)", "code", show.code || "") +
-      showSelectField("Chart type", "kind",
-        [["weekly", "Regular weekly show"], ["year_end", "Separate end-of-year Top 50"]], show.kind || "weekly") +
-      showSelectField("Default chart size", "chart_size",
-        [[20, "Top 20"], [50, "Top 50"]], show.chart_size || 20) +
-      input("Daily votes allowed per listener", "daily_limit", show.daily_limit || 5, "number") +
-      showSelectField("Voting schedule", "schedule_mode",
-        [["weekly", "Repeating weekly"], ["manual", "Manually open and close"],
-         ["campaign", "Exact date range"]], show.schedule_mode || "weekly") +
-      showSelectField("Broadcast day", "broadcast_weekday", weekdays, show.broadcast_weekday ?? 5) +
-      '<h3>Weekly voting window (Zimbabwe time)</h3>' +
-      showSelectField("Opens on", "opens_weekday", weekdays, show.opens_weekday ?? 0) +
-      input("Opens at", "opens_time", show.opens_time || "08:00", "time") +
-      showSelectField("Closes on", "closes_weekday", weekdays, show.closes_weekday ?? 5) +
-      input("Closes at", "closes_time", show.closes_time || "18:00", "time") +
-      '<h3>Campaign dates (Zimbabwe time, if selected)</h3>' +
-      input("Campaign starts", "campaign_start",
-        (show.campaign_start || "").slice(0,16), "datetime-local", false) +
-      input("Campaign ends", "campaign_end",
-        (show.campaign_end || "").slice(0,16), "datetime-local", false) +
-      '<label class="field"><input type="checkbox" name="is_enabled" ' +
-      (show.is_enabled ? "checked " : "") + '> Enable this programme</label>' +
-      '<label class="field"><input type="checkbox" name="manual_open" ' +
-      (show.manual_open ? "checked " : "") + '> Accept votes in manual mode</label>' +
-      '<p class="hint">Schedule changes affect future incoming votes only. Previous votes and published charts retain their original programme IDs. Annual shows require Top 50 and an exact campaign window.</p>';
+    return '<div class="show-form">' +
+      '<p class="show-form-help">Programme codes must be unique within this station. Changes to a show do not move existing votes or rewrite saved charts.</p>' +
+      '<fieldset class="show-form-section"><legend>Programme details</legend>' +
+        '<div class="show-form-grid">' +
+        input("Programme name", "name", show.name || "") +
+        input("Voting code", "code", show.code || "") +
+        showSelectField("Chart type", "kind",
+          [["weekly", "Regular weekly show"], ["year_end", "End-of-year Top 50"]], show.kind || "weekly") +
+        showSelectField("Chart size", "chart_size",
+          [[20, "Top 20"], [50, "Top 50"]], show.chart_size || 20) +
+        input("Daily vote limit per listener", "daily_limit", show.daily_limit ?? 5, "number") +
+        showSelectField("Voting schedule", "schedule_mode",
+          [["weekly", "Repeating weekly"], ["manual", "Manual open / close"],
+           ["campaign", "Fixed date range"]], show.schedule_mode || "weekly") +
+        '</div>' +
+      '</fieldset>' +
+      '<fieldset class="show-form-section" data-show-mode="weekly">' +
+        '<legend>Weekly voting hours</legend>' +
+        '<p class="show-form-caption">Times use Zimbabwe local time.</p>' +
+        '<div class="show-form-grid">' +
+        showSelectField("Broadcast day", "broadcast_weekday", weekdays, show.broadcast_weekday ?? 5) +
+        showSelectField("Opens on", "opens_weekday", weekdays, show.opens_weekday ?? 0) +
+        input("Opening time", "opens_time", show.opens_time || "08:00", "time") +
+        showSelectField("Closes on", "closes_weekday", weekdays, show.closes_weekday ?? 5) +
+        input("Closing time", "closes_time", show.closes_time || "18:00", "time") +
+        '</div>' +
+      '</fieldset>' +
+      '<fieldset class="show-form-section" data-show-mode="campaign">' +
+        '<legend>Campaign voting dates</legend>' +
+        '<p class="show-form-caption">Select the exact opening and closing dates, using Zimbabwe local time.</p>' +
+        '<div class="show-form-grid">' +
+        input("Campaign starts", "campaign_start",
+          (show.campaign_start || "").slice(0, 16), "datetime-local", false) +
+        input("Campaign ends", "campaign_end",
+          (show.campaign_end || "").slice(0, 16), "datetime-local", false) +
+        '</div>' +
+      '</fieldset>' +
+      '<fieldset class="show-form-section" data-show-mode="manual">' +
+        '<legend>Manual voting</legend>' +
+        '<label class="show-form-check"><input type="checkbox" name="manual_open" ' +
+        (show.manual_open ? "checked" : "") + '> Allow votes while this programme is manually open</label>' +
+      '</fieldset>' +
+      '<fieldset class="show-form-section show-form-activation">' +
+        '<legend>Programme availability</legend>' +
+        '<label class="show-form-check"><input type="checkbox" name="is_enabled" ' +
+        (show.is_enabled ? "checked" : "") + '> Enable this programme to receive votes</label>' +
+      '</fieldset>' +
+      '</div>';
+  }
+  function syncShowFormVisibility() {
+    const form = document.querySelector("#modal-content .show-form");
+    if (!form) return;
+    const kind = form.querySelector('[name="kind"]');
+    const size = form.querySelector('[name="chart_size"]');
+    const mode = form.querySelector('[name="schedule_mode"]');
+    if (kind.value === "year_end") {
+      size.value = "50";
+      mode.value = "campaign";
+    }
+    size.querySelector('option[value="20"]').disabled = kind.value === "year_end";
+    for (const option of mode.options) {
+      option.disabled = kind.value === "year_end" && option.value !== "campaign";
+    }
+    form.querySelectorAll("[data-show-mode]").forEach((section) => {
+      section.hidden = section.dataset.showMode !== mode.value;
+    });
   }
   const showPayload = (fields, id = null) => ({
     id,
@@ -513,6 +608,7 @@
             showFields(initial),
             (fields) => api("workspace/shows/save",
               showPayload(fields, edit ? Number(id) : null)));
+      syncShowFormVisibility();
       return;
     }
     if (action === "show-archive") {
@@ -683,6 +779,10 @@
     );
   });
   document.addEventListener("change", (e) => {
+    if (e.target.closest("#modal-content .show-form") &&
+        ["kind", "schedule_mode"].includes(e.target.name)) {
+      syncShowFormVisibility();
+    }
     if (e.target.id === "chart-show-select") {
       selectedShowId = Number(e.target.value);
       chartPeriod = "weekly";
