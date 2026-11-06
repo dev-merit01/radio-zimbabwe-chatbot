@@ -29,6 +29,18 @@ def get_selected_show(request):
     return show
 
 
+def station_show(station, raw):
+    """Validate a programme ID against the authenticated user's station."""
+    if raw is None or raw == "":
+        return legacy_show(station)
+    if type(raw) is not int or raw <= 0:
+        raise ValueError("Invalid chart show.")
+    show = ChartShow.objects.filter(station=station, pk=raw).first()
+    if show is None:
+        raise ValueError("Chart show not found for this station.")
+    return show
+
+
 def route_vote(station, text, received_at=None):
     """(show, song_text, submitted_code, error_reason).
 
