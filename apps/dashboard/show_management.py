@@ -125,6 +125,8 @@ def save_show(request):
         raise ValueError("Choose a regular or year-end chart.")
     if mode not in {"weekly", "manual", "campaign"}:
         raise ValueError("Invalid voting schedule mode.")
+    if kind == "year_end" and mode != "campaign":
+        raise ValueError("End-of-year Top 50 must use an exact-date voting campaign.")
     size = parsed_int(data, "chart_size", 50 if kind == "year_end" else 20, 20, 50)
     if size not in {20, 50} or (kind == "year_end" and size != 50):
         raise ValueError("Select Top 20 or Top 50; annual charts must be Top 50.")
