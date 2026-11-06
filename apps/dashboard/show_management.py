@@ -301,3 +301,27 @@ def assign_unassigned(request):
             details={"unassigned_id": row.pk, "chart_show_id": show.pk},
         )
     return JsonResponse({"ok": True, "event_id": event.pk})
+
+
+@require_POST
+@api_access("admin")
+def dismiss_unassigned(request):
+    data = json.loads(request.body)
+    record_id = data.get("id")
+    if type(record_id) is not int or record_id <= 0:
+        raise ValueError("Invalid unassigned vote.")
+    station = get_active_station(request)
+    with transaction.atomic():
+        lock_station(station)
+        record = UnassignedVote.objects.select_for_update().filter(
+            station=station, id=record_id, state="pending",
+        ).first()
+        if record is None:
+            return JsonResponse({"error": "Unassigned vote not found."}, status=404)
+        record.state = "dismissed"
+        record.save(update_fields=["state"])
+        ReviewAudit.objects.create(
+            station=station, actor=request.user, action="unassigned_dismissed",
+            details={"unassigned_id": record.pk, "reason": record.reason},
+        )
+    return JsonResponse({"ok": True})
