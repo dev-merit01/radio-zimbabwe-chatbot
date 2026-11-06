@@ -1,10 +1,16 @@
 from django.urls import path
 from .views import chart_today, dashboard, chart_archives, chart_detail, stats_overview
 
-from . import desktop, workspace
+from . import desktop, workspace, show_management
 
 urlpatterns = [
     path("desktop/status", desktop.status),
+    path("workspace/shows", show_management.list_shows),
+    path("workspace/shows/save", show_management.save_show),
+    path("workspace/shows/archive", show_management.archive_show),
+    path("workspace/shows/routing", show_management.set_routing_policy),
+    path("workspace/unassigned", show_management.unassigned_list),
+    path("workspace/unassigned/assign", show_management.assign_unassigned),
     path("workspace/administration", workspace.administration),
     path("workspace/accounts/<int:user_id>/approve", workspace.approve_account),
     path("workspace/station-password", workspace.station_password),
