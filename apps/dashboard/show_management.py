@@ -143,7 +143,7 @@ def save_show(request):
     if mode == "campaign" and start and end and start >= end:
         raise ValueError("Campaign closing time must be after opening.")
     if (mode == "weekly" and start_day == end_day and
-            (end_time.hour, end_time.minute) == (start_time.hour, start_time.minute)):
+            end_time <= start_time):
         raise ValueError("A weekly voting window must have a non-zero duration.")
 
     with transaction.atomic():
@@ -164,6 +164,10 @@ def save_show(request):
         ).exclude(pk=show.pk if show else None).exists():
             raise ValueError("A chart show with this name already exists.")
         before = serialize(show) if show else None
+        if show and show.kind != kind and (
+            show.raw_votes.exists() or show.published_charts.exists()
+        ):
+            raise ValueError("Cannot change the type of a show containing votes or archives.")
         show = show or ChartShow(station=station)
         show.name = name
         show.code = code
