@@ -220,7 +220,7 @@
               waiting.items.map((item) =>
                 '<tr><td>' + esc(new Date(item.received_at).toLocaleString()) +
                 '</td><td>' + esc(item.text) + '</td><td>' + esc(item.reason) +
-                '</td><td>' + btn("Assign to show", "show-assign", item.id) + '</td></tr>'
+                '</td><td>' + btn("Assign to show", "show-assign", item.id) + btn("Dismiss", "show-dismiss", item.id) + '</td></tr>'
               )
             ) : '<p class="hint">No unassigned votes.</p>'));
         }
@@ -527,6 +527,14 @@
       modal(showPolicyEnabled ? "Disable mandatory voting codes" : "Enable mandatory voting codes",
         "<p>When codes are required, unrecognised messages will be held for review with no WhatsApp reply. Announce the voting codes before enabling this rule.</p>",
         () => api("workspace/shows/routing", {require_codes: !showPolicyEnabled}));
+      return;
+    }
+    if (action === "show-dismiss") {
+      const item = (window.studioUnassigned || []).find((row) => row.id === Number(id));
+      if (!item) return;
+      modal("Dismiss unassigned vote",
+        "<p>This message will not count in any chart. The action will be recorded in the audit log.</p>",
+        () => api("workspace/unassigned/dismiss", {id: Number(id)}));
       return;
     }
     if (action === "show-assign") {
