@@ -14,7 +14,6 @@ from django.utils import timezone
 from django.views.decorators.http import require_GET, require_POST
 
 from apps.accounts.context_processors import get_active_station
-from apps.charts.routing import legacy_show
 from apps.voting.models import (
     ChartShow, InboundEvent, ReviewAudit, StationVotingConfig, UnassignedVote,
 )
