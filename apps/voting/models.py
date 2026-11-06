@@ -78,7 +78,7 @@ class ChartShow(models.Model):
             ),
         ]
         ordering = ["station", "kind", "name", "id"]
-        indexes = [models.Index(fields=["station", "is_enabled"])]
+        indexes = [models.Index(fields=["station", "is_enabled"], name="av_show_enabled_idx")]
 
     def __str__(self):
         return f"{self.get_station_display()}: {self.name}"
@@ -144,7 +144,7 @@ class UnassignedVote(models.Model):
                 name="unique_unassigned_message",
             )
         ]
-        indexes = [models.Index(fields=["station", "state", "-received_at"])]
+        indexes = [models.Index(fields=["station", "state", "-received_at"], name="av_unassigned_idx")]
 
 
 class User(models.Model):
