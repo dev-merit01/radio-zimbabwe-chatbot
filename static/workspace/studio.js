@@ -181,6 +181,48 @@
         if (incoming && d.submissions?.length) {
           html += `<section class="panel"><div class="panel-heading"><h2>Recent submissions</h2></div><div class="table-wrap"><table><thead><tr><th>Vote</th><th>Processing</th><th>Result</th></tr></thead><tbody>${d.submissions.map(s => `<tr><td>${esc(s.text)}</td><td>${esc(s.state)}</td><td>${esc(s.reply || "Waiting for the voting worker")}</td></tr>`).join("")}</tbody></table></div></section>`;
         }
+      } else if (page === "shows") {
+        window.studioShows = showsCache;
+        const cards = showsCache.map((show) =>
+          '<article class="panel settings-section">' +
+            '<div class="settings-row"><div><strong>' + esc(show.name) + '</strong>' +
+            '<p class="hint">' + (show.kind === "legacy" ? "Historical station votes" :
+              'Voting code: ' + esc(show.code) + ' · ' +
+              (show.kind === "year_end" ? "Annual Top 50" : "Top " + show.chart_size)) +
+              '</p></div><span class="access-badge ' + (show.accepting ? "" : "pending") + '">' +
+              (show.accepting ? "Accepting votes" : show.is_archived ? "Archived" :
+               show.kind === "legacy" ? "Historical" : show.is_enabled ? "Outside voting period" : "Disabled") +
+              '</span></div><div class="row-actions">' +
+              btn("View chart", "show-select", show.id) +
+              (showsData.is_admin && show.kind !== "legacy" && !show.is_archived
+                ? btn("Edit", "show-edit", show.id) +
+                  btn("Duplicate settings", "show-duplicate", show.id) +
+                  btn("Archive", "show-archive", show.id)
+                : "") + '</div></article>'
+        ).join("");
+        html = panel("Programmes for this station",
+          '<p class="hint">One WhatsApp number per station. Each chart show has its own code, voting period and independent ranking. The historical chart remains unchanged.</p>' +
+          cards,
+          showsData.is_admin ? btn("Create chart show", "show-new") : "");
+        if (showsData.is_admin) {
+          html += panel("Code-only voting",
+            '<p>When enabled, messages without a recognised active show code are held for review instead of going into the historical chart. Enable this only after you have announced the codes to listeners.</p>' +
+            '<div class="settings-row"><strong>Require programme codes</strong><span>' +
+            (showsData.require_codes ? "Enabled" : "Not enabled — legacy votes still accepted") +
+            '</span></div>', btn(showsData.require_codes ? "Disable code requirement" : "Enable code requirement", "show-policy"));
+          const waiting = await read("workspace/unassigned");
+          window.studioUnassigned = waiting.items;
+          html += panel("Unassigned incoming votes",
+            '<p class="hint">Wrong or missing programme codes never count toward a chart until reviewed.</p>' +
+            (waiting.items.length ? table(
+              ["Received", "Message", "Reason", "Action"],
+              waiting.items.map((item) =>
+                '<tr><td>' + esc(new Date(item.received_at).toLocaleString()) +
+                '</td><td>' + esc(item.text) + '</td><td>' + esc(item.reason) +
+                '</td><td>' + btn("Assign to show", "show-assign", item.id) + '</td></tr>'
+              )
+            ) : '<p class="hint">No unassigned votes.</p>'));
+        }
       } else if (page === "archives") {
         const d = await read(
           "chart/archives?show_id=" + selectedShowId +
