@@ -1,6 +1,4 @@
 """Add programme identities without reassigning any historical station votes."""
-import datetime
-
 import django.db.models.deletion
 from django.db import migrations, models
 from django.db.models import Q
