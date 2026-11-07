@@ -415,7 +415,7 @@ def review_suspicious_vote(request):
         lock_station(station)
         record = SuspectedSpamVote.objects.select_for_update().filter(
             station=station, pk=record_id, state="pending",
-        ).select_related("chart_show").first()
+        ).first()
         if record is None:
             return JsonResponse({"error": "Flagged vote not found."}, status=404)
         event_id = None
