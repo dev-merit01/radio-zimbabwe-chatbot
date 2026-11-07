@@ -246,6 +246,9 @@
           const waiting = await read("workspace/unassigned");
           if (current !== generation) return;
           window.studioUnassigned = waiting.items;
+          const flagged = await read("workspace/spam");
+          if (current !== generation) return;
+          window.studioSpam = flagged.items;
           html += '<div class="show-settings-grid">' +
             '<section class="panel show-settings-panel" aria-labelledby="show-multiplier-title">' +
               '<div class="show-settings-head"><h2 id="show-multiplier-title">Station vote multiplier</h2>' +
@@ -282,6 +285,28 @@
                     )
                   ) + '</div>'
                 : '<p class="show-queue-empty">No unassigned votes at this station.</p>') +
+            '</section>' +
+            '<section class="panel show-settings-panel show-spam-panel" aria-labelledby="show-spam-title">' +
+              '<div class="show-settings-head"><h2 id="show-spam-title">Suspected spam votes</h2>' +
+                '<span class="show-queue-count show-spam-count">' +
+                num(flagged.pending) + ' flagged for review</span></div>' +
+              '<p>Repeated submissions or unusually rapid votes from the same sender are held before AI processing. They are not counted unless the administrator releases them. Popular songs voted for by different listeners are unaffected.</p>' +
+              (flagged.items.length
+                ? '<div class="show-queue-table">' + table(
+                    ["Received", "Listener", "Chart show", "Vote", "Flag", "Review"],
+                    flagged.items.map((item) =>
+                      '<tr><td>' + esc(new Date(item.received_at).toLocaleString()) +
+                      '</td><td>' + esc(item.listener) +
+                      '</td><td>' + esc(item.show) +
+                      '</td><td class="show-queue-text">' + esc(item.text) +
+                      '</td><td>' + esc(item.reason.replaceAll("_", " ")) +
+                      '</td><td><div class="show-queue-actions">' +
+                      btn("Release", "spam-release", item.id) +
+                      btn("Dismiss", "spam-dismiss", item.id) +
+                      '</div></td></tr>'
+                    )
+                  ) + '</div>'
+                : '<p class="show-queue-empty">No suspicious votes are currently awaiting review.</p>') +
             '</section>' +
           '</div>';
         }
@@ -657,6 +682,24 @@
       modal("Dismiss unassigned vote",
         "<p>This message will not count in any chart. The action will be recorded in the audit log.</p>",
         () => api("workspace/unassigned/dismiss", {id: Number(id)}));
+      return;
+    }
+    if (action === "spam-release" || action === "spam-dismiss") {
+      const item = (window.studioSpam || []).find((row) => row.id === Number(id));
+      if (!item) return;
+      const release = action === "spam-release";
+      modal(release ? "Release flagged vote" : "Dismiss flagged vote",
+        '<p class="hint"><strong>Reason:</strong> ' +
+          esc(item.reason.replaceAll("_", " ")) +
+          ' · <strong>Chart show:</strong> ' + esc(item.show) +
+          '</p><p class="hint">' + esc(item.text) + '</p>' +
+          '<p>' + (release
+            ? "Confirm this submission is legitimate. It will then enter the normal duplicate-limit and AI verification pipeline. It is not automatically counted or approved."
+            : "Dismiss this suspicious message without adding a vote. The decision will be recorded in the station audit log.") +
+          '</p>',
+        () => api("workspace/spam/review", {
+          id: Number(id), action: release ? "release" : "dismiss",
+        }));
       return;
     }
     if (action === "show-assign") {
