@@ -16,6 +16,7 @@ from django.views.decorators.http import require_GET, require_POST
 from apps.accounts.context_processors import get_active_station
 from apps.voting.models import (
     ChartShow, InboundEvent, ReviewAudit, StationVotingConfig, UnassignedVote,
+    SuspectedSpamVote, WeeklyChart,
 )
 from apps.voting.pipeline import lock_station
 from apps.voting.services import validate_submission
@@ -365,3 +366,99 @@ def set_station_multiplier(request):
                 },
             )
     return JsonResponse({"ok": True, "station": station, "vote_multiplier": multiplier})
+
+
+@require_GET
+@api_access("admin")
+def suspicious_votes(request):
+    """Central administrator sees only the selected station's held messages."""
+    station = get_active_station(request)
+    rows = SuspectedSpamVote.objects.filter(
+        station=station, state="pending",
+    ).select_related("chart_show").order_by("-received_at", "-pk")[:100]
+    return JsonResponse({
+        "station": station,
+        "pending": SuspectedSpamVote.objects.filter(
+            station=station, state="pending"
+        ).count(),
+        "items": [{
+            "id": row.pk,
+            "listener": "••••" + row.sender[-4:],
+            "text": row.vote_text,
+            "show": row.chart_show.name if row.chart_show else "Historical chart",
+            "reason": row.reason,
+            "received_at": row.received_at.isoformat(),
+        } for row in rows],
+    })
+
+
+@require_POST
+@api_access("admin")
+def review_suspicious_vote(request):
+    """Approve only a previously held authentic message, not an arbitrary vote.
+
+    Releasing still runs normal daily limits, duplication and AI verification.
+    The original station, chart show and receipt timestamp cannot be changed.
+    A finalized chart period cannot be modified retroactively.
+    """
+    data = json.loads(request.body)
+    if not isinstance(data, dict) or set(data) != {"id", "action"}:
+        raise ValueError("Expected flagged vote ID and review action.")
+    record_id, action = data["id"], data["action"]
+    if type(record_id) is not int or record_id <= 0:
+        raise ValueError("Invalid suspicious vote ID.")
+    if action not in ("release", "dismiss"):
+        raise ValueError("Choose release or dismiss.")
+
+    station = get_active_station(request)
+    with transaction.atomic():
+        lock_station(station)
+        record = SuspectedSpamVote.objects.select_for_update().filter(
+            station=station, pk=record_id, state="pending",
+        ).select_related("chart_show").first()
+        if record is None:
+            return JsonResponse({"error": "Flagged vote not found."}, status=404)
+        event_id = None
+        if action == "release":
+            if record.chart_show and record.chart_show.station != station:
+                raise ValueError("Flagged vote belongs to another station.")
+            # A flagged vote cannot be inserted after an official snapshot was
+            # locked, preventing a mismatch between live and archived totals.
+            date_received = timezone.localtime(record.received_at).date()
+            if WeeklyChart.objects.filter(
+                station=station, chart_show=record.chart_show,
+                is_finalized=True,
+                week_start__lte=date_received, week_end__gte=date_received,
+            ).exists():
+                raise ValueError(
+                    "This voting period has a published chart. "
+                    "Keep this flagged message for audit instead."
+                )
+            event, created = InboundEvent.objects.get_or_create(
+                provider=record.provider, station=station,
+                message_id=record.message_id,
+                defaults={
+                    "sender": record.sender, "text": record.text,
+                    "vote_text": record.vote_text,
+                    "submitted_code": record.submitted_code,
+                    "chart_show": record.chart_show,
+                    "received_at": record.received_at, "media_type": "",
+                },
+            )
+            if not created:
+                raise ValueError("This message has already entered the voting pipeline.")
+            event_id = event.pk
+        record.state = "released" if action == "release" else "dismissed"
+        record.resolved_by = request.user
+        record.resolved_at = timezone.now()
+        record.save(update_fields=["state", "resolved_by", "resolved_at"])
+        ReviewAudit.objects.create(
+            station=station, actor=request.user,
+            action="spam_released" if action == "release" else "spam_dismissed",
+            details={
+                "flag_id": record.pk, "reason": record.reason,
+                "chart_show_id": record.chart_show_id,
+                "event_id": event_id,
+            },
+        )
+    return JsonResponse({"ok": True, "state": record.state, "event_id": event_id})
