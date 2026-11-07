@@ -253,7 +253,7 @@
               '<p>Applies to the selected station and all its chart shows. Listener votes remain unchanged; charts display weighted points separately. Published editions keep their saved multiplier.</p>' +
               btn("Change multiplier", "station-multiplier") +
             '</section>' +
-            '<section class="panel show-settings-panel" aria-labelledby="show-code-policy-title">'' +
+            '<section class="panel show-settings-panel" aria-labelledby="show-code-policy-title">' +
               '<div class="show-settings-head"><h2 id="show-code-policy-title">Voting code settings</h2>' +
                 '<span class="show-status show-status--' + (showsData.require_codes ? "live" : "scheduled") + '">' +
                 (showsData.require_codes ? "Codes required" : "Compatibility mode") +
