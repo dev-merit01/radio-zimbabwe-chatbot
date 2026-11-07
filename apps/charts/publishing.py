@@ -6,6 +6,7 @@ from django.db.models import Min, Sum, Q
 from django.utils import timezone
 
 from apps.charts.routing import legacy_show
+from apps.charts.multiplier import station_multiplier
 from apps.charts.show_rankings import counts_for_show, ranked_songs
 from apps.voting.models import (
     CleanedSong, InboundEvent, ReviewAudit, VoteJob,
@@ -149,6 +150,7 @@ def _publish(station, start, end, actor, size, chart_date=None, year_end=False, 
         )
         chart = WeeklyChart.objects.create(
             station=station, chart_show=show,
+            vote_multiplier=station_multiplier(station),
             week_start=start, week_end=end,
             chart_date=chart_date, is_year_end=year_end,
             year=year, week_number=week,

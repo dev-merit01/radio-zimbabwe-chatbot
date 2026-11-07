@@ -9,6 +9,7 @@ urlpatterns = [
     path("workspace/shows/save", show_management.save_show),
     path("workspace/shows/archive", show_management.archive_show),
     path("workspace/shows/routing", show_management.set_routing_policy),
+    path("workspace/shows/multiplier", show_management.set_station_multiplier),
     path("workspace/unassigned", show_management.unassigned_list),
     path("workspace/unassigned/assign", show_management.assign_unassigned),
     path("workspace/unassigned/dismiss", show_management.dismiss_unassigned),

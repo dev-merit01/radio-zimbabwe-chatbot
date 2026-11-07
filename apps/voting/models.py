@@ -116,6 +116,8 @@ class StationVotingConfig(models.Model):
     station = models.CharField(max_length=32, choices=Station.choices, unique=True)
     # Until explicitly activated, old code-free votes continue to the legacy chart.
     require_codes = models.BooleanField(default=False)
+    # Applies to chart points only, never the number of authentic listener votes.
+    vote_multiplier = models.PositiveSmallIntegerField(default=1)
     updated_at = models.DateTimeField(auto_now=True)
 
 
@@ -771,6 +773,8 @@ class WeeklyChart(models.Model):
         default=20, help_text="20 for regular, 50 for year-end"
     )
     total_votes = models.IntegerField(default=0, help_text="Total votes for this week")
+    # Snapshot of the station multiplier at publication. Historical charts stay x1.
+    vote_multiplier = models.PositiveSmallIntegerField(default=1)
     unique_songs = models.IntegerField(default=0, help_text="Unique songs voted for")
 
     # Status

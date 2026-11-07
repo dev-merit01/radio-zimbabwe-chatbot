@@ -52,6 +52,7 @@ def list_shows(request):
     return JsonResponse({
         "station": station, "is_admin": request.user.is_superuser,
         "require_codes": config.require_codes,
+        "vote_multiplier": config.vote_multiplier,
         "shows": [serialize(s) for s in
                   ChartShow.objects.filter(station=station).order_by("kind", "name", "id")],
         "unassigned_pending": UnassignedVote.objects.filter(
@@ -327,3 +328,40 @@ def dismiss_unassigned(request):
             details={"unassigned_id": record.pk, "reason": record.reason},
         )
     return JsonResponse({"ok": True})
+
+
+@require_POST
+@api_access("admin")
+def set_station_multiplier(request):
+    """Update only the super-admin's current station, with an audit record.
+
+    This changes live chart *points*, not authentic vote counts. Previously
+    published chart editions retain the multiplier captured at publication.
+    """
+    data = json.loads(request.body)
+    if not isinstance(data, dict) or set(data) != {"multiplier"}:
+        raise ValueError("Provide only the vote multiplier.")
+    multiplier = data["multiplier"]
+    if type(multiplier) is not int or not 1 <= multiplier <= 10:
+        raise ValueError("Choose a whole-number multiplier from 1 to 10.")
+    station = get_active_station(request)
+    with transaction.atomic():
+        lock_station(station)
+        config, _ = StationVotingConfig.objects.select_for_update().get_or_create(
+            station=station
+        )
+        before = config.vote_multiplier
+        if before != multiplier:
+            config.vote_multiplier = multiplier
+            config.save(update_fields=["vote_multiplier", "updated_at"])
+            ReviewAudit.objects.create(
+                station=station, actor=request.user,
+                action="vote_multiplier",
+                details={
+                    "old_multiplier": before,
+                    "new_multiplier": multiplier,
+                    "scope": "live_chart_points_only",
+                    "published_charts_unchanged": True,
+                },
+            )
+    return JsonResponse({"ok": True, "station": station, "vote_multiplier": multiplier})
