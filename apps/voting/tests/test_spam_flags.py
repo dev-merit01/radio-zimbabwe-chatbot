@@ -11,6 +11,7 @@ from django.test import Client, TestCase, override_settings
 from django.utils import timezone
 
 from apps.accounts.models import AccountProfile
+from apps.charts.publishing import publish_edition
 from apps.voting.models import (
     ChartShow, InboundEvent, OutboundMessage, RawVote,
     ReviewAudit, SuspectedSpamVote, VoteJob, WeeklyChart,
@@ -214,3 +215,21 @@ class SuspectedSpamVoteTests(TestCase):
         self.assertFalse(InboundEvent.objects.get(
             message_id="power-first"
         ).chart_show is None)
+
+    def test_cannot_publish_until_flagged_votes_are_reviewed(self):
+        self.show.broadcast_weekday = timezone.localdate().weekday()
+        self.show.save(update_fields=["broadcast_weekday"])
+        for i in range(3):
+            self.send_vote("SAT River Artist - Morning Song", f"publish-{i}")
+        while run_one(InboundEvent):
+            pass
+        while run_one(VoteJob):
+            pass
+        with self.assertRaisesMessage(ValueError, "flagged votes"):
+            publish_edition(
+                "national_fm", timezone.localdate(), self.admin,
+                20, chart_show=self.show,
+            )
+        self.assertEqual(SuspectedSpamVote.objects.filter(
+            station="national_fm", state="pending",
+        ).count(), 1)
