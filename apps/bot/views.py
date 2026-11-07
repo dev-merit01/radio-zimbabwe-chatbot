@@ -6,6 +6,7 @@ import hmac
 import json
 import time
 from django.conf import settings
+from django.db import transaction
 from django.utils import timezone
 from django.http import JsonResponse
 from django.core.exceptions import RequestDataTooBig
@@ -151,7 +152,9 @@ def receive(request, provider):
             return JsonResponse({"ok": True, "ignored": True})
         from apps.voting.services import validate_submission
         from apps.charts.routing import route_vote
-        from apps.voting.models import UnassignedVote
+        from apps.voting.models import UnassignedVote, SuspectedSpamVote
+        from apps.voting.spam_detection import suspected_spam_reason
+        from apps.voting.pipeline import lock_station
         if media:
             return JsonResponse({"ok": True, "ignored": True, "reason": "Text votes only."})
         # Freeze the original routing decision on provider retries, even when
@@ -164,6 +167,10 @@ def receive(request, provider):
             provider=provider, station=station, message_id=message_id
         ).exists():
             return JsonResponse({"ok": True, "duplicate": True, "unassigned": True})
+        if SuspectedSpamVote.objects.filter(
+            provider=provider, station=station, message_id=message_id
+        ).exists():
+            return JsonResponse({"ok": True, "duplicate": True, "flagged": True})
         received_at = timezone.now()
         chart_show, vote_text, submitted_code, route_error = route_vote(
             station, text, received_at
@@ -181,19 +188,42 @@ def receive(request, provider):
         valid, reason = validate_submission(vote_text)
         if not valid:
             return JsonResponse({"ok": True, "ignored": True, "reason": reason})
-        _, created = InboundEvent.objects.get_or_create(
-            provider=provider,
-            station=station,
-            message_id=message_id,
-            defaults={
-                "sender": sender, "text": text, "vote_text": vote_text,
-                "submitted_code": submitted_code, "chart_show": chart_show,
-                "received_at": received_at, "media_type": "",
-            },
-        )
-        return JsonResponse(
-            {"ok": True, "duplicate": not created}, status=202 if created else 200
-        )
+        with transaction.atomic():
+            # Serialise intake decisions per station. Otherwise simultaneous
+            # messages from one sender can both evade the burst threshold.
+            lock_station(station)
+            if InboundEvent.objects.filter(
+                provider=provider, station=station, message_id=message_id
+            ).exists():
+                return JsonResponse({"ok": True, "duplicate": True})
+            if UnassignedVote.objects.filter(
+                provider=provider, station=station, message_id=message_id
+            ).exists():
+                return JsonResponse({"ok": True, "duplicate": True, "unassigned": True})
+            if SuspectedSpamVote.objects.filter(
+                provider=provider, station=station, message_id=message_id
+            ).exists():
+                return JsonResponse({"ok": True, "duplicate": True, "flagged": True})
+            spam_reason = suspected_spam_reason(
+                station, provider, sender, vote_text, received_at
+            )
+            if spam_reason:
+                SuspectedSpamVote.objects.create(
+                    provider=provider, station=station, message_id=message_id,
+                    sender=sender, text=text, vote_text=vote_text,
+                    submitted_code=submitted_code, chart_show=chart_show,
+                    received_at=received_at, reason=spam_reason,
+                )
+                # Held before vote creation and before AI API use. No listener
+                # message is sent; Bird receives only a normal webhook ack.
+                return JsonResponse({"ok": True, "flagged": True}, status=202)
+            InboundEvent.objects.create(
+                provider=provider, station=station, message_id=message_id,
+                sender=sender, text=text, vote_text=vote_text,
+                submitted_code=submitted_code, chart_show=chart_show,
+                received_at=received_at, media_type="",
+            )
+        return JsonResponse({"ok": True, "duplicate": False}, status=202)
     except (ValueError, TypeError, AttributeError):
         return JsonResponse(
             {"error": "Invalid message envelope or missing message ID"}, status=400

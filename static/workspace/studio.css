@@ -2002,3 +2002,25 @@ dialog:has(.show-form) {
   border-color: #bacde8;
   color: #0754bd;
 }
+
+
+/* Suspicious inbound votes: obvious but neutral review status. */
+.show-spam-panel {
+  grid-column: 1 / -1;
+}
+.show-spam-count {
+  background: #fff0df;
+  color: #8c4b14;
+}
+.show-spam-panel .show-queue-text {
+  max-width: 390px;
+  overflow-wrap: anywhere;
+}
+.show-spam-panel [data-action="spam-release"] {
+  background: #e8f5ed;
+  color: #185d39;
+  border-color: #b8dfc8;
+}
+.show-spam-panel [data-action="spam-dismiss"] {
+  color: #8c4b14;
+}

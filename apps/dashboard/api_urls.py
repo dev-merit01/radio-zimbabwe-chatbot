@@ -13,6 +13,8 @@ urlpatterns = [
     path("workspace/unassigned", show_management.unassigned_list),
     path("workspace/unassigned/assign", show_management.assign_unassigned),
     path("workspace/unassigned/dismiss", show_management.dismiss_unassigned),
+    path("workspace/spam", show_management.suspicious_votes),
+    path("workspace/spam/review", show_management.review_suspicious_vote),
     path("workspace/administration", workspace.administration),
     path("workspace/accounts/<int:user_id>/approve", workspace.approve_account),
     path("workspace/station-password", workspace.station_password),

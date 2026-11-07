@@ -148,6 +148,60 @@ class UnassignedVote(models.Model):
         indexes = [models.Index(fields=["station", "state", "-received_at"], name="av_unassigned_idx")]
 
 
+class SuspectedSpamVote(models.Model):
+    """Suspected automated/rapid inbound messages, held before vote creation.
+
+    Human review is mandatory before a held message enters the AI voting
+    pipeline. Provider IDs are unique so retries cannot bypass a flag.
+    """
+
+    station = models.CharField(max_length=32, choices=Station.choices)
+    chart_show = models.ForeignKey(
+        ChartShow, null=True, blank=True, on_delete=models.PROTECT,
+        related_name="spam_reviews",
+    )
+    provider = models.CharField(max_length=16)
+    message_id = models.CharField(max_length=200)
+    sender = models.CharField(max_length=64)
+    text = models.CharField(max_length=2048)
+    vote_text = models.CharField(max_length=2048)
+    submitted_code = models.CharField(max_length=16, blank=True)
+    reason = models.CharField(max_length=32)
+    state = models.CharField(
+        max_length=16, default="pending",
+        choices=[
+            ("pending", "Awaiting review"),
+            ("released", "Released by administrator"),
+            ("dismissed", "Dismissed by administrator"),
+        ],
+    )
+    received_at = models.DateTimeField()
+    resolved_by = models.ForeignKey(
+        "auth.User", null=True, blank=True, on_delete=models.SET_NULL,
+    )
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["provider", "station", "message_id"],
+                name="unique_flagged_inbound_message",
+            )
+        ]
+        indexes = [
+            models.Index(
+                fields=["station", "sender", "-received_at"],
+                name="av_spam_sender_idx",
+            ),
+            models.Index(
+                fields=["station", "state", "-received_at"],
+                name="av_spam_queue_idx",
+            ),
+        ]
+
+
+
 class User(models.Model):
     CHANNEL_CHOICES = (
         ("telegram", "Telegram"),

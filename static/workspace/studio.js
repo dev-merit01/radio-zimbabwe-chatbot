@@ -246,6 +246,9 @@
           const waiting = await read("workspace/unassigned");
           if (current !== generation) return;
           window.studioUnassigned = waiting.items;
+          const flagged = await read("workspace/spam");
+          if (current !== generation) return;
+          window.studioSpam = flagged.items;
           html += '<div class="show-settings-grid">' +
             '<section class="panel show-settings-panel" aria-labelledby="show-multiplier-title">' +
               '<div class="show-settings-head"><h2 id="show-multiplier-title">Station vote multiplier</h2>' +
@@ -283,6 +286,28 @@
                   ) + '</div>'
                 : '<p class="show-queue-empty">No unassigned votes at this station.</p>') +
             '</section>' +
+            '<section class="panel show-settings-panel show-spam-panel" aria-labelledby="show-spam-title">' +
+              '<div class="show-settings-head"><h2 id="show-spam-title">Suspected spam votes</h2>' +
+                '<span class="show-queue-count show-spam-count">' +
+                num(flagged.pending) + ' flagged for review</span></div>' +
+              '<p>Repeated submissions or unusually rapid votes from the same sender are held before AI processing. They are not counted unless the administrator releases them. Popular songs voted for by different listeners are unaffected.</p>' +
+              (flagged.items.length
+                ? '<div class="show-queue-table">' + table(
+                    ["Received", "Listener", "Chart show", "Vote", "Flag", "Review"],
+                    flagged.items.map((item) =>
+                      '<tr><td>' + esc(new Date(item.received_at).toLocaleString()) +
+                      '</td><td>' + esc(item.listener) +
+                      '</td><td>' + esc(item.show) +
+                      '</td><td class="show-queue-text">' + esc(item.text) +
+                      '</td><td>' + esc(item.reason.replaceAll("_", " ")) +
+                      '</td><td><div class="show-queue-actions">' +
+                      btn("Release", "spam-release", item.id) +
+                      btn("Dismiss", "spam-dismiss", item.id) +
+                      '</div></td></tr>'
+                    )
+                  ) + '</div>'
+                : '<p class="show-queue-empty">No suspicious votes are currently awaiting review.</p>') +
+            '</section>' +
           '</div>';
         }
         html += '</div>';
@@ -317,11 +342,11 @@
           ["Active accounts", num(d.summary.active_accounts), "Approved station team members"],
         ].map(([label,value,note]) => `<div class="admin-metric"><span>${label}</span><strong>${value}</strong><small>${note}</small></div>`).join("")}</div>
         <div class="admin-grid"><div class="admin-main">
-        ${panel("Station directory", `<div class="station-directory">${d.stations.map(station => `<article class="station-tile ${station.id === overview.station ? "selected" : ""}"><div class="station-tile-heading"><span class="station-monogram">${esc(station.name.split(" ").map(w=>w[0]).join("").slice(0,2))}</span><div><h3>${esc(station.name)}</h3><small>${station.id === overview.station ? "Current workspace" : "Independent station workspace"}</small></div></div><div class="station-tile-stats"><span><strong>${num(station.votes)}</strong> received votes</span><span><strong>${num(station.pending)}</strong> to review</span></div>${station.id === overview.station ? '<span class="access-badge">Selected</span>' : btn("Open station", "admin-station", station.id)}</article>`).join("")}</div>`)}
+        ${panel("Station directory", `<div class="station-directory">${d.stations.map(station => `<article class="station-tile ${station.id === overview.station ? "selected" : ""}"><div class="station-tile-heading"><span class="station-monogram">${esc(station.name.split(" ").map(w=>w[0]).join("").slice(0,2))}</span><div><h3>${esc(station.name)}</h3><small>${station.id === overview.station ? "Current workspace" : "Independent station workspace"}</small></div></div><div class="station-tile-stats"><span><strong>${num(station.votes)}</strong> received votes</span><span><strong>${num(station.pending)}</strong> to review</span><span><strong>${num(station.spam)}</strong> spam flags</span></div>${station.id === overview.station ? '<span class="access-badge">Selected</span>' : btn("Open station", "admin-station", station.id)}</article>`).join("")}</div>`)}
         ${panel("Accounts & access", `<div class="admin-section-intro"><p>Approve access for the station shown. Account management includes station assignments, password resets and deactivation.</p></div>` + table(["Team member", "Assigned station", "Access", "Action"], d.accounts.map(u => `<tr><td><strong>${esc(u.name || u.username)}</strong><br><small>@${esc(u.username)}</small></td><td>${esc(u.station)}</td><td><span class="access-badge ${u.active ? "" : "pending"}">${u.active ? "Active" : "Awaiting activation"}</span></td><td>${u.active ? '<a class="account-link" href="/admin/auth/user/' + u.id + '/change/">Manage account →</a>' : btn("Approve access", "approve-account", u.id)}</td></tr>`)), '<a class="button secondary" href="/admin/auth/user/">Manage accounts</a>')}
         </div><aside class="admin-aside">
         <section class="admin-station-focus"><span class="studio-kicker">CURRENT WORKSPACE</span><h2>${esc(selected?.name)}</h2><p>These controls apply to this station.</p></section>
-        ${panel("Voting & publication", `<div class="admin-action-list"><button data-page="review"><strong>Review music <span>→</span></strong><small>Edit, verify, reject or merge songs.</small></button><button data-action="publish"><strong>Publish selected chart <span>→</span></strong><small>Publish a permanent Top 20 or Top 50.</small></button><button data-page="shows"><strong>Manage chart shows <span>→</span></strong><small>Choose the year-end chart show before publishing.</small></button><button data-action="station-multiplier"><strong>Station vote multiplier <span>→</span></strong><small>Configure weighted points for the selected station (×1–×10).</small></button><button data-page="archives"><strong>Chart archives <span>→</span></strong><small>Revisit and export saved editions.</small></button></div>`)}
+        ${panel("Voting & publication", `<div class="admin-action-list"><button data-page="review"><strong>Review music <span>→</span></strong><small>Edit, verify, reject or merge songs.</small></button><button data-action="publish"><strong>Publish selected chart <span>→</span></strong><small>Publish a permanent Top 20 or Top 50.</small></button><button data-page="shows"><strong>Manage chart shows <span>→</span></strong><small>Choose the year-end chart show before publishing.</small></button><button data-page="shows"><strong>Review suspected spam <span>→</span></strong><small>Flagged votes across the selected station: ${num(selected?.spam || 0)}.</small></button><button data-action="station-multiplier"><strong>Station vote multiplier <span>→</span></strong><small>Configure weighted points for the selected station (×1–×10).</small></button><button data-page="archives"><strong>Chart archives <span>→</span></strong><small>Revisit and export saved editions.</small></button></div>`)}
         ${panel("Station operations", `<div class="admin-action-list"><button data-action="station-password"><strong>Station password <span>→</span></strong><small>Manage access when switching stations.</small></button><button data-page="connections"><strong>Connections & queues <span>→</span></strong><small>Check providers and retry failed jobs.</small></button><button data-page="activity"><strong>Activity history <span>→</span></strong><small>Review recorded administrative actions.</small></button></div>`)}
         </aside></div>`;
       } else if (page === "activity") {
@@ -657,6 +682,24 @@
       modal("Dismiss unassigned vote",
         "<p>This message will not count in any chart. The action will be recorded in the audit log.</p>",
         () => api("workspace/unassigned/dismiss", {id: Number(id)}));
+      return;
+    }
+    if (action === "spam-release" || action === "spam-dismiss") {
+      const item = (window.studioSpam || []).find((row) => row.id === Number(id));
+      if (!item) return;
+      const release = action === "spam-release";
+      modal(release ? "Release flagged vote" : "Dismiss flagged vote",
+        '<p class="hint"><strong>Reason:</strong> ' +
+          esc(item.reason.replaceAll("_", " ")) +
+          ' · <strong>Chart show:</strong> ' + esc(item.show) +
+          '</p><p class="hint">' + esc(item.text) + '</p>' +
+          '<p>' + (release
+            ? "Confirm this submission is legitimate. It will then enter the normal duplicate-limit and AI verification pipeline. It is not automatically counted or approved."
+            : "Dismiss this suspicious message without adding a vote. The decision will be recorded in the station audit log.") +
+          '</p>',
+        () => api("workspace/spam/review", {
+          id: Number(id), action: release ? "release" : "dismiss",
+        }));
       return;
     }
     if (action === "show-assign") {
