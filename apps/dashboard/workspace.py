@@ -13,6 +13,7 @@ from django.views.decorators.http import require_POST
 from apps.accounts.context_processors import get_active_station
 from apps.charts.routing import get_selected_show, station_show
 from apps.charts.show_rankings import counts_for_show
+from apps.charts.multiplier import station_multiplier, score_for_votes
 from apps.voting.models import (
     RawVote,
     CleanedSong,
@@ -79,6 +80,7 @@ def page(request, qs):
 @api_access()
 def overview(request):
     station = get_active_station(request)
+    multiplier = station_multiplier(station)
     today = timezone.localdate()
     from apps.charts.periods import week_dates
     show = get_selected_show(request)
@@ -106,6 +108,8 @@ def overview(request):
             "can_add": request.user.is_superuser,
             "can_publish": request.user.is_superuser,
             "received": votes.count(), "verified_votes": sum(totals.values()),
+            "verified_score": score_for_votes(sum(totals.values()), multiplier),
+            "vote_multiplier": multiplier,
             "listeners": votes.values("user_id").distinct().count(),
             "pending_songs": CleanedSong.objects.filter(
                 station=station, status="pending"
@@ -142,6 +146,10 @@ def overview(request):
             "can_publish": request.user.is_superuser,
             "received": votes.count(),
             "verified_votes": accepted.aggregate(n=Sum("count"))["n"] or 0,
+            "verified_score": score_for_votes(
+                accepted.aggregate(n=Sum("count"))["n"] or 0, multiplier
+            ),
+            "vote_multiplier": multiplier,
             "listeners": votes.values("user_id").distinct().count(),
             "pending_songs": CleanedSong.objects.filter(
                 station=station, status="pending"
@@ -436,10 +444,15 @@ def export_chart(request):
 
     output = io.StringIO(newline="")
     writer = csv.writer(output)
-    writer.writerow(["Rank", "Title", "Artist", "Votes"])
+    multiplier = data.get("chart", data).get("vote_multiplier", 1)
+    writer.writerow(
+        ["Rank", "Title", "Artist", "Votes"] +
+        (["Weighted score (x" + str(multiplier) + ")"] if multiplier != 1 else [])
+    )
     for row in rows:
         writer.writerow(
-            [row["rank"], safe(row["title"]), safe(row["artists"]), row["count"]]
+            [row["rank"], safe(row["title"]), safe(row["artists"]), row["count"]] +
+            ([row.get("score", row["count"] * multiplier)] if multiplier != 1 else [])
         )
     response = HttpResponse(
         "\ufeff" + output.getvalue(), content_type="text/csv; charset=utf-8"
