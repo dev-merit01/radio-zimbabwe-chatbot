@@ -1981,3 +1981,24 @@ dialog:has(.show-form) {
     padding: 12px;
   }
 }
+
+/* Clearly distinguish station-level chart weighting from real listener votes. */
+.show-multiplier-current {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9px;
+  min-width: 58px;
+  padding: 7px 12px;
+  background: #e6efff;
+  color: #074ba6;
+  font-size: 22px;
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.5px;
+}
+.show-settings-panel [data-action="station-multiplier"] {
+  font-weight: 700;
+  border-color: #bacde8;
+  color: #0754bd;
+}
