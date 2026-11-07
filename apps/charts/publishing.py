@@ -9,7 +9,7 @@ from apps.charts.routing import legacy_show
 from apps.charts.multiplier import station_multiplier
 from apps.charts.show_rankings import counts_for_show, ranked_songs
 from apps.voting.models import (
-    CleanedSong, InboundEvent, ReviewAudit, VoteJob,
+    CleanedSong, InboundEvent, ReviewAudit, VoteJob, SuspectedSpamVote,
     WeeklyChart, WeeklyChartEntry,
 )
 from apps.voting.pipeline import lock_station, rebuild_tallies
@@ -110,9 +110,14 @@ def _publish(station, start, end, actor, size, chart_date=None, year_end=False, 
                 vote__vote_date__range=(start, end),
                 state__in=unfinished,
             ).exists()
+            or SuspectedSpamVote.objects.filter(
+                station=station, chart_show=show, state="pending",
+                received_at__date__range=(start, end),
+            ).exists()
         ):
             raise ValueError(
-                "This chart show still has unprocessed votes. Resolve its queue before publishing."
+                "This chart show has unprocessed or flagged votes. "
+                "Resolve its review queue before publishing."
             )
         if show.kind == "legacy":
             rebuild_tallies(station, date_range=(start, end))
