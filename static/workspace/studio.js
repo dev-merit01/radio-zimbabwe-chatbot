@@ -16,7 +16,7 @@
   const num = (v) => Number(v || 0).toLocaleString();
   let reader, toastTimer;
   let chartSize = 20, chartPeriod = "weekly";
-  let selectedShowId = null, showsCache = [], showPolicyEnabled = false;
+  let selectedShowId = null, showsCache = [], showPolicyEnabled = false, activeVoteMultiplier = 1;
   let page = "overview",
     pagination = 1,
     query = "",
@@ -83,15 +83,16 @@
     return `<section class="panel"><div class="panel-head"><h2>${esc(title)}</h2>${actions}</div>${body}</section>`;
   }
   function chart(rows) {
-    return rows.length
-      ? table(
-          ["Rank", "Song", "Votes", "Movement"],
-          rows.map(
-            (r) =>
-              `<tr><td>${r.rank}</td><td><strong>${esc(r.title)}</strong><br><small>${esc(r.artists)}</small></td><td class="vote-count">${num(r.count)}</td><td>${esc(r.movement)}</td></tr>`,
-          ),
-        )
-      : empty;
+    if (!rows.length) return empty;
+    const showScore = rows.some((r) => r.score !== undefined && r.score !== r.count);
+    return table(
+      ["Rank", "Song", "Votes", ...(showScore ? ["Weighted points"] : []), "Movement"],
+      rows.map((r) =>
+        `<tr><td>${r.rank}</td><td><strong>${esc(r.title)}</strong><br><small>${esc(r.artists)}</small></td><td class="vote-count">${num(r.count)}</td>` +
+        (showScore ? `<td class="vote-count">${num(r.score ?? r.count)}</td>` : "") +
+        `<td>${esc(r.movement)}</td></tr>`
+      ),
+    );
   }
   const pager = (d) =>
     `<div class="table-footer"><span>${num(d.total)} records</span><div class="pagination">${d.page > 1 ? btn("Previous", "previous") : ""}<span>${d.page} / ${d.pages}</span>${d.page < d.pages ? btn("Next", "next") : ""}</div></div>`;
@@ -116,6 +117,7 @@
       if (current !== generation) return;
       showsCache = showsData.shows;
       showPolicyEnabled = showsData.require_codes;
+      activeVoteMultiplier = showsData.vote_multiplier || 1;
       if (!showsCache.some((show) => show.id === selectedShowId))
         selectedShowId = showsCache.find((show) => show.kind === "legacy")?.id;
       const selectedShow = showsCache.find((show) => show.id === selectedShowId);
@@ -128,6 +130,7 @@
         html = `<div class="metrics">${[
           ["Received this week", overview.received],
           ["Verified votes", overview.verified_votes],
+          ...(overview.vote_multiplier > 1 ? [["Weighted chart points", overview.verified_score]] : []),
           ["Unique listeners", overview.listeners],
           ["Songs awaiting review", overview.pending_songs],
         ]
@@ -140,7 +143,7 @@
           '<div class="content-grid"><div>' +
           panel(
             chartPeriod === "year_end" ? "Year-to-date Top " + chartSize : "Live weekly Top " + chartSize,
-            `<form id="chart-options" class="toolbar"><label>Period <select name="period"><option value="weekly" ${chartPeriod === "weekly" ? "selected" : ""}>Sunday–Saturday</option><option value="year_end" ${chartPeriod === "year_end" ? "selected" : ""}>Year to date</option></select></label><label>Chart size <select name="size"><option value="20" ${chartSize === 20 ? "selected" : ""}>Top 20</option><option value="50" ${chartSize === 50 ? "selected" : ""}>Top 50</option></select></label><button class="button secondary">Show chart</button></form><p class="hint">${esc(data.week_start)} to ${esc(data.week_end)} · Verified votes only</p>` + chart(data.top100),
+            `<form id="chart-options" class="toolbar"><label>Period <select name="period"><option value="weekly" ${chartPeriod === "weekly" ? "selected" : ""}>Sunday–Saturday</option><option value="year_end" ${chartPeriod === "year_end" ? "selected" : ""}>Year to date</option></select></label><label>Chart size <select name="size"><option value="20" ${chartSize === 20 ? "selected" : ""}>Top 20</option><option value="50" ${chartSize === 50 ? "selected" : ""}>Top 50</option></select></label><button class="button secondary">Show chart</button></form><p class="hint">${esc(data.week_start)} to ${esc(data.week_end)} · Verified votes only · ${data.vote_multiplier > 1 ? "Weighted scoring ×" + data.vote_multiplier + " (votes remain unchanged)" : "1 vote = 1 point"}</p>` + chart(data.top100),
             `<a class="button secondary" href="/api/workspace/export?limit=${chartSize}&period=${chartPeriod}&show_id=${selectedShowId}">Export CSV</a>`,
           ) +
           '</div><aside class="side-stack"><section class="panel activity-card"><h2>Votes this week</h2><p>Received votes by day, including songs awaiting review.</p><canvas id="timeline" width="520" height="250" aria-label="Daily vote counts" role="img"></canvas><p id="timeline-summary" class="sr-only"></p></section><section class="review-callout"><h3>' +
@@ -244,7 +247,13 @@
           if (current !== generation) return;
           window.studioUnassigned = waiting.items;
           html += '<div class="show-settings-grid">' +
-            '<section class="panel show-settings-panel" aria-labelledby="show-code-policy-title">' +
+            '<section class="panel show-settings-panel" aria-labelledby="show-multiplier-title">' +
+              '<div class="show-settings-head"><h2 id="show-multiplier-title">Station vote multiplier</h2>' +
+                '<span class="show-multiplier-current">×' + activeVoteMultiplier + '</span></div>' +
+              '<p>Applies to the selected station and all its chart shows. Listener votes remain unchanged; charts display weighted points separately. Published editions keep their saved multiplier.</p>' +
+              btn("Change multiplier", "station-multiplier") +
+            '</section>' +
+            '<section class="panel show-settings-panel" aria-labelledby="show-code-policy-title">'' +
               '<div class="show-settings-head"><h2 id="show-code-policy-title">Voting code settings</h2>' +
                 '<span class="show-status show-status--' + (showsData.require_codes ? "live" : "scheduled") + '">' +
                 (showsData.require_codes ? "Codes required" : "Compatibility mode") +
@@ -287,10 +296,10 @@
           `<form id="search-form" class="toolbar"><label>Year <input name="q" type="number" min="1900" max="9999" value="${esc(d.year)}"></label><button class="button secondary">Load</button></form>` +
             (d.charts.length
               ? table(
-                  ["Edition", "Voting period", "Votes", "Open"],
+                  ["Edition", "Voting period", "Votes", "Weighted points", "Open"],
                   d.charts.map(
                     (c) =>
-                      `<tr><td>${c.is_year_end ? "Year-end Top 50" : "Top " + c.chart_size + " · " + (c.chart_date || "Week " + c.week_number)}</td><td>${esc(c.week_start)} – ${esc(c.week_end)}</td><td>${num(c.total_votes)}</td><td>${btn("View chart", "archive", c.id)}</td></tr>`,
+                      `<tr><td>${c.is_year_end ? "Year-end Top 50" : "Top " + c.chart_size + " · " + (c.chart_date || "Week " + c.week_number)}</td><td>${esc(c.week_start)} – ${esc(c.week_end)}</td><td>${num(c.total_votes)}</td><td>${num(c.total_score)} (×${c.vote_multiplier})</td><td>${btn("View chart", "archive", c.id)}</td></tr>`,
                   ),
                 )
               : empty),
@@ -312,7 +321,7 @@
         ${panel("Accounts & access", `<div class="admin-section-intro"><p>Approve access for the station shown. Account management includes station assignments, password resets and deactivation.</p></div>` + table(["Team member", "Assigned station", "Access", "Action"], d.accounts.map(u => `<tr><td><strong>${esc(u.name || u.username)}</strong><br><small>@${esc(u.username)}</small></td><td>${esc(u.station)}</td><td><span class="access-badge ${u.active ? "" : "pending"}">${u.active ? "Active" : "Awaiting activation"}</span></td><td>${u.active ? '<a class="account-link" href="/admin/auth/user/' + u.id + '/change/">Manage account →</a>' : btn("Approve access", "approve-account", u.id)}</td></tr>`)), '<a class="button secondary" href="/admin/auth/user/">Manage accounts</a>')}
         </div><aside class="admin-aside">
         <section class="admin-station-focus"><span class="studio-kicker">CURRENT WORKSPACE</span><h2>${esc(selected?.name)}</h2><p>These controls apply to this station.</p></section>
-        ${panel("Voting & publication", `<div class="admin-action-list"><button data-page="review"><strong>Review music <span>→</span></strong><small>Edit, verify, reject or merge songs.</small></button><button data-action="publish"><strong>Publish selected chart <span>→</span></strong><small>Publish a permanent Top 20 or Top 50.</small></button><button data-page="shows"><strong>Manage chart shows <span>→</span></strong><small>Choose the year-end chart show before publishing.</small></button><button data-page="archives"><strong>Chart archives <span>→</span></strong><small>Revisit and export saved editions.</small></button></div>`)}
+        ${panel("Voting & publication", `<div class="admin-action-list"><button data-page="review"><strong>Review music <span>→</span></strong><small>Edit, verify, reject or merge songs.</small></button><button data-action="publish"><strong>Publish selected chart <span>→</span></strong><small>Publish a permanent Top 20 or Top 50.</small></button><button data-page="shows"><strong>Manage chart shows <span>→</span></strong><small>Choose the year-end chart show before publishing.</small></button><button data-action="station-multiplier"><strong>Station vote multiplier <span>→</span></strong><small>Configure weighted points for the selected station (×1–×10).</small></button><button data-page="archives"><strong>Chart archives <span>→</span></strong><small>Revisit and export saved editions.</small></button></div>`)}
         ${panel("Station operations", `<div class="admin-action-list"><button data-action="station-password"><strong>Station password <span>→</span></strong><small>Manage access when switching stations.</small></button><button data-page="connections"><strong>Connections & queues <span>→</span></strong><small>Check providers and retry failed jobs.</small></button><button data-page="activity"><strong>Activity history <span>→</span></strong><small>Review recorded administrative actions.</small></button></div>`)}
         </aside></div>`;
       } else if (page === "activity") {
@@ -617,6 +626,23 @@
       modal("Archive " + show.name,
         "<p>This will stop new voting for the programme and hide it from the active list. All votes and published chart archives remain permanently intact.</p>",
         () => api("workspace/shows/archive", {id: Number(id)}));
+      return;
+    }
+    if (action === "station-multiplier") {
+      const options = Array.from({length: 10}, (_, i) =>
+        '<option value="' + (i + 1) + '"' +
+        (activeVoteMultiplier === i + 1 ? ' selected' : '') +
+        '>×' + (i + 1) + (i === 0 ? ' — standard, no weighting' : '') +
+        '</option>'
+      ).join("");
+      modal("Station vote multiplier",
+        '<p class="hint">This applies to the station currently selected by the administrator, across all its chart shows. Actual received votes stay unchanged; chart scores are multiplied. Changing the setting updates live score displays, but not saved chart archives.</p>' +
+        '<label class="field">Score multiplier<select name="multiplier" required>' + options + '</select></label>' +
+        '<p class="hint">Example: 10 verified votes with ×2 produces 20 chart points, while the vote count remains 10.</p>',
+        (fields) => api("workspace/shows/multiplier", {
+          multiplier: Number(fields.get("multiplier")),
+        })
+      );
       return;
     }
     if (action === "show-policy") {
