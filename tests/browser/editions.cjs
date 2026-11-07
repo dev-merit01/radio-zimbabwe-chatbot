@@ -45,6 +45,10 @@ const assert = require('node:assert/strict');
   await page.screenshot({path:'/tmp/airvote-admin.png',fullPage:true});
   await page.locator('nav [data-page="shows"]').click();
   await page.locator('.show-grid').waitFor();
+  await page.locator('#show-spam-title').waitFor();
+  assert.equal(await page.locator('#show-spam-title').innerText(), 'Suspected spam votes');
+  assert.ok((await page.locator('.show-spam-count').innerText()).includes('0 flagged'));
+
   assert.equal(await page.locator('.show-multiplier-current').innerText(), '×1');
   await page.getByRole('button', {name:'Change multiplier', exact:true}).click();
   await page.locator('#modal-content select[name="multiplier"]').waitFor();
