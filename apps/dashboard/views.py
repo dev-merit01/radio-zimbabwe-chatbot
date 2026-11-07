@@ -9,6 +9,7 @@ from apps.voting.models import CleanedSongTally, CleanedSong, WeeklyChart
 from apps.accounts.context_processors import get_active_station
 from apps.charts.routing import get_selected_show
 from apps.charts.show_rankings import counts_for_show, ranked_songs
+from apps.charts.multiplier import station_multiplier, score_for_votes
 
 
 def get_current_week_dates():
@@ -24,6 +25,7 @@ def get_week_dates_for_date(target_date):
 def chart_today_for_show(show, limit):
     """Live Top 20/50 from this show only, with previous programme-specific ranks."""
     today = timezone.localdate()
+    multiplier = station_multiplier(show.station)
     if show.kind == "year_end":
         start = show.campaign_start.date() if show.campaign_start else date(today.year, 1, 1)
         end = today
@@ -57,7 +59,7 @@ def chart_today_for_show(show, limit):
             "display_name": f"{music_name(song.artist)} - {music_name(song.title)}",
             "album": song.album or "", "image_url": song.image_url or "",
             "spotify_track_id": song.spotify_track_id or "",
-            "count": count, "previous_rank": old,
+            "count": count, "score": score_for_votes(count, multiplier), "previous_rank": old,
             "movement": movement, "is_verified": True,
         })
     totals = counts_for_show(show, start, end)
@@ -66,6 +68,8 @@ def chart_today_for_show(show, limit):
         "week_number": end.isocalendar()[1], "year": end.year,
         "updated_at": timezone.now().isoformat(),
         "total_songs": len(data), "total_votes": sum(totals.values()),
+        "total_score": score_for_votes(sum(totals.values()), multiplier),
+        "vote_multiplier": multiplier,
         "chart_type": kind, "chart_show": show.name, "chart_show_id": show.pk,
         "limit": limit, "top100": data,
     })
@@ -77,6 +81,7 @@ def chart_today(request):
     today = timezone.localdate()
     week_start, week_end = get_current_week_dates()
     station = get_active_station(request)
+    multiplier = station_multiplier(station)
     try:
         show = get_selected_show(request)
     except ValueError as exc:
@@ -152,6 +157,7 @@ def chart_today(request):
                 "image_url": song.image_url or "",
                 "spotify_track_id": song.spotify_track_id or "",
                 "count": song.week_votes or 0,
+                "score": score_for_votes(song.week_votes or 0, multiplier),
                 "previous_rank": prev_rank,
                 "movement": movement,
                 "is_verified": True,
@@ -182,6 +188,8 @@ def chart_today(request):
             "updated_at": timezone.now().isoformat(),
             "total_songs": len(data),
             "total_votes": total_week_votes,
+            "total_score": score_for_votes(total_week_votes, multiplier),
+            "vote_multiplier": multiplier,
             "chart_type": period,
             "limit": limit,
             "top100": data,  # Keep key for backward compatibility
@@ -223,6 +231,8 @@ def chart_archives(request):
                 "chart_show_id": chart.chart_show_id,
                 "chart_show": chart.chart_show.name if chart.chart_show else "",
                 "total_votes": chart.total_votes,
+                "total_score": score_for_votes(chart.total_votes, chart.vote_multiplier),
+                "vote_multiplier": chart.vote_multiplier,
                 "unique_songs": chart.unique_songs,
                 "finalized_at": chart.finalized_at.isoformat()
                 if chart.finalized_at
@@ -271,6 +281,7 @@ def chart_detail(request, chart_id):
                 "image_url": entry.image_url,
                 "spotify_track_id": entry.spotify_track_id,
                 "count": entry.vote_count,
+                "score": score_for_votes(entry.vote_count, chart.vote_multiplier),
                 "previous_rank": entry.previous_rank,
                 "weeks_on_chart": entry.weeks_on_chart,
                 "peak_rank": entry.peak_rank,
@@ -290,6 +301,8 @@ def chart_detail(request, chart_id):
                 "chart_date": str(chart.chart_date) if chart.chart_date else None,
                 "chart_size": chart.chart_size,
                 "total_votes": chart.total_votes,
+                "total_score": score_for_votes(chart.total_votes, chart.vote_multiplier),
+                "vote_multiplier": chart.vote_multiplier,
                 "finalized_at": chart.finalized_at.isoformat()
                 if chart.finalized_at
                 else None,
