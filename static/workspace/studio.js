@@ -738,6 +738,29 @@
   }
   const field = (label, name, value = "", type = "text") =>
     `<label class="field">${label}<input required maxlength="240" name="${name}" type="${type}" value="${esc(value)}"></label>`;
+  function stationFormFields(station = {}) {
+    const existing = Boolean(station.slug);
+    const name = '<label class="field">Station name<input name="name" minlength="3" maxlength="100" required value="' +
+      esc(station.name || "") + '" placeholder="e.g. Midlands Radio"></label>';
+    const number = '<label class="field">Bird WhatsApp receiving number (optional during setup)' +
+      '<input name="bird_number" inputmode="tel" maxlength="20" autocomplete="off" value="' +
+      esc(station.bird_number || station.effective_bird_number || "") +
+      '" placeholder="263790000000"></label>';
+    const logo = '<label class="field">Station logo HTTPS image URL (optional)' +
+      '<input name="logo_url" type="url" maxlength="500" value="' +
+      esc(station.logo_url || "") + '" placeholder="https://example.org/station-logo.png"></label>';
+    const status = existing
+      ? showSelectField("Station status", "station_active",
+        [["false", "Disabled — setup / maintenance"], ["true", "Active — accept configured votes"]],
+        String(Boolean(station.is_active)))
+      : '<p class="hint">New stations are initially disabled. AirVote will generate a permanent station ID. Configure its chart shows and Bird number before activation.</p>';
+    return '<div class="network-station-form">' +
+      (existing ? '<p class="network-permanent-id"><strong>Permanent ID:</strong> ' +
+        esc(station.slug) + ' <small>(cannot be changed)</small></p>' : "") +
+      name + number + logo + status +
+      '<p class="hint">The Bird number identifies the station; voting codes then identify each chart show. A number already reserved for another station cannot be reassigned here. Existing Railway-configured numbers remain connected until that configuration is retired.</p>' +
+      '</div>';
+  }
   const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
   const showSelectField = (label, name, options, current) =>
     '<label class="field">' + esc(label) + '<select name="' + name + '">' +
@@ -1084,6 +1107,51 @@
       } catch (err) {
         toast(err.message);
       }
+      return;
+    }
+    if (action === "network-manage") {
+      navigate("stations");
+      return;
+    }
+    if (action === "network-station-new") {
+      modal("Create a radio station", stationFormFields(),
+        async (fields) => {
+          const result = await api("workspace/stations/create", {
+            name: fields.get("name"),
+            bird_number: fields.get("bird_number") || "",
+            logo_url: fields.get("logo_url") || "",
+          });
+          const select = $("station-select");
+          if (select && result.station && !Array.from(select.options).some(
+            (option) => option.value === result.station.slug
+          )) {
+            select.add(new Option(result.station.name, result.station.slug));
+          }
+        });
+      return;
+    }
+    if (action === "network-station-edit") {
+      const station = (window.airvoteNetworkStations || []).find(
+        (item) => item.slug === id
+      );
+      if (!station) { toast("Station is no longer available."); return; }
+      modal("Configure " + station.name, stationFormFields(station),
+        async (fields) => {
+          const result = await api("workspace/stations/update", {
+            slug: station.slug, name: fields.get("name"),
+            bird_number: fields.get("bird_number") || "",
+            logo_url: fields.get("logo_url") || "",
+            is_active: fields.get("station_active") === "true",
+          });
+          const option = Array.from($("station-select")?.options || []).find(
+            (item) => item.value === result.station.slug
+          );
+          if (option) option.textContent = result.station.name;
+          if (result.station.slug === $("station-select")?.value) {
+            const heading = document.querySelector(".station strong");
+            if (heading) heading.textContent = result.station.name;
+          }
+        });
       return;
     }
     if (action === "admin-station") {
