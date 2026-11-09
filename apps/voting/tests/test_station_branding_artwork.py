@@ -2,13 +2,13 @@
 
 from types import SimpleNamespace
 
-from django.test import SimpleTestCase
+from django.test import TestCase
 
 from apps.accounts.context_processors import station_branding
 from apps.accounts.models import Station
 
 
-class StationBrandingArtworkTests(SimpleTestCase):
+class StationBrandingArtworkTests(TestCase):
     def get_branding(self, station):
         request = SimpleNamespace(
             session={},
