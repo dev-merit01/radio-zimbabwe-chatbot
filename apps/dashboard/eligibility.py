@@ -13,7 +13,7 @@ from apps.accounts.permissions import presenter_show, require_presenter_show
 from apps.charts.routing import station_show
 from apps.voting.models import (
     CandidateSongSuggestion, ChartShow, CleanedSong, EditionCandidate,
-    EligibleEdition, MatchKeyMapping, RawVote, ReviewAudit,
+    EligibleEdition, InboundEvent, MatchKeyMapping, RawVote, ReviewAudit,
 )
 from apps.voting.pipeline import lock_station
 
@@ -336,9 +336,15 @@ def review_edition(request):
         else:
             # No switching eligibility on after listeners have already
             # participated in this period; no silent retroactive exclusions.
+            current_window = _edition_window(edition.chart_show, edition.chart_date)
+            if current_window != (edition.voting_start, edition.voting_end):
+                raise ValueError("Programme dates changed. Create a new shortlist.")
             if RawVote.objects.filter(
                 station=station, chart_show=edition.chart_show,
                 vote_date__range=(edition.voting_start, edition.voting_end),
+            ).exists() or InboundEvent.objects.filter(
+                station=station, chart_show=edition.chart_show,
+                received_at__date__range=(edition.voting_start, edition.voting_end),
             ).exists():
                 raise ValueError("Voting has already started for this edition. "
                                  "Prepare the candidate list for the next edition.")
