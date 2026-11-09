@@ -2107,3 +2107,42 @@ dialog:has(.show-form) {
   .eligible-actions { padding:12px 15px; }
   .eligible-search { margin:0 15px 15px; padding:12px; }
 }
+
+
+/* Official ZBC programme directory: on-air information stays distinct from
+   the station's voting schedule and the listeners' WhatsApp code. */
+.show-broadcast,
+.show-presenter {
+  margin: 0 0 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #455e79;
+  overflow-wrap: anywhere;
+}
+.show-broadcast strong,
+.show-presenter strong {
+  color: #183b60;
+  font-weight: 700;
+}
+.show-presenter {
+  margin-bottom: 18px;
+}
+.show-vote-example {
+  margin: 8px 2px 0;
+  font-size: 11px;
+  color: #647c97;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.show-vote-example strong {
+  color: #294f7d;
+  font-weight: 650;
+}
+.show-form-section > .show-form-caption {
+  color: #62758a;
+  line-height: 1.55;
+}
+@media (max-width: 580px) {
+  .show-broadcast, .show-presenter { font-size: 12px; }
+  .show-vote-example { font-size: 11px; }
+}
