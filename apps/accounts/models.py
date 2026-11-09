@@ -97,10 +97,15 @@ def station_choices(*, active_only=False):
 def station_exists(slug, *, active_only=False):
     if not isinstance(slug, str) or not slug or len(slug) > 32:
         return False
-    qs = BroadcastStation.objects.filter(slug=slug)
-    if active_only:
-        qs = qs.filter(is_active=True)
-    return qs.exists()
+    active = BroadcastStation.objects.filter(slug=slug).values_list(
+        "is_active", flat=True
+    ).first()
+    if active is None:
+        # The historical seven station IDs remain valid if an old database
+        # has not been seeded yet, or in isolated transactional test resets.
+        # A deliberately deactivated database row is NOT overridden.
+        return slug in Station.values
+    return bool(active) if active_only else True
 
 
 def station_label(slug):
