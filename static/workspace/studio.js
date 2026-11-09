@@ -133,6 +133,7 @@
       const selectedShow = showsCache.find((show) => show.id === selectedShowId);
       if (lastChartShowId !== selectedShowId) {
         chartSize = selectedShow?.kind === "legacy" ? 20 : selectedShow?.chart_size || 20;
+        chartPeriod = selectedShow?.kind === "year_end" ? "year_end" : "weekly";
         lastChartShowId = selectedShowId;
       }
       const overview = await read("workspace/overview?show_id=" + selectedShowId);
