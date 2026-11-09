@@ -50,12 +50,19 @@ def serialize(show):
 def list_shows(request):
     station = get_active_station(request)
     config, _ = StationVotingConfig.objects.get_or_create(station=station)
+    from apps.accounts.permissions import presenter_show
+    assigned = presenter_show(request.user)
+    visible = ChartShow.objects.filter(station=station)
+    if assigned:
+        visible = visible.filter(pk=assigned.pk)
     return JsonResponse({
         "station": station, "is_admin": request.user.is_superuser,
         "require_codes": config.require_codes,
         "vote_multiplier": config.vote_multiplier,
+        "presenter_show_id": assigned.pk if assigned else None,
+        "is_presenter": bool(assigned),
         "shows": [serialize(s) for s in
-                  ChartShow.objects.filter(station=station).order_by("kind", "name", "id")],
+                  visible.order_by("kind", "name", "id")],
         "unassigned_pending": UnassignedVote.objects.filter(
             station=station, state="pending"
         ).count() if request.user.is_superuser else 0,
@@ -172,6 +179,19 @@ def save_show(request):
             show.raw_votes.exists() or show.published_charts.exists()
         ):
             raise ValueError("Cannot change the type of a show containing votes or archives.")
+        if show and show.eligible_editions.filter(status="locked").exists():
+            # Preserve period boundaries for immutable candidate lists.
+            if (
+                show.schedule_mode != mode
+                or show.broadcast_weekday != broadcast
+                or show.chart_size != size
+                or show.campaign_start != start
+                or show.campaign_end != end
+            ):
+                raise ValueError(
+                    "Approved candidate lists lock the programme's schedule "
+                    "and chart size. Archive the show before changing them."
+                )
         show = show or ChartShow(station=station)
         show.name = name
         show.code = code

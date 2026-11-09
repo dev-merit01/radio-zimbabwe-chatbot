@@ -1,4 +1,5 @@
 import re
+from django.conf import settings
 from django.db import models
 from django.utils import timezone
 from apps.accounts.models import Station
@@ -61,6 +62,8 @@ class ChartShow(models.Model):
     chart_size = models.PositiveSmallIntegerField(default=20)
     daily_limit = models.PositiveSmallIntegerField(default=5)
     is_archived = models.BooleanField(default=False)
+    # Activated only after an edition shortlist is approved and locked.
+    eligibility_enforced = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -110,6 +113,93 @@ class ChartShow(models.Model):
         current_minutes = when.weekday() * 1440 + when.hour * 60 + when.minute
         return (start_minutes <= current_minutes < end_minutes
                 or start_minutes <= current_minutes + 7 * 1440 < end_minutes)
+
+
+class EligibleEdition(models.Model):
+    """Approved candidate shortlist for one immutable show voting period."""
+
+    STATUS = [
+        ("draft", "Draft"), ("submitted", "Awaiting approval"),
+        ("returned", "Returned for revision"), ("locked", "Approved and locked"),
+    ]
+    station = models.CharField(max_length=32, choices=Station.choices, db_index=True)
+    chart_show = models.ForeignKey(
+        ChartShow, on_delete=models.PROTECT, related_name="eligible_editions",
+    )
+    chart_date = models.DateField()
+    voting_start = models.DateField()
+    voting_end = models.DateField()
+    status = models.CharField(max_length=16, choices=STATUS, default="draft")
+    prepared_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL,
+        related_name="prepared_eligible_editions",
+    )
+    approved_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="approved_eligible_editions",
+    )
+    approved_at = models.DateTimeField(null=True, blank=True)
+    note = models.CharField(max_length=500, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["chart_show", "chart_date"],
+                name="unique_eligible_chart_edition",
+            ),
+        ]
+        ordering = ["-chart_date", "-id"]
+
+
+class EditionCandidate(models.Model):
+    edition = models.ForeignKey(
+        EligibleEdition, on_delete=models.CASCADE, related_name="candidates",
+    )
+    song = models.ForeignKey(
+        "CleanedSong", on_delete=models.PROTECT, related_name="candidate_editions",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["edition", "song"], name="unique_edition_song",
+            ),
+        ]
+
+
+class CandidateSongSuggestion(models.Model):
+    """Presenter nominations of genuinely new songs, pending admin verification."""
+
+    STATUS = [
+        ("pending", "Pending review"), ("accepted", "Accepted"),
+        ("rejected", "Rejected"),
+    ]
+    edition = models.ForeignKey(
+        EligibleEdition, on_delete=models.PROTECT, related_name="suggestions",
+    )
+    artist = models.CharField(max_length=256)
+    title = models.CharField(max_length=256)
+    notes = models.CharField(max_length=500, blank=True)
+    status = models.CharField(max_length=16, choices=STATUS, default="pending")
+    suggested_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, on_delete=models.SET_NULL,
+        related_name="candidate_suggestions",
+    )
+    matched_song = models.ForeignKey(
+        "CleanedSong", null=True, blank=True, on_delete=models.PROTECT,
+        related_name="resolved_candidate_suggestions",
+    )
+    reviewed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL, null=True, blank=True,
+        on_delete=models.SET_NULL, related_name="reviewed_candidate_suggestions",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
+
 
 
 class StationVotingConfig(models.Model):

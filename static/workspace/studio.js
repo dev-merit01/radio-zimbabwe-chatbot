@@ -17,6 +17,7 @@
   let reader, toastTimer;
   let chartSize = 20, chartPeriod = "weekly";
   let selectedShowId = null, showsCache = [], showPolicyEnabled = false, activeVoteMultiplier = 1;
+  let selectedEditionId = null, eligibilityResults = [], eligibilityQuery = "";
   let page = "overview",
     pagination = 1,
     query = "",
@@ -27,6 +28,8 @@
   const titles = {
     overview: "Voting overview",
     shows: "Chart shows",
+    eligibility: "Eligible songs",
+    presenters: "Presenter accounts",
     administration: "Admin control",
     incoming: "Incoming votes",
     review: "Review queue",
@@ -119,7 +122,13 @@
       showPolicyEnabled = showsData.require_codes;
       activeVoteMultiplier = showsData.vote_multiplier || 1;
       if (!showsCache.some((show) => show.id === selectedShowId))
-        selectedShowId = showsCache.find((show) => show.kind === "legacy")?.id;
+        selectedShowId = showsData.presenter_show_id ||
+          showsCache.find((show) => show.kind === "legacy")?.id ||
+          showsCache[0]?.id;
+      if (page === "eligibility" && showsCache.find((show) => show.id === selectedShowId)?.kind === "legacy")
+        selectedShowId = showsCache.find((show) => show.kind !== "legacy")?.id;
+      if (page === "eligibility" && !selectedShowId)
+        throw new Error("Create a programme first before preparing its candidate list.");
       const selectedShow = showsCache.find((show) => show.id === selectedShowId);
       const overview = await read("workspace/overview?show_id=" + selectedShowId);
       if (current !== generation) return;
@@ -185,6 +194,144 @@
         if (incoming && d.submissions?.length) {
           html += `<section class="panel"><div class="panel-heading"><h2>Recent submissions</h2></div><div class="table-wrap"><table><thead><tr><th>Vote</th><th>Processing</th><th>Result</th></tr></thead><tbody>${d.submissions.map(s => `<tr><td>${esc(s.text)}</td><td>${esc(s.state)}</td><td>${esc(s.reply || "Waiting for the voting worker")}</td></tr>`).join("")}</tbody></table></div></section>`;
         }
+      } else if (page === "eligibility") {
+        const show = showsCache.find((item) => item.id === selectedShowId);
+        if (show?.kind === "legacy") throw new Error("Select a chart show, not the historical chart.");
+        if (window.eligibilityLastShowId !== selectedShowId) {
+          window.eligibilityLastShowId = selectedShowId;
+          selectedEditionId = null;
+          eligibilityResults = [];
+          eligibilityQuery = "";
+        }
+        const url = "workspace/eligibility?show_id=" + selectedShowId +
+          (selectedEditionId ? "&edition_id=" + selectedEditionId : "");
+        const d = await read(url);
+        if (current !== generation) return;
+        const selected = d.selected;
+        if (selected) selectedEditionId = selected.id;
+        const canEdit = selected && ["draft", "returned"].includes(selected.status);
+        const canReview = d.is_admin && selected?.status === "submitted";
+        const programmeSelect = d.is_admin
+          ? '<label class="field">Select programme<select id="eligibility-show-select">' +
+            showsCache.filter((show) => show.kind !== "legacy").map((item) =>
+              '<option value="' + item.id + '"' +
+              (item.id === selectedShowId ? " selected" : "") + '>' +
+              esc(item.name) + '</option>'
+            ).join("") + '</select></label>'
+          : '<div class="eligible-assigned"><strong>Assigned programme:</strong> ' +
+            esc(d.chart_show) + '</div>';
+        html = '<div class="eligible-page">' +
+          panel("Programme candidate lists",
+            '<p class="hint">The presenter prepares candidates and the administrator approves the eligible list before voting starts. Listener votes alone determine the rankings.</p>' +
+            programmeSelect +
+            '<div class="eligible-overview"><span>Chart positions: <strong>Top ' +
+              num(d.chart_size) + '</strong></span><span>Eligibility protection: <strong>' +
+              (d.eligibility_enforced ? "Enabled" : "Not activated") +
+              '</strong></span></div>' +
+            '<div class="eligible-edition-list">' +
+              (d.editions.length ? d.editions.map((item) =>
+                '<button class="eligible-edition-option ' +
+                (selectedEditionId === item.id ? "is-selected" : "") +
+                '" data-action="eligible-select" data-id="' + item.id + '">' +
+                '<strong>' + esc(item.chart_date) + '</strong> · ' +
+                esc(item.status) + ' · ' + num(item.candidate_count) +
+                ' songs</button>'
+              ).join("") : '<p class="hint">No editions prepared for this programme.</p>') +
+            '</div>',
+            d.can_prepare ? btn("Create new edition", "eligible-new") : "") +
+          (selected
+            ? panel("Candidate list · " + selected.chart_date,
+              '<div class="eligible-details">' +
+              '<p><strong>Status:</strong> ' + esc(selected.status) +
+              ' · <strong>Voting period:</strong> ' + esc(selected.voting_start) +
+              ' to ' + esc(selected.voting_end) + '</p>' +
+              (selected.note ? '<p class="hint"><strong>Admin notes:</strong> ' +
+              esc(selected.note) + '</p>' : "") +
+              (selected.status === "locked"
+                ? '<p class="eligible-locked">Approved and locked by ' +
+                  esc(selected.approved_by) + '. No changes to this shortlist are permitted.</p>'
+                : "") + '</div>' +
+              (selected.candidates.length
+                ? table(["Artist", "Song", "Catalogue status", "Action"],
+                    selected.candidates.map((item) =>
+                      '<tr><td>' + esc(item.artist) + '</td><td>' +
+                      esc(item.title) + '</td><td>' + esc(item.status) +
+                      '</td><td>' +
+                      (canEdit ? btn("Remove", "eligible-remove", item.id) : "Locked") +
+                      '</td></tr>'))
+                : '<p class="show-queue-empty">No verified candidate songs selected yet.</p>') +
+              (canEdit ? '<div class="eligible-actions">' +
+                btn("Find verified songs", "eligible-find") +
+                btn("Propose a new song", "eligible-suggest") +
+                btn("Submit for approval", "eligible-submit") +
+                '</div>' : "") +
+              (canReview ? '<div class="eligible-actions">' +
+                btn("Approve and lock", "eligible-approve") +
+                btn("Return for revision", "eligible-return") +
+                '</div>' : "") +
+              (canEdit ? '<div class="eligible-search"><label class="field">Search verified catalogue' +
+                '<input id="eligible-search-input" placeholder="Artist or song title" value="' +
+                  esc(eligibilityQuery) + '"></label>' +
+                (eligibilityResults.length
+                  ? table(["Artist", "Song", "Action"], eligibilityResults.map((item) =>
+                      '<tr><td>' + esc(item.artist) + '</td><td>' + esc(item.title) +
+                      '</td><td>' + btn("Add", "eligible-add", item.id) + '</td></tr>'))
+                  : '<p class="hint">Search by artist or title to add a verified catalogue entry.</p>') +
+              '</div>' : "") +
+              (selected.suggestions.length ? '<div class="eligible-suggestions"><h3>New song suggestions</h3>' +
+                table(["Artist", "Song", "Status", "Action"], selected.suggestions.map((item) =>
+                  '<tr><td>' + esc(item.artist) + '</td><td>' +
+                    esc(item.title) + '</td><td>' + esc(item.status) +
+                    '</td><td>' + (d.is_admin && item.status === "pending" &&
+                     selected.status !== "locked" ?
+                      btn("Link verified song", "eligible-proposal-accept", item.id) +
+                      btn("Reject", "eligible-proposal-reject", item.id)
+                      : "") + '</td></tr>')) + '</div>' : ""),
+              "") +
+            panel("Nominations outside the shortlist",
+              '<p class="hint">Incoming song requests that do not match the eligible list remain nomination interest; they cannot enter official rankings. No vote is carried into a later edition.</p>' +
+              (d.nomination_interest?.length
+                ? table(["Song requested", "Submissions"], d.nomination_interest.map((item) =>
+                    '<tr><td>' + esc(item.display_name) + '</td><td>' +
+                    num(item.n) + '</td></tr>'))
+                : '<p class="show-queue-empty">No unlisted song requests in this edition.</p>'),
+              "")
+            : '<div class="empty"><h3>Create your first candidate list</h3>' +
+                '<p>Prepare a list for an upcoming broadcast before voting opens.</p></div>') +
+          '</div>';
+      } else if (page === "presenters") {
+        const d = await read("workspace/presenters");
+        if (current !== generation) return;
+        window.presenterAccounts = d;
+        const choices = showsCache.filter((item) =>
+          item.kind !== "legacy" && !item.is_archived
+        );
+        html = '<div class="presenter-page">' +
+          panel("Presenter accounts · " + esc(overview.station),
+            '<p class="hint">Assign each presenter to one chart show in the selected station. They sign in with their own username and password; only the central administrator can change assignments.</p>' +
+            (d.presenters.length ? table(
+              ["Username", "Assigned chart show", "Login", "Action"],
+              d.presenters.map((item) =>
+                '<tr><td><strong>' + esc(item.username) + '</strong></td><td>' +
+                esc(item.chart_show) + '</td><td>' +
+                (item.active ? "Active" : "Inactive") + '</td><td>' +
+                btn("Change assignment", "presenter-reassign", item.user_id) +
+                '</td></tr>'
+              )
+            ) : '<p class="show-queue-empty">No presenters assigned to this station yet.</p>'),
+            choices.length ? btn("Create presenter account", "presenter-create") : "") +
+          panel("Existing station accounts",
+            '<p class="hint">Existing station accounts continue to work. The administrator can assign an account to a specific programme without changing its password.</p>' +
+            (d.unassigned_accounts.length ? table(
+              ["Username", "Status", "Action"],
+              d.unassigned_accounts.map((item) =>
+                '<tr><td>' + esc(item.username) + '</td><td>' +
+                (item.active ? "Active" : "Inactive") + '</td><td>' +
+                (choices.length ? btn("Assign chart show", "presenter-assign", item.user_id) : "") +
+                '</td></tr>'
+              )
+            ) : '<p class="show-queue-empty">All current station accounts have assignments.</p>')) +
+          '</div>';
       } else if (page === "shows") {
         window.studioShows = showsCache;
         const programmeShows = showsCache.filter((show) => show.kind !== "legacy");
@@ -386,7 +533,7 @@
       if (permissions.is_admin && ["activity", "connections"].includes(page)) {
         html = '<div class="workspace-tools"><button class="button secondary" data-page="administration">← Admin control</button></div>' + html;
       }
-      if (["overview", "incoming", "archives"].includes(page)) {
+      if (["overview", "incoming", "archives"].includes(page) && !showsData.is_presenter) {
         html = '<div class="workspace-tools"><label>Chart show <select id="chart-show-select">' +
           showsCache.filter((show) => !show.is_archived || show.id === selectedShowId)
             .map((show) => '<option value="' + show.id + '"' + (show.id === selectedShowId ? ' selected' : '') + '>' + esc(show.name) + (show.is_archived ? " (archived)" : "") + '</option>').join("") +
@@ -474,6 +621,8 @@
       catalogue: "Search, edit and manage your station’s music.",
       archives: "Immutable published charts for the selected programme.",
       shows: "Programmes, voting codes, schedules and per-show settings.",
+      eligibility: "Prepare verified candidate lists, propose new songs and submit for administrator approval.",
+      presenters: "Assign each presenter to exactly one station and chart show.",
       administration: "Manage accounts and oversee voting across every station.",
       activity: "A record of catalogue changes and chart publications.",
       connections: "Provider setup, background workers and processing queues.",
@@ -622,6 +771,113 @@
     if (!b) return;
     const action = b.dataset.action,
       id = b.dataset.id;
+    if (action === "eligible-select") {
+      selectedEditionId = Number(id);
+      eligibilityResults = [];
+      render();
+      return;
+    }
+    if (action === "eligible-new") {
+      modal("Create candidate list", field("Broadcast/chart date", "chart_date", "", "date"),
+        (fields) => api("workspace/eligibility/create", {
+          chart_show_id: selectedShowId, chart_date: fields.get("chart_date"),
+        }));
+      return;
+    }
+    if (action === "eligible-find") {
+      eligibilityQuery = document.getElementById("eligible-search-input")?.value?.trim() || "";
+      if (!eligibilityQuery) { toast("Enter an artist or song title."); return; }
+      try {
+        const d = await api("workspace/songs?status=verified&q=" +
+          encodeURIComponent(eligibilityQuery) + "&page=1");
+        eligibilityResults = d.items || [];
+        await render();
+      } catch (error) { toast(error.message); }
+      return;
+    }
+    if (action === "eligible-add" || action === "eligible-remove") {
+      try {
+        await api("workspace/eligibility/candidate", {
+          edition_id: selectedEditionId,
+          song_id: Number(id),
+          action: action === "eligible-add" ? "add" : "remove",
+        });
+        await render();
+      } catch (error) { toast(error.message); }
+      return;
+    }
+    if (action === "eligible-suggest") {
+      modal("Propose a new song",
+        field("Artist name", "artist") + field("Song title", "title") +
+        '<label class="field">Release details (optional)<textarea name="notes" maxlength="500"></textarea></label>',
+        (fields) => api("workspace/eligibility/suggest", {
+          edition_id: selectedEditionId, artist: fields.get("artist"),
+          title: fields.get("title"), notes: fields.get("notes") || "",
+        }));
+      return;
+    }
+    if (action === "eligible-submit") {
+      modal("Submit candidate list for approval",
+        "<p>The central administrator will check the songs and lock the approved list before voting begins.</p>",
+        () => api("workspace/eligibility/submit", {
+          edition_id: selectedEditionId,
+        }));
+      return;
+    }
+    if (action === "eligible-approve" || action === "eligible-return") {
+      const approving = action === "eligible-approve";
+      modal(approving ? "Approve and lock song list" : "Return for revision",
+        approving
+          ? "<p>Once approved, this edition's songs are locked. Only these songs can count in the chart. The list must be approved before voting starts.</p>"
+          : '<label class="field">Reason for revision<textarea name="note" maxlength="500"></textarea></label>',
+        (fields) => api("workspace/eligibility/review", {
+          edition_id: selectedEditionId,
+          action: approving ? "approve" : "return",
+          ...(approving ? {} : {note: fields.get("note") || ""}),
+        }));
+      return;
+    }
+    if (action === "eligible-proposal-accept" || action === "eligible-proposal-reject") {
+      const accept = action === "eligible-proposal-accept";
+      modal(accept ? "Link to verified catalogue song" : "Reject suggested song",
+        accept
+          ? '<p class="hint">First verify the proposed song in Song catalogue, then enter its verified song ID. The match must belong to this station.</p>' +
+            field("Verified catalogue song ID", "song_id", "", "number")
+          : "<p>Rejecting a suggestion does not delete it from the audit history.</p>",
+        (fields) => api("workspace/eligibility/suggestion/review", {
+          suggestion_id: Number(id), action: accept ? "accept" : "reject",
+          ...(accept ? {song_id: Number(fields.get("song_id"))} : {}),
+        }));
+      return;
+    }
+    if (action === "presenter-create") {
+      const options = showsCache.filter((item) =>
+        item.kind !== "legacy" && !item.is_archived
+      ).map((item) => [item.id, item.name]);
+      modal("Create presenter account",
+        field("Presenter username", "username") +
+        '<label class="field">Strong password<input name="password" type="password" required minlength="12" maxlength="128" autocomplete="new-password"></label>' +
+        showSelectField("Assigned chart show", "chart_show_id", options, options[0]?.[0]) +
+        '<p class="hint">The presenter will only access this station and programme. The password is saved securely as a hash.</p>',
+        (fields) => api("workspace/presenters/create", {
+          username: fields.get("username"), password: fields.get("password"),
+          chart_show_id: Number(fields.get("chart_show_id")),
+        }));
+      return;
+    }
+    if (action === "presenter-assign" || action === "presenter-reassign") {
+      const options = showsCache.filter((item) =>
+        item.kind !== "legacy" && !item.is_archived
+      ).map((item) => [item.id, item.name]);
+      if (!options.length) { toast("Create a chart show first."); return; }
+      modal("Assign presenter to programme",
+        showSelectField("Chart show", "chart_show_id", options, options[0][0]) +
+        '<p class="hint">Only the central administrator can change this assignment. The new programme takes effect on the next request.</p>',
+        (fields) => api("workspace/presenters/assign", {
+          user_id: Number(id), chart_show_id: Number(fields.get("chart_show_id")),
+        }));
+      return;
+    }
     if (action === "show-select") {
       selectedShowId = Number(id);
       chartPeriod = "weekly";
@@ -851,6 +1107,14 @@
     if (e.target.closest("#modal-content .show-form") &&
         ["kind", "schedule_mode"].includes(e.target.name)) {
       syncShowFormVisibility();
+    }
+    if (e.target.id === "eligibility-show-select") {
+      selectedShowId = Number(e.target.value);
+      selectedEditionId = null;
+      eligibilityResults = [];
+      eligibilityQuery = "";
+      render();
+      return;
     }
     if (e.target.id === "chart-show-select") {
       selectedShowId = Number(e.target.value);

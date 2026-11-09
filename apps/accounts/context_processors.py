@@ -45,6 +45,13 @@ def get_active_station(request) -> str:
         if not user or not getattr(user, "is_authenticated", False):
             return Station.RADIO_ZIMBABWE
 
+        from .permissions import presenter_show
+        assigned = presenter_show(user)
+        if assigned:
+            # Assigned presenters can never override their station with a
+            # stale session or an independently supplied station password.
+            return assigned.station
+
         session = getattr(request, "session", None)
         switched = session.get("switched_station") if session else None
         if switched in Station.values:
@@ -64,7 +71,10 @@ def get_active_station(request) -> str:
 
         return Station.RADIO_ZIMBABWE
     except Exception:
-        # Never let a context processor-dependent helper break page rendering
+        # Authenticated users must fail closed rather than silently seeing
+        # Radio Zimbabwe if assignment retrieval is unavailable.
+        if getattr(getattr(request, "user", None), "is_authenticated", False):
+            raise
         return Station.RADIO_ZIMBABWE
 
 
@@ -87,9 +97,11 @@ def station_branding(request):
 
         # Every signed-in station user can request a password-protected switch
         user = getattr(request, "user", None)
+        from .permissions import presenter_show
+        assigned = presenter_show(user)
         can_switch_station = bool(
-            user
-            and getattr(user, "is_authenticated", False)
+            user and getattr(user, "is_authenticated", False)
+            and assigned is None
         )
 
         return {
@@ -99,6 +111,7 @@ def station_branding(request):
             "branding_station_logo_fallback_url": fallback_url,
             "active_station": station,
             "can_switch_station": can_switch_station,
+            "presenter_chart_show_name": assigned.name if assigned else None,
             "station_choices": Station.choices if can_switch_station else [],
         }
     except Exception:

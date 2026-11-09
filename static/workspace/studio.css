@@ -2039,3 +2039,71 @@ dialog:has(.show-form) {
     padding: 13px 16px;
   }
 }
+
+/* Presenter-owned eligible song lists and independent administrator accounts. */
+.eligible-page,
+.presenter-page { display:grid; gap:20px; max-width:1370px; }
+.eligible-page > .panel,
+.presenter-page > .panel { min-width:0; }
+.eligible-overview { display:flex; flex-wrap:wrap; gap:14px; margin:14px 0; }
+.eligible-overview span {
+  display:inline-flex; gap:7px; align-items:center;
+  background:#f0f5fb; color:#324c6b;
+  border:1px solid #dae5f1; padding:9px 13px; border-radius:8px; font-size:13px;
+}
+.eligible-assigned { background:#f0f5fb; padding:12px 16px; border-radius:8px; }
+.eligible-edition-list {
+  display:flex; flex-wrap:wrap; gap:8px; margin:14px 0 7px;
+}
+.eligible-edition-option {
+  cursor:pointer; background:#fff; border:1px solid #cdd9e9;
+  color:#254360; padding:11px 14px; border-radius:8px;
+  font-size:13px; line-height:1.5;
+}
+.eligible-edition-option:hover,
+.eligible-edition-option.is-selected {
+  background:#eaf2ff; border-color:#497ec5; color:#133d7b;
+}
+.eligible-details {
+  padding:0 20px 8px; color:#344e6a; font-size:13px; line-height:1.55;
+}
+.eligible-locked {
+  background:#e5f5e9; border:1px solid #bee4cb;
+  padding:12px 15px; border-radius:8px; color:#20633b;
+}
+.eligible-actions {
+  display:flex; gap:9px; flex-wrap:wrap; padding:14px 20px;
+  border-top:1px solid #e4eaf3; margin-top:15px;
+}
+.eligible-actions .button[data-action="eligible-approve"] {
+  background:#0c7044; border-color:#0c7044; color:white;
+}
+.eligible-search {
+  margin:0 20px 20px; padding:16px;
+  border:1px solid #d8e4f3; background:#f8fbff; border-radius:10px;
+}
+.eligible-search .field { max-width:560px; }
+.eligible-suggestions {
+  border-top:1px solid #dbe5f0; margin-top:12px; padding-top:14px;
+}
+.eligible-suggestions h3 { margin:0 20px 10px; color:#214467; font-size:16px; }
+.eligible-page .table-wrap, .presenter-page .table-wrap { overflow-x:auto; }
+.eligible-page .table-wrap th, .eligible-page .table-wrap td,
+.presenter-page .table-wrap th, .presenter-page .table-wrap td {
+  padding:12px 14px; font-size:13px;
+}
+.eligible-page .table-wrap .button,
+.presenter-page .table-wrap .button { margin:2px 3px 2px 0; }
+.eligible-page .panel .hint, .presenter-page .panel .hint {
+  line-height:1.6; color:#506783; padding:0 20px;
+}
+#modal-content textarea {
+  width:100%; min-height:90px; display:block; margin-top:6px;
+  border:1px solid #bfcede; border-radius:8px; padding:10px;
+  color:#173452; font:inherit; resize:vertical;
+}
+@media (max-width:720px) {
+  .eligible-details { padding:0 15px 8px; }
+  .eligible-actions { padding:12px 15px; }
+  .eligible-search { margin:0 15px 15px; padding:12px; }
+}

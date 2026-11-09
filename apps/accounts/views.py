@@ -122,7 +122,13 @@ def switch_station(request):
     from django.contrib.auth.hashers import check_password
     from .models import StationAccess
     from .context_processors import get_active_station
+    from .permissions import presenter_show
     from apps.voting.models import ReviewAudit
+    if presenter_show(request.user):
+        return JsonResponse(
+            {"error": "Presenters are restricted to their assigned station."},
+            status=403,
+        )
 
     if request.method == "GET":
         return JsonResponse({"current_station": get_active_station(request),

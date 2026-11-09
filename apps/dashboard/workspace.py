@@ -292,6 +292,11 @@ def incoming(request):
 
 @api_access()
 def health(request):
+    from apps.accounts.permissions import presenter_show
+    if presenter_show(request.user):
+        return JsonResponse(
+            {"error": "Station connections are administrator tools."}, status=403,
+        )
     station = get_active_station(request)
     now = timezone.now()
     counts = {}
@@ -383,6 +388,11 @@ def retry_failed(request):
 
 @api_access()
 def audit(request):
+    from apps.accounts.permissions import presenter_show
+    if presenter_show(request.user):
+        return JsonResponse(
+            {"error": "Station audit logs are administrator tools."}, status=403,
+        )
     p, meta = page(
         request,
         ReviewAudit.objects.filter(station=get_active_station(request))
@@ -412,7 +422,7 @@ def publish(request):
 
     data = json.loads(request.body)
     station = get_active_station(request)
-    show = station_show(station, data.get("show_id"))
+    show = station_show(station, data.get("show_id"), user=request.user)
     chart, created = publish_edition(
         station,
         date.fromisoformat(data["chart_date"]),

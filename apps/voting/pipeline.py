@@ -467,6 +467,17 @@ def review_song(
     with transaction.atomic():
         lock_station(station)
         song = CleanedSong.objects.get(pk=song_id, station=station)
+        # Do not silently remove, rename or unverify songs after the
+        # administrator has locked them into an official candidate list.
+        if action in {"pending", "rejected", "merge", "edit"}:
+            from .models import EditionCandidate
+            if EditionCandidate.objects.filter(
+                song=song, edition__status="locked",
+            ).exists():
+                raise ValueError(
+                    "This song is on a locked eligible list. "
+                    "Preserve the official edition and review changes separately."
+                )
         affected = [song.id]
         review_keys = list(MatchKeyMapping.objects.filter(
             station=station, cleaned_song=song

@@ -5,6 +5,7 @@ from django.utils import timezone
 
 from apps.voting.models import ChartShow, StationVotingConfig
 from apps.accounts.context_processors import get_active_station
+from apps.accounts.permissions import presenter_show, require_presenter_show
 
 
 CODE_VOTE = re.compile(r"^([A-Za-z0-9]{2,16})(?:\s*[:|]\s*|\s+)(.+)$", re.S)
@@ -22,25 +23,29 @@ def get_selected_show(request):
     """Only station-scoped shows may be read; never accept arbitrary station IDs."""
     station = get_active_station(request)
     raw = request.GET.get("show_id") or request.POST.get("show_id")
+    assignment = presenter_show(request.user)
     if raw is None or raw == "":
-        return legacy_show(station)
+        return assignment if assignment else legacy_show(station)
     if not str(raw).isdecimal():
         raise ValueError("Invalid chart show.")
     show = ChartShow.objects.filter(pk=int(raw), station=station).first()
     if not show:
         raise ValueError("Chart show not found for this station.")
-    return show
+    return require_presenter_show(request, show)
 
 
-def station_show(station, raw):
+def station_show(station, raw, user=None):
     """Validate a programme ID against the authenticated user's station."""
+    assigned = presenter_show(user) if user else None
     if raw is None or raw == "":
-        return legacy_show(station)
+        return assigned if assigned and assigned.station == station else legacy_show(station)
     if type(raw) is not int or raw <= 0:
         raise ValueError("Invalid chart show.")
     show = ChartShow.objects.filter(station=station, pk=raw).first()
     if show is None:
         raise ValueError("Chart show not found for this station.")
+    if assigned and show.pk != assigned.pk:
+        raise ValueError("Your presenter account cannot access this chart show.")
     return show
 
 

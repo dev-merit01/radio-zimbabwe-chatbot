@@ -33,3 +33,24 @@ class StationAccess(models.Model):
     password_hash = models.CharField(max_length=128)
     version = models.UUIDField(default=uuid.uuid4, editable=False)
     updated_at = models.DateTimeField(auto_now=True)
+
+
+class PresenterAssignment(models.Model):
+    """A presenter can access exactly one station's one chart show at a time.
+
+    Administrators are not assigned; station-team accounts remain unassigned
+    until the central administrator gives them a programme.
+    """
+
+    user = models.OneToOneField(
+        settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+        related_name="presenter_assignment",
+    )
+    chart_show = models.ForeignKey(
+        "voting.ChartShow", on_delete=models.PROTECT,
+        related_name="presenters",
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.user.username}: {self.chart_show}"

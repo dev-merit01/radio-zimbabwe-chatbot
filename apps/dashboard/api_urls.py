@@ -1,10 +1,20 @@
 from django.urls import path
 from .views import chart_today, dashboard, chart_archives, chart_detail, stats_overview
 
-from . import desktop, workspace, show_management
+from . import desktop, workspace, show_management, eligibility, presenter_management
 
 urlpatterns = [
     path("desktop/status", desktop.status),
+    path("workspace/eligibility", eligibility.list_editions),
+    path("workspace/eligibility/create", eligibility.create_edition),
+    path("workspace/eligibility/candidate", eligibility.edit_candidate),
+    path("workspace/eligibility/suggest", eligibility.suggest_song),
+    path("workspace/eligibility/submit", eligibility.submit_edition),
+    path("workspace/eligibility/review", eligibility.review_edition),
+    path("workspace/eligibility/suggestion/review", eligibility.review_suggestion),
+    path("workspace/presenters", presenter_management.list_presenters),
+    path("workspace/presenters/create", presenter_management.create_presenter),
+    path("workspace/presenters/assign", presenter_management.assign_presenter),
     path("workspace/shows", show_management.list_shows),
     path("workspace/shows/save", show_management.save_show),
     path("workspace/shows/archive", show_management.archive_show),
