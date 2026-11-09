@@ -46,6 +46,8 @@ def chart_today_for_show(show, limit):
         {row.cleaned_song_id: row.rank for row in previous.entries.all()}
         if previous else {}
     )
+    # Never display more positions than the approved programme size.
+    limit = min(limit, show.chart_size)
     ranked = ranked_songs(show, start, end, limit)
     data = []
     for rank, (song, count) in enumerate(ranked, 1):
