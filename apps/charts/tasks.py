@@ -4,13 +4,13 @@ from datetime import date
 from celery import shared_task
 from django.db.models import Sum
 from django.utils import timezone
-from apps.accounts.models import Station
+from apps.accounts.models import station_exists
 from apps.voting.models import CleanedSongTally
 from apps.voting.pipeline import rebuild_tallies
 
 
 def validate_station(station):
-    if station not in Station.values:
+    if not station_exists(station, active_only=True):
         raise ValueError("An explicit valid station is required.")
 
 
