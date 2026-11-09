@@ -65,6 +65,12 @@ def bird_station_for_message(message):
     routes = getattr(settings, "BIRD_NUMBER_STATION_MAP", {})
     if not isinstance(routes, dict):
         return None
+    if not routes and not BroadcastStation.objects.filter(
+        is_active=True, bird_number__isnull=False,
+    ).exists():
+        # Older single-station installations have no receiver routing at all.
+        # Keep their previously supported default station behaviour.
+        return getattr(settings, "BIRD_STATION", "")
     recipient = message.get("to")
     if not isinstance(recipient, dict):
         return None
