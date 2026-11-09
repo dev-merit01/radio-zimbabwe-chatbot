@@ -1,7 +1,6 @@
 """Presenter permissions and immutable station-approved candidate lists."""
 import json
 from datetime import timedelta
-from unittest.mock import patch
 
 from django.contrib.auth import get_user_model
 from django.test import Client, TestCase, override_settings
@@ -11,7 +10,7 @@ from apps.accounts.models import AccountProfile, PresenterAssignment
 from apps.charts.show_rankings import counts_for_show, ranked_songs
 from apps.voting.models import (
     ChartShow, CleanedSong, EditionCandidate, EligibleEdition, MatchKeyMapping,
-    RawVote, ReviewAudit, User, WeeklyChart,
+    RawVote, ReviewAudit, User,
 )
 
 
