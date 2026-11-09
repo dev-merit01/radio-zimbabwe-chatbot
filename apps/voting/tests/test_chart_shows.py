@@ -286,7 +286,7 @@ class MultiChartShowTests(TestCase):
         self.consume()
         self.verify_song()
         annual = ChartShow.objects.get(
-            station="national_fm", code="EOY"
+            station="national_fm", name="National FM Top 50"
         )
         annual.campaign_start = timezone.make_aware(datetime(2026, 12, 1, 0, 0))
         annual.campaign_end = timezone.make_aware(datetime(2027, 1, 1, 0, 0))
@@ -294,7 +294,7 @@ class MultiChartShowTests(TestCase):
         # Programme-specific year-end votes, recorded on a December day.
         VotingService("whatsapp", "annual-listener", "national_fm").handle_incoming_text(
             "River Artist - Morning Song", vote_date=date(2026, 12, 20),
-            chart_show=annual, submitted_code="EOY",
+            chart_show=annual, submitted_code=annual.code,
         )
         self.assertTrue(run_one(VoteJob))
         with patch("apps.charts.publishing.timezone.localdate", return_value=date(2026, 12, 31)):

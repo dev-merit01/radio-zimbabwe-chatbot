@@ -12,6 +12,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 from apps.accounts.context_processors import get_active_station
 from apps.charts.routing import get_selected_show, station_show
+from apps.charts.periods import campaign_local_dates
 from apps.charts.show_rankings import counts_for_show
 from apps.charts.multiplier import station_multiplier, score_for_votes
 from apps.voting.models import (
@@ -87,7 +88,8 @@ def overview(request):
     show = get_selected_show(request)
     if show.kind != "legacy":
         if show.kind == "year_end":
-            start = show.campaign_start.date() if show.campaign_start else date(today.year, 1, 1)
+            campaign_start, _ = campaign_local_dates(show)
+            start = campaign_start or date(today.year, 1, 1)
         else:
             chart_day = today + timedelta(days=(show.broadcast_weekday - today.weekday()) % 7)
             start = chart_day - timedelta(days=6)

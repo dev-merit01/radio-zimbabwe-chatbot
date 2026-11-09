@@ -17,6 +17,7 @@
   let reader, toastTimer;
   let chartSize = 20, chartPeriod = "weekly";
   let selectedShowId = null, showsCache = [], showPolicyEnabled = false, activeVoteMultiplier = 1;
+  let lastChartShowId = null;
   let selectedEditionId = null, eligibilityResults = [], eligibilityQuery = "";
   let page = "overview",
     pagination = 1,
@@ -130,6 +131,11 @@
       if (page === "eligibility" && !selectedShowId)
         throw new Error("Create a programme first before preparing its candidate list.");
       const selectedShow = showsCache.find((show) => show.id === selectedShowId);
+      if (lastChartShowId !== selectedShowId) {
+        chartSize = selectedShow?.kind === "legacy" ? 20 : selectedShow?.chart_size || 20;
+        chartPeriod = selectedShow?.kind === "year_end" ? "year_end" : "weekly";
+        lastChartShowId = selectedShowId;
+      }
       const overview = await read("workspace/overview?show_id=" + selectedShowId);
       if (current !== generation) return;
       permissions = overview;
@@ -152,7 +158,7 @@
           '<div class="content-grid"><div>' +
           panel(
             chartPeriod === "year_end" ? "Year-to-date Top " + chartSize : "Live weekly Top " + chartSize,
-            `<form id="chart-options" class="toolbar"><label>Period <select name="period"><option value="weekly" ${chartPeriod === "weekly" ? "selected" : ""}>Sunday–Saturday</option><option value="year_end" ${chartPeriod === "year_end" ? "selected" : ""}>Year to date</option></select></label><label>Chart size <select name="size"><option value="20" ${chartSize === 20 ? "selected" : ""}>Top 20</option><option value="50" ${chartSize === 50 ? "selected" : ""}>Top 50</option></select></label><button class="button secondary">Show chart</button></form><p class="hint chart-period-meta">${esc(data.week_start)} to ${esc(data.week_end)} · Verified votes only · ${data.vote_multiplier > 1 ? "Weighted scoring ×" + data.vote_multiplier + " (votes remain unchanged)" : "1 vote = 1 point"}</p>` + chart(data.top100),
+            `<form id="chart-options" class="toolbar"><label>Period <select name="period"><option value="weekly" ${chartPeriod === "weekly" ? "selected" : ""} ${selectedShow?.kind === "year_end" ? "disabled" : ""}>Weekly chart</option><option value="year_end" ${chartPeriod === "year_end" || selectedShow?.kind === "year_end" ? "selected" : ""}>Annual countdown</option></select></label><label>Chart size <select name="size">${(selectedShow?.kind === "legacy" ? [20, 50] : [selectedShow?.chart_size || 20]).map(size => `<option value="${size}" ${chartSize === size ? "selected" : ""}>Top ${size}</option>`).join("")}</select></label><button class="button secondary">Show chart</button></form><p class="hint chart-period-meta">${esc(data.week_start)} to ${esc(data.week_end)} · Verified votes only · ${data.vote_multiplier > 1 ? "Weighted scoring ×" + data.vote_multiplier + " (votes remain unchanged)" : "1 vote = 1 point"}</p>` + chart(data.top100),
             `<a class="button secondary" href="/api/workspace/export?limit=${chartSize}&period=${chartPeriod}&show_id=${selectedShowId}">Export CSV</a>`,
           ) +
           '</div><aside class="side-stack"><section class="panel activity-card"><h2>Votes this week</h2><p>Received votes by day, including songs awaiting review.</p><canvas id="timeline" width="520" height="250" aria-label="Daily vote counts" role="img"></canvas><p id="timeline-summary" class="sr-only"></p></section><section class="review-callout"><h3>' +
@@ -336,7 +342,7 @@
         window.studioShows = showsCache;
         const programmeShows = showsCache.filter((show) => show.kind !== "legacy");
         const liveCount = programmeShows.filter((show) => show.accepting).length;
-        const cardMarkup = showsCache.map((show) => {
+        const cardMarkup = showsCache.filter((show) => !show.is_archived).map((show) => {
           const historical = show.kind === "legacy";
           const archived = show.is_archived;
           const status = show.accepting ? "Accepting votes"
@@ -353,6 +359,15 @@
           const detail = historical ? "Existing station-wide votes and saved charts"
             : show.kind === "year_end" ? "Separate Top 50 campaign"
             : "Top " + show.chart_size + " · " + esc(days[show.broadcast_weekday] || "Saturday") + " broadcast";
+          const broadcastTime = show.broadcast_start
+            ? show.broadcast_start + (show.broadcast_end ? "–" + show.broadcast_end : " · end time to confirm")
+            : "To be confirmed";
+          const broadcast = historical ? "" :
+            '<p class="show-broadcast"><strong>On air:</strong> ' +
+            (show.kind === "year_end" ? "Date to be confirmed" : esc(days[show.broadcast_weekday])) +
+            ' · ' + esc(broadcastTime) + '</p>' +
+            '<p class="show-presenter"><strong>Presenter:</strong> ' +
+            esc(show.presenter_name || "To be assigned") + '</p>';
           return '<article class="show-card' + (archived ? " is-archived" : "") + '">' +
             '<div class="show-card-top">' +
               '<span class="show-type">' + typeLabel + '</span>' +
@@ -360,8 +375,11 @@
             '</div>' +
             '<h3 class="show-card-title">' + esc(show.name) + '</h3>' +
             '<p class="show-card-description">' + detail + '</p>' +
+            broadcast +
             '<div class="show-code-block"><span class="show-code-label">VOTING CODE</span>' +
               code + '</div>' +
+            (historical ? "" : '<p class="show-vote-example">Send: <strong>' +
+              esc(show.code) + ' Artist - Song</strong></p>') +
             '<div class="show-card-actions">' +
               btn("View results", "show-select", show.id) +
               (showsData.is_admin && !historical && !archived
@@ -685,17 +703,24 @@
       '<fieldset class="show-form-section"><legend>Programme details</legend>' +
         '<div class="show-form-grid">' +
         input("Programme name", "name", show.name || "") +
-        input("Voting code", "code", show.code || "") +
+        input("Voting code (2–16 letters or numbers)", "code", show.code || "") +
+        input("Presenter (on-air name, optional)", "presenter_name", show.presenter_name || "", "text", false) +
         showSelectField("Chart type", "kind",
           [["weekly", "Regular weekly show"], ["year_end", "End-of-year Top 50"]], show.kind || "weekly") +
         showSelectField("Chart size", "chart_size",
-          [[20, "Top 20"], [50, "Top 50"]], show.chart_size || 20) +
+          [[10, "Top 10"], [20, "Top 20"], [40, "Top 40"], [50, "Top 50"]], show.chart_size || 20) +
         input("Daily vote limit per listener", "daily_limit", show.daily_limit ?? 5, "number") +
         showSelectField("Voting schedule", "schedule_mode",
           [["weekly", "Repeating weekly"], ["manual", "Manual open / close"],
            ["campaign", "Fixed date range"]], show.schedule_mode || "weekly") +
         '</div>' +
       '</fieldset>' +
+      '<fieldset class="show-form-section"><legend>Broadcast timetable (not voting hours)</legend>' +
+        '<p class="show-form-caption">From the ZBC programme schedule. Do not use these times to open or close WhatsApp voting.</p>' +
+        '<div class="show-form-grid">' +
+        input("On-air start", "broadcast_start", show.broadcast_start || "", "time", false) +
+        input("On-air end (optional)", "broadcast_end", show.broadcast_end || "", "time", false) +
+        '</div></fieldset>' +
       '<fieldset class="show-form-section" data-show-mode="weekly">' +
         '<legend>Weekly voting hours</legend>' +
         '<p class="show-form-caption">Times use Zimbabwe local time.</p>' +
@@ -724,6 +749,11 @@
       '</fieldset>' +
       '<fieldset class="show-form-section show-form-activation">' +
         '<legend>Programme availability</legend>' +
+        (show.is_enabled ? '<label class="show-form-check">' +
+          '<input type="checkbox" name="confirm_live_code_change">' +
+          'I understand that changing the code while voting is open ' +
+          'will require listeners to use the new code. Earlier votes will be preserved.' +
+          '</label>' : "") +
         '<label class="show-form-check"><input type="checkbox" name="is_enabled" ' +
         (show.is_enabled ? "checked" : "") + '> Enable this programme to receive votes</label>' +
       '</fieldset>' +
@@ -739,7 +769,9 @@
       size.value = "50";
       mode.value = "campaign";
     }
-    size.querySelector('option[value="20"]').disabled = kind.value === "year_end";
+    Array.from(size.options).forEach((option) => {
+      option.disabled = kind.value === "year_end" && option.value !== "50";
+    });
     for (const option of mode.options) {
       option.disabled = kind.value === "year_end" && option.value !== "campaign";
     }
@@ -749,7 +781,10 @@
   }
   const showPayload = (fields, id = null) => ({
     id,
-    name: fields.get("name"), code: fields.get("code"),
+    name: fields.get("name"), code: fields.get("code").trim().toUpperCase(),
+    presenter_name: fields.get("presenter_name") || "",
+    broadcast_start: fields.get("broadcast_start") || "",
+    broadcast_end: fields.get("broadcast_end") || "",
     kind: fields.get("kind"), schedule_mode: fields.get("schedule_mode"),
     chart_size: Number(fields.get("chart_size")),
     daily_limit: Number(fields.get("daily_limit")),
@@ -760,6 +795,7 @@
     campaign_start: fields.get("campaign_start") || null,
     campaign_end: fields.get("campaign_end") || null,
     is_enabled: fields.has("is_enabled"), manual_open: fields.has("manual_open"),
+    confirm_live_code_change: fields.has("confirm_live_code_change"),
   });
   document.addEventListener("click", async (e) => {
     const nav = e.target.closest("[data-page]");
@@ -1011,8 +1047,11 @@
       modal(
         annual ? "Save December Top 50" : show?.kind === "legacy" ? "Save Saturday chart" : "Publish chart show",
         field(annual ? "Publication date (December)" : "Chart broadcast date", "chart_date", "", "date") +
-          (annual ? '<input type="hidden" name="size" value="50">' : '<label class="field">Chart size<select name="size"><option>20</option><option>50</option></select></label>') +
-          `<p class="hint">${annual ? "Counts verified votes from January 1 through the chosen December date." : "Counts verified votes from Sunday through the chosen Saturday."} Saving today includes votes processed so far. Finish reviewing and processing votes first. This permanent snapshot cannot be overwritten; later votes and edits will not change it.</p>`,
+          (annual ? '<input type="hidden" name="size" value="50">' :
+            show?.kind === "legacy"
+              ? '<label class="field">Chart size<select name="size"><option>20</option><option>50</option></select></label>'
+              : '<input type="hidden" name="size" value="' + show.chart_size + '"><p class="hint">Configured chart size: Top ' + show.chart_size + '</p>') +
+          `<p class="hint">${annual ? "Counts verified votes received during the configured annual campaign, up to the selected publication date." : show?.kind === "legacy" ? "Counts verified votes from Monday through Sunday." : "Counts eligible verified votes in the seven days leading up to this show's broadcast date."} Finish reviewing and processing votes first. Published results cannot be rewritten.</p>`,
         (f) => api("workspace/publish", {...Object.fromEntries(f), show_id: selectedShowId, kind: annual ? "year_end" : "weekly"}),
       );
       return;
