@@ -47,6 +47,10 @@ class ChartShow(models.Model):
     ]
     station = models.CharField(max_length=32, choices=Station.choices, db_index=True)
     name = models.CharField(max_length=120)
+    # Broadcast/programme information must not be mistaken for voting hours.
+    presenter_name = models.CharField(max_length=120, blank=True)
+    broadcast_start = models.TimeField(null=True, blank=True)
+    broadcast_end = models.TimeField(null=True, blank=True)
     code = models.CharField(max_length=16, blank=True)
     kind = models.CharField(max_length=16, choices=KIND_CHOICES, default="weekly")
     schedule_mode = models.CharField(max_length=16, choices=MODE_CHOICES, default="weekly")
