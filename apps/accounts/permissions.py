@@ -3,7 +3,11 @@ from apps.accounts.models import PresenterAssignment
 
 
 def presenter_show(user):
-    if not getattr(user, "is_authenticated", False) or user.is_superuser:
+    if (not getattr(user, "is_authenticated", False)
+            or getattr(user, "is_superuser", False)
+            or not getattr(user, "pk", None)):
+        # Static/anonymous request contexts have no saved user or assignment.
+        # This also avoids unnecessary database queries for such contexts.
         return None
     assignment = PresenterAssignment.objects.select_related("chart_show").filter(
         user=user
