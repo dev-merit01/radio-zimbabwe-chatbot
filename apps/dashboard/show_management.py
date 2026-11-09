@@ -190,6 +190,13 @@ def save_show(request):
             return JsonResponse({"error": "Chart show not found."}, status=404)
         if show and (show.kind == "legacy" or show.is_archived):
             raise ValueError("Historical or archived shows cannot be edited.")
+        if (show and show.code != code and show.accepts_at(timezone.now())
+                and not parsed_bool(data, "confirm_live_code_change", False)):
+            raise ValueError(
+                "Voting is currently open. Confirm this code change: "
+                "listeners using the previous code will be sent to review. "
+                "Previous votes and archives remain assigned to their show."
+            )
         if ChartShow.objects.filter(
             station=station, code=code
         ).exclude(pk=show.pk if show else None).exists():
