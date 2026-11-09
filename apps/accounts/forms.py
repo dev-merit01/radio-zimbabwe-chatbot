@@ -4,7 +4,7 @@ from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from django.db import transaction
 
-from .models import AccountProfile, Station
+from .models import AccountProfile, station_choices
 
 
 User = get_user_model()
@@ -14,7 +14,11 @@ class RegistrationForm(forms.Form):
     first_name = forms.CharField(max_length=150)
     last_name = forms.CharField(max_length=150)
     username = forms.CharField(max_length=150)
-    station = forms.ChoiceField(choices=Station.choices)
+    station = forms.ChoiceField(choices=(), required=True)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.fields["station"].choices = station_choices(active_only=True)
     password = forms.CharField(widget=forms.PasswordInput)
     confirm_password = forms.CharField(widget=forms.PasswordInput)
 
