@@ -11,6 +11,7 @@ from django.views.decorators.http import require_GET, require_POST
 from apps.accounts.context_processors import get_active_station
 from apps.accounts.permissions import presenter_show, require_presenter_show
 from apps.charts.routing import station_show
+from apps.charts.periods import campaign_local_dates
 from apps.voting.models import (
     CandidateSongSuggestion, CleanedSong, EditionCandidate,
     EligibleEdition, InboundEvent, MatchKeyMapping, RawVote, ReviewAudit,
@@ -53,7 +54,7 @@ def _edition_window(show, chart_date):
     if show.kind == "year_end":
         if chart_date.month != 12 or not show.campaign_start or not show.campaign_end:
             raise ValueError("End-of-year shows require December and a configured campaign.")
-        start, end = show.campaign_start.date(), show.campaign_end.date()
+        start, end = campaign_local_dates(show)
         if not start <= chart_date <= end:
             raise ValueError("Chart date must fall in the configured annual campaign.")
         return start, end
