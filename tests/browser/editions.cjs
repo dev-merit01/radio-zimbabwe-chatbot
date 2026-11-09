@@ -28,6 +28,19 @@ const assert = require('node:assert/strict');
   await page.getByLabel('Password', {exact: true}).fill('local-browser-test-only');
   await page.getByRole('button', {name: 'Sign in', exact: true}).click();
   await page.locator('#chart-options').waitFor();
+  const chartInsets = await page.evaluate(() => {
+    const toolbar = document.querySelector('#chart-options');
+    const note = document.querySelector('.chart-period-meta');
+    const panel = toolbar.closest('.panel');
+    return {
+      note: note.getBoundingClientRect().left - panel.getBoundingClientRect().left,
+      toolbar: toolbar.getBoundingClientRect().left - panel.getBoundingClientRect().left +
+        parseFloat(getComputedStyle(toolbar).paddingLeft),
+    };
+  });
+  assert.ok(chartInsets.note >= 16, 'Chart date must have a comfortable panel inset.');
+  assert.ok(Math.abs(chartInsets.note - chartInsets.toolbar) <= 3,
+    'Chart date should align with the chart toolbar content.');
   assert.equal(await page.locator('#refresh').count(), 0);
   assert.equal(await page.locator('.breadcrumb').count(), 0);
   await page.locator('#chart-options select[name="size"]').selectOption('50');
