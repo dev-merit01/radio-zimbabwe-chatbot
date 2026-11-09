@@ -14,10 +14,10 @@ class WorkspaceSecurityMiddleware:
             return redirect("/accounts/login/?next=/admin/")
         private = not request.path.startswith(("/webhook/", "/static/"))
         if private and request.user.is_authenticated and not request.user.is_superuser:
-            from apps.accounts.models import Station
+            from apps.accounts.models import station_exists
 
             profile = getattr(request.user, "profile", None)
-            if not profile or profile.station not in Station.values:
+            if not profile or not station_exists(profile.station, active_only=True):
                 if request.path.startswith("/api/"):
                     return JsonResponse(
                         {"error": "Ask an administrator to assign your station."},
