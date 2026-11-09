@@ -56,7 +56,7 @@ def get_active_station(request) -> str:
 
         session = getattr(request, "session", None)
         switched = session.get("switched_station") if session else None
-        if station_exists(switched):
+        if station_exists(switched, active_only=not user.is_superuser):
             if user.is_superuser:
                 return switched
             version = session.get("station_access_version")
