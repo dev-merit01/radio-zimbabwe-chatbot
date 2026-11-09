@@ -2,7 +2,7 @@
 import json
 from datetime import date, timedelta
 
-from django.db import IntegrityError, transaction
+from django.db import transaction
 from django.db.models import Count
 from django.http import JsonResponse
 from django.utils import timezone
@@ -12,7 +12,7 @@ from apps.accounts.context_processors import get_active_station
 from apps.accounts.permissions import presenter_show, require_presenter_show
 from apps.charts.routing import station_show
 from apps.voting.models import (
-    CandidateSongSuggestion, ChartShow, CleanedSong, EditionCandidate,
+    CandidateSongSuggestion, CleanedSong, EditionCandidate,
     EligibleEdition, InboundEvent, MatchKeyMapping, RawVote, ReviewAudit,
 )
 from apps.voting.pipeline import lock_station
