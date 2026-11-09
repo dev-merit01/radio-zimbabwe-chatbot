@@ -11,7 +11,7 @@ from django.test import TestCase, override_settings
 from django.utils import timezone
 
 from apps.charts.routing import route_vote
-from apps.voting.models import ChartShow
+from apps.voting.models import ChartShow, RawVote, User
 
 
 LINEUP = importlib.import_module(
@@ -206,6 +206,40 @@ class ZBCOfficialChartLineupTests(TestCase):
                 "power_fm", most_recent_saturday, self.admin,
                 40, chart_show=show,
             )
+
+    def test_used_legacy_template_is_never_repurposed_or_reassigned(self):
+        existing = ChartShow.objects.get(
+            station="central_radio", name="Central Radio Top 20 Chart Show"
+        )
+        original_pk = existing.pk
+        # Mimic a live customised legacy template with an attached vote.
+        existing.name = "Saturday Top 20"
+        existing.code = "SAT20"
+        existing.is_enabled = True
+        existing.save(update_fields=["name", "code", "is_enabled"])
+        listener = User.objects.create(
+            channel="whatsapp", user_ref="live-c203", station="central_radio"
+        )
+        vote = RawVote.objects.create(
+            user=listener, station="central_radio", chart_show=existing,
+            submitted_code="SAT20", raw_input="Artist - Song",
+            artist_raw="Artist", song_raw="Song",
+            artist_normalized="artist", song_normalized="song",
+            match_key="artist::song", display_name="Artist - Song",
+            ai_status="review", vote_date=timezone.localdate(),
+        )
+        LINEUP.seed_official_chart_shows(apps, None)
+        existing.refresh_from_db()
+        vote.refresh_from_db()
+        replacement = ChartShow.objects.get(
+            station="central_radio", name="Central Radio Top 20 Chart Show"
+        )
+        self.assertEqual(existing.pk, original_pk)
+        self.assertEqual(existing.name, "Saturday Top 20")
+        self.assertEqual(existing.code, "SAT20")
+        self.assertEqual(vote.chart_show_id, original_pk)
+        self.assertNotEqual(replacement.pk, original_pk)
+        self.assertFalse(replacement.is_enabled)
 
     def test_unconfirmed_annual_dates_are_not_invented(self):
         self.assertIsNone(ChartShow.objects.get(
