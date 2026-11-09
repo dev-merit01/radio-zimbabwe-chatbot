@@ -194,6 +194,144 @@
         if (incoming && d.submissions?.length) {
           html += `<section class="panel"><div class="panel-heading"><h2>Recent submissions</h2></div><div class="table-wrap"><table><thead><tr><th>Vote</th><th>Processing</th><th>Result</th></tr></thead><tbody>${d.submissions.map(s => `<tr><td>${esc(s.text)}</td><td>${esc(s.state)}</td><td>${esc(s.reply || "Waiting for the voting worker")}</td></tr>`).join("")}</tbody></table></div></section>`;
         }
+      } else if (page === "eligibility") {
+        const show = showsCache.find((item) => item.id === selectedShowId);
+        if (show?.kind === "legacy") throw new Error("Select a chart show, not the historical chart.");
+        if (window.eligibilityLastShowId !== selectedShowId) {
+          window.eligibilityLastShowId = selectedShowId;
+          selectedEditionId = null;
+          eligibilityResults = [];
+          eligibilityQuery = "";
+        }
+        const url = "workspace/eligibility?show_id=" + selectedShowId +
+          (selectedEditionId ? "&edition_id=" + selectedEditionId : "");
+        const d = await read(url);
+        if (current !== generation) return;
+        const selected = d.selected;
+        if (selected) selectedEditionId = selected.id;
+        const canEdit = selected && ["draft", "returned"].includes(selected.status);
+        const canReview = d.is_admin && selected?.status === "submitted";
+        const programmeSelect = d.is_admin
+          ? '<label class="field">Select programme<select id="eligibility-show-select">' +
+            showsCache.filter((show) => show.kind !== "legacy").map((item) =>
+              '<option value="' + item.id + '"' +
+              (item.id === selectedShowId ? " selected" : "") + '>' +
+              esc(item.name) + '</option>'
+            ).join("") + '</select></label>'
+          : '<div class="eligible-assigned"><strong>Assigned programme:</strong> ' +
+            esc(d.chart_show) + '</div>';
+        html = '<div class="eligible-page">' +
+          panel("Programme candidate lists",
+            '<p class="hint">The presenter prepares candidates and the administrator approves the eligible list before voting starts. Listener votes alone determine the rankings.</p>' +
+            programmeSelect +
+            '<div class="eligible-overview"><span>Chart positions: <strong>Top ' +
+              num(d.chart_size) + '</strong></span><span>Eligibility protection: <strong>' +
+              (d.eligibility_enforced ? "Enabled" : "Not activated") +
+              '</strong></span></div>' +
+            '<div class="eligible-edition-list">' +
+              (d.editions.length ? d.editions.map((item) =>
+                '<button class="eligible-edition-option ' +
+                (selectedEditionId === item.id ? "is-selected" : "") +
+                '" data-action="eligible-select" data-id="' + item.id + '">' +
+                '<strong>' + esc(item.chart_date) + '</strong> · ' +
+                esc(item.status) + ' · ' + num(item.candidate_count) +
+                ' songs</button>'
+              ).join("") : '<p class="hint">No editions prepared for this programme.</p>') +
+            '</div>',
+            d.can_prepare ? btn("Create new edition", "eligible-new") : "") +
+          (selected
+            ? panel("Candidate list · " + selected.chart_date,
+              '<div class="eligible-details">' +
+              '<p><strong>Status:</strong> ' + esc(selected.status) +
+              ' · <strong>Voting period:</strong> ' + esc(selected.voting_start) +
+              ' to ' + esc(selected.voting_end) + '</p>' +
+              (selected.note ? '<p class="hint"><strong>Admin notes:</strong> ' +
+              esc(selected.note) + '</p>' : "") +
+              (selected.status === "locked"
+                ? '<p class="eligible-locked">Approved and locked by ' +
+                  esc(selected.approved_by) + '. No changes to this shortlist are permitted.</p>'
+                : "") + '</div>' +
+              (selected.candidates.length
+                ? table(["Artist", "Song", "Catalogue status", "Action"],
+                    selected.candidates.map((item) =>
+                      '<tr><td>' + esc(item.artist) + '</td><td>' +
+                      esc(item.title) + '</td><td>' + esc(item.status) +
+                      '</td><td>' +
+                      (canEdit ? btn("Remove", "eligible-remove", item.id) : "Locked") +
+                      '</td></tr>'))
+                : '<p class="show-queue-empty">No verified candidate songs selected yet.</p>') +
+              (canEdit ? '<div class="eligible-actions">' +
+                btn("Find verified songs", "eligible-find") +
+                btn("Propose a new song", "eligible-suggest") +
+                btn("Submit for approval", "eligible-submit") +
+                '</div>' : "") +
+              (canReview ? '<div class="eligible-actions">' +
+                btn("Approve and lock", "eligible-approve") +
+                btn("Return for revision", "eligible-return") +
+                '</div>' : "") +
+              (canEdit ? '<div class="eligible-search"><label class="field">Search verified catalogue' +
+                '<input id="eligible-search-input" placeholder="Artist or song title" value="' +
+                  esc(eligibilityQuery) + '"></label>' +
+                (eligibilityResults.length
+                  ? table(["Artist", "Song", "Action"], eligibilityResults.map((item) =>
+                      '<tr><td>' + esc(item.artist) + '</td><td>' + esc(item.title) +
+                      '</td><td>' + btn("Add", "eligible-add", item.id) + '</td></tr>'))
+                  : '<p class="hint">Search by artist or title to add a verified catalogue entry.</p>') +
+              '</div>' : "") +
+              (selected.suggestions.length ? '<div class="eligible-suggestions"><h3>New song suggestions</h3>' +
+                table(["Artist", "Song", "Status", "Action"], selected.suggestions.map((item) =>
+                  '<tr><td>' + esc(item.artist) + '</td><td>' +
+                    esc(item.title) + '</td><td>' + esc(item.status) +
+                    '</td><td>' + (d.is_admin && item.status === "pending" &&
+                     selected.status !== "locked" ?
+                      btn("Link verified song", "eligible-proposal-accept", item.id) +
+                      btn("Reject", "eligible-proposal-reject", item.id)
+                      : "") + '</td></tr>')) + '</div>' : ""),
+              "") +
+            panel("Nominations outside the shortlist",
+              '<p class="hint">Incoming song requests that do not match the eligible list remain nomination interest; they cannot enter official rankings. No vote is carried into a later edition.</p>' +
+              (d.nomination_interest?.length
+                ? table(["Song requested", "Submissions"], d.nomination_interest.map((item) =>
+                    '<tr><td>' + esc(item.display_name) + '</td><td>' +
+                    num(item.n) + '</td></tr>'))
+                : '<p class="show-queue-empty">No unlisted song requests in this edition.</p>'),
+              "")
+            : '<div class="empty"><h3>Create your first candidate list</h3>' +
+                '<p>Prepare a list for an upcoming broadcast before voting opens.</p></div>') +
+          '</div>';
+      } else if (page === "presenters") {
+        const d = await read("workspace/presenters");
+        if (current !== generation) return;
+        window.presenterAccounts = d;
+        const choices = showsCache.filter((item) =>
+          item.kind !== "legacy" && !item.is_archived
+        );
+        html = '<div class="presenter-page">' +
+          panel("Presenter accounts · " + esc(overview.station),
+            '<p class="hint">Assign each presenter to one chart show in the selected station. They sign in with their own username and password; only the central administrator can change assignments.</p>' +
+            (d.presenters.length ? table(
+              ["Username", "Assigned chart show", "Login", "Action"],
+              d.presenters.map((item) =>
+                '<tr><td><strong>' + esc(item.username) + '</strong></td><td>' +
+                esc(item.chart_show) + '</td><td>' +
+                (item.active ? "Active" : "Inactive") + '</td><td>' +
+                btn("Change assignment", "presenter-reassign", item.user_id) +
+                '</td></tr>'
+              )
+            ) : '<p class="show-queue-empty">No presenters assigned to this station yet.</p>'),
+            choices.length ? btn("Create presenter account", "presenter-create") : "") +
+          panel("Existing station accounts",
+            '<p class="hint">Existing station accounts continue to work. The administrator can assign an account to a specific programme without changing its password.</p>' +
+            (d.unassigned_accounts.length ? table(
+              ["Username", "Status", "Action"],
+              d.unassigned_accounts.map((item) =>
+                '<tr><td>' + esc(item.username) + '</td><td>' +
+                (item.active ? "Active" : "Inactive") + '</td><td>' +
+                (choices.length ? btn("Assign chart show", "presenter-assign", item.user_id) : "") +
+                '</td></tr>'
+              )
+            ) : '<p class="show-queue-empty">All current station accounts have assignments.</p>')) +
+          '</div>';
       } else if (page === "shows") {
         window.studioShows = showsCache;
         const programmeShows = showsCache.filter((show) => show.kind !== "legacy");
