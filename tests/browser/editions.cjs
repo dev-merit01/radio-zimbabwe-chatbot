@@ -33,7 +33,8 @@ const assert = require('node:assert/strict');
     const note = document.querySelector('.chart-period-meta');
     const panel = toolbar.closest('.panel');
     return {
-      note: note.getBoundingClientRect().left - panel.getBoundingClientRect().left,
+      note: note.getBoundingClientRect().left - panel.getBoundingClientRect().left +
+        parseFloat(getComputedStyle(note).paddingLeft),
       toolbar: toolbar.getBoundingClientRect().left - panel.getBoundingClientRect().left +
         parseFloat(getComputedStyle(toolbar).paddingLeft),
     };
