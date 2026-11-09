@@ -163,7 +163,11 @@ def create_station(request):
             )
         except IntegrityError as exc:
             raise ValueError("A station with this ID or number already exists.") from exc
-        StationVotingConfig.objects.get_or_create(station=slug)
+        # New stations require programme codes from day one. Code-free votes
+        # cannot enter an unrelated historical chart accidentally.
+        StationVotingConfig.objects.get_or_create(
+            station=slug, defaults={"require_codes": True},
+        )
         legacy_show(slug)
         ReviewAudit.objects.create(
             station=slug, actor=request.user, action="station_created",
