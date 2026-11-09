@@ -27,6 +27,9 @@ from .workspace import api_access
 def serialize(show):
     return {
         "id": show.pk, "station": show.station, "name": show.name,
+        "presenter_name": show.presenter_name,
+        "broadcast_start": show.broadcast_start.strftime("%H:%M") if show.broadcast_start else "",
+        "broadcast_end": show.broadcast_end.strftime("%H:%M") if show.broadcast_end else "",
         "code": show.code, "kind": show.kind,
         "schedule_mode": show.schedule_mode,
         "is_enabled": show.is_enabled, "manual_open": show.manual_open,
@@ -108,6 +111,19 @@ def parsed_datetime(data, key):
     return parsed
 
 
+def parsed_optional_broadcast_time(data, key):
+    """On-air metadata is independent of voting opening and closing times."""
+    value = data.get(key, "")
+    if value in (None, ""):
+        return None
+    if not isinstance(value, str) or not re.fullmatch(r"\d{2}:\d{2}", value):
+        raise ValueError(f"Invalid {key}; use 24-hour HH:MM.")
+    try:
+        return time.fromisoformat(value)
+    except ValueError as exc:
+        raise ValueError(f"Invalid {key}.") from exc
+
+
 @require_POST
 @api_access("admin")
 def save_show(request):
@@ -128,6 +144,14 @@ def save_show(request):
         raise ValueError("Voting code must contain 2–16 letters or numbers.")
     name = name.strip()
     code = code.strip().upper()
+    presenter = data.get("presenter_name", "")
+    if not isinstance(presenter, str) or len(presenter.strip()) > 120:
+        raise ValueError("Presenter must be a name up to 120 characters.")
+    presenter = presenter.strip()
+    broadcast_start = parsed_optional_broadcast_time(data, "broadcast_start")
+    broadcast_end = parsed_optional_broadcast_time(data, "broadcast_end")
+    if broadcast_end and not broadcast_start:
+        raise ValueError("A broadcast end time requires a starting time.")
     kind = data.get("kind", "weekly")
     mode = data.get("schedule_mode", "weekly")
     if kind not in {"weekly", "year_end"}:
@@ -136,9 +160,9 @@ def save_show(request):
         raise ValueError("Invalid voting schedule mode.")
     if kind == "year_end" and mode != "campaign":
         raise ValueError("End-of-year Top 50 must use an exact-date voting campaign.")
-    size = parsed_int(data, "chart_size", 50 if kind == "year_end" else 20, 20, 50)
-    if size not in {20, 50} or (kind == "year_end" and size != 50):
-        raise ValueError("Select Top 20 or Top 50; annual charts must be Top 50.")
+    size = parsed_int(data, "chart_size", 50 if kind == "year_end" else 20, 10, 50)
+    if size not in {10, 20, 40, 50} or (kind == "year_end" and size != 50):
+        raise ValueError("Choose Top 10, 20, 40 or 50; annual charts must be Top 50.")
     limit = parsed_int(data, "daily_limit", 5, 1, 100)
     broadcast = parsed_int(data, "broadcast_weekday", 5, 0, 6)
     start_day = parsed_int(data, "opens_weekday", 0, 0, 6)
@@ -194,6 +218,9 @@ def save_show(request):
                 )
         show = show or ChartShow(station=station)
         show.name = name
+        show.presenter_name = presenter
+        show.broadcast_start = broadcast_start
+        show.broadcast_end = broadcast_end
         show.code = code
         show.kind = kind
         show.schedule_mode = mode
