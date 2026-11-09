@@ -4,7 +4,9 @@ from collections import Counter
 from django.conf import settings
 from django.db.models import Count, OuterRef, Subquery
 
-from apps.voting.models import CleanedSong, MatchKeyMapping, RawVote
+from apps.voting.models import (
+    CleanedSong, EditionCandidate, EligibleEdition, MatchKeyMapping, RawVote,
+)
 
 
 def counts_for_show(show, start, end):
@@ -23,6 +25,20 @@ def counts_for_show(show, start, end):
             ).values("cleaned_song_id").annotate(n=Sum("count"))
             .values_list("cleaned_song_id", "n")
         )
+    eligible_song_ids = None
+    if show.eligibility_enforced:
+        # Only an administrator-locked shortlist for this exact programme
+        # period can contribute to public rankings. Unlisted requests remain
+        # in raw records as nomination interest, never as chart votes.
+        edition = EligibleEdition.objects.filter(
+            station=show.station, chart_show=show, status="locked",
+            voting_start__lte=start, voting_end__gte=end,
+        ).first()
+        if edition is None:
+            return {}
+        eligible_song_ids = EditionCandidate.objects.filter(
+            edition=edition
+        ).values("song_id")
     mapping = MatchKeyMapping.objects.filter(
         station=show.station, match_key=OuterRef("match_key"),
         cleaned_song__station=show.station,
@@ -34,6 +50,8 @@ def counts_for_show(show, start, end):
         ai_status__in=("approved", "legacy"),
     ).annotate(song_id=Subquery(mapping.values("cleaned_song_id")[:1]))
     votes = votes.filter(song_id__isnull=False)
+    if eligible_song_ids is not None:
+        votes = votes.filter(song_id__in=eligible_song_ids)
     if settings.ALLOW_REPEAT_SONG:
         rows = votes.order_by().values("song_id").annotate(n=Count("id"))
     else:
