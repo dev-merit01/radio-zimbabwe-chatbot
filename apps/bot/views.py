@@ -119,6 +119,11 @@ def receive(request, provider):
                 # Unknown Bird recipients must never affect any station's votes.
                 return JsonResponse({"ok": True, "ignored": True, "reason": "Unmapped Bird destination"})
         if not station_exists(station, active_only=True):
+            from apps.accounts.models import BroadcastStation
+            if BroadcastStation.objects.filter(slug=station, is_active=False).exists():
+                return JsonResponse({
+                    "ok": True, "ignored": True, "reason": "Station disabled",
+                })
             return JsonResponse({"error": "Invalid station configuration"}, status=503)
         if provider == "telegram":
             # Only new private messages. Edits, callbacks and channel posts are not votes.
