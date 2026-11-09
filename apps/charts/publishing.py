@@ -6,6 +6,7 @@ from django.db.models import Min, Sum, Q
 from django.utils import timezone
 
 from apps.charts.routing import legacy_show
+from apps.charts.periods import campaign_local_dates
 from apps.charts.multiplier import station_multiplier
 from apps.charts.show_rankings import counts_for_show, ranked_songs
 from apps.voting.models import (
@@ -54,10 +55,11 @@ def publish_edition(station, chart_date, actor, size=20, kind="weekly", chart_sh
             raise ValueError(
                 "The year-end chart must be a Top 50 with a December publication date."
             )
-        start = (
-            show.campaign_start.date() if show.kind == "year_end" and show.campaign_start
-            else date(chart_date.year, 1, 1)
-        )
+        campaign_start, campaign_end = campaign_local_dates(show)
+        start = (campaign_start if show.kind == "year_end" and campaign_start
+                 else date(chart_date.year, 1, 1))
+        if show.kind == "year_end" and campaign_end and chart_date > campaign_end:
+            raise ValueError("The publication date is outside this campaign's voting period.")
         if start > chart_date:
             raise ValueError("Year-end voting has not started.")
     else:
