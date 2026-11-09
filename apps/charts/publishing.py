@@ -29,13 +29,18 @@ def publish_week(station, start, actor, size=20):
 
 
 def publish_edition(station, chart_date, actor, size=20, kind="weekly", chart_show=None):
-    if size not in (20, 50):
-        raise ValueError("Choose Top 20 or Top 50.")
+    if size not in (10, 20, 40, 50):
+        raise ValueError("Choose Top 10, 20, 40 or 50.")
     if chart_date > timezone.localdate():
         raise ValueError("Cannot save a chart for a future date.")
     show = chart_show or legacy_show(station)
     if show.station != station or show.is_archived:
         raise ValueError("Invalid chart show for this station.")
+    if show.kind != "legacy" and size != show.chart_size:
+        raise ValueError(
+            f"This programme is configured as Top {show.chart_size}. "
+            "Choose that chart size or update the show before voting begins."
+        )
     if kind == "weekly":
         if show.kind == "year_end":
             raise ValueError("End-of-year shows require an annual edition.")
