@@ -125,13 +125,25 @@ def list_stations(request):
 @api_access("admin")
 def create_station(request):
     payload = json.loads(request.body)
+    name = _validated_name(payload.get("name"))
     slug = payload.get("slug")
+    if slug in ("", None):
+        base = re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")[:32]
+        if not base or not base[0].isalpha():
+            base = ("station_" + base)[:32]
+        if len(base) < 3:
+            base = (base + "_fm")[:32]
+        slug = base
+        index = 2
+        while BroadcastStation.objects.filter(slug=slug).exists():
+            suffix = f"_{index}"
+            slug = base[:32 - len(suffix)] + suffix
+            index += 1
     if not isinstance(slug, str) or not _SLUG.fullmatch(slug):
         raise ValueError(
-            "Use a permanent station ID of 3–32 lowercase letters, "
-            "numbers and underscores, starting with a letter."
+            "Use a station ID of 3–32 lowercase letters, numbers and "
+            "underscores, starting with a letter."
         )
-    name = _validated_name(payload.get("name"))
     if type(payload.get("is_active", False)) is not bool:
         raise ValueError("Invalid station activation status.")
     if payload.get("is_active", False):
