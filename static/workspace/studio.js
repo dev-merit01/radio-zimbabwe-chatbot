@@ -17,6 +17,7 @@
   let reader, toastTimer;
   let chartSize = 20, chartPeriod = "weekly";
   let selectedShowId = null, showsCache = [], showPolicyEnabled = false, activeVoteMultiplier = 1;
+  let selectedEditionId = null, eligibilityResults = [], eligibilityQuery = "";
   let page = "overview",
     pagination = 1,
     query = "",
@@ -27,6 +28,8 @@
   const titles = {
     overview: "Voting overview",
     shows: "Chart shows",
+    eligibility: "Eligible songs",
+    presenters: "Presenter accounts",
     administration: "Admin control",
     incoming: "Incoming votes",
     review: "Review queue",
@@ -119,7 +122,13 @@
       showPolicyEnabled = showsData.require_codes;
       activeVoteMultiplier = showsData.vote_multiplier || 1;
       if (!showsCache.some((show) => show.id === selectedShowId))
-        selectedShowId = showsCache.find((show) => show.kind === "legacy")?.id;
+        selectedShowId = showsData.presenter_show_id ||
+          showsCache.find((show) => show.kind === "legacy")?.id ||
+          showsCache[0]?.id;
+      if (page === "eligibility" && showsCache.find((show) => show.id === selectedShowId)?.kind === "legacy")
+        selectedShowId = showsCache.find((show) => show.kind !== "legacy")?.id;
+      if (page === "eligibility" && !selectedShowId)
+        throw new Error("Create a programme first before preparing its candidate list.");
       const selectedShow = showsCache.find((show) => show.id === selectedShowId);
       const overview = await read("workspace/overview?show_id=" + selectedShowId);
       if (current !== generation) return;
@@ -386,7 +395,7 @@
       if (permissions.is_admin && ["activity", "connections"].includes(page)) {
         html = '<div class="workspace-tools"><button class="button secondary" data-page="administration">← Admin control</button></div>' + html;
       }
-      if (["overview", "incoming", "archives"].includes(page)) {
+      if (["overview", "incoming", "archives"].includes(page) && !showsData.is_presenter) {
         html = '<div class="workspace-tools"><label>Chart show <select id="chart-show-select">' +
           showsCache.filter((show) => !show.is_archived || show.id === selectedShowId)
             .map((show) => '<option value="' + show.id + '"' + (show.id === selectedShowId ? ' selected' : '') + '>' + esc(show.name) + (show.is_archived ? " (archived)" : "") + '</option>').join("") +
@@ -474,6 +483,8 @@
       catalogue: "Search, edit and manage your station’s music.",
       archives: "Immutable published charts for the selected programme.",
       shows: "Programmes, voting codes, schedules and per-show settings.",
+      eligibility: "Prepare verified candidate lists, propose new songs and submit for administrator approval.",
+      presenters: "Assign each presenter to exactly one station and chart show.",
       administration: "Manage accounts and oversee voting across every station.",
       activity: "A record of catalogue changes and chart publications.",
       connections: "Provider setup, background workers and processing queues.",
