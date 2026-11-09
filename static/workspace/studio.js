@@ -771,6 +771,113 @@
     if (!b) return;
     const action = b.dataset.action,
       id = b.dataset.id;
+    if (action === "eligible-select") {
+      selectedEditionId = Number(id);
+      eligibilityResults = [];
+      render();
+      return;
+    }
+    if (action === "eligible-new") {
+      modal("Create candidate list", field("Broadcast/chart date", "chart_date", "", "date"),
+        (fields) => api("workspace/eligibility/create", {
+          chart_show_id: selectedShowId, chart_date: fields.get("chart_date"),
+        }));
+      return;
+    }
+    if (action === "eligible-find") {
+      eligibilityQuery = document.getElementById("eligible-search-input")?.value?.trim() || "";
+      if (!eligibilityQuery) { toast("Enter an artist or song title."); return; }
+      try {
+        const d = await api("workspace/songs?status=verified&q=" +
+          encodeURIComponent(eligibilityQuery) + "&page=1");
+        eligibilityResults = d.items || [];
+        await render();
+      } catch (error) { toast(error.message); }
+      return;
+    }
+    if (action === "eligible-add" || action === "eligible-remove") {
+      try {
+        await api("workspace/eligibility/candidate", {
+          edition_id: selectedEditionId,
+          song_id: Number(id),
+          action: action === "eligible-add" ? "add" : "remove",
+        });
+        await render();
+      } catch (error) { toast(error.message); }
+      return;
+    }
+    if (action === "eligible-suggest") {
+      modal("Propose a new song",
+        field("Artist name", "artist") + field("Song title", "title") +
+        '<label class="field">Release details (optional)<textarea name="notes" maxlength="500"></textarea></label>',
+        (fields) => api("workspace/eligibility/suggest", {
+          edition_id: selectedEditionId, artist: fields.get("artist"),
+          title: fields.get("title"), notes: fields.get("notes") || "",
+        }));
+      return;
+    }
+    if (action === "eligible-submit") {
+      modal("Submit candidate list for approval",
+        "<p>The central administrator will check the songs and lock the approved list before voting begins.</p>",
+        () => api("workspace/eligibility/submit", {
+          edition_id: selectedEditionId,
+        }));
+      return;
+    }
+    if (action === "eligible-approve" || action === "eligible-return") {
+      const approving = action === "eligible-approve";
+      modal(approving ? "Approve and lock song list" : "Return for revision",
+        approving
+          ? "<p>Once approved, this edition's songs are locked. Only these songs can count in the chart. The list must be approved before voting starts.</p>"
+          : '<label class="field">Reason for revision<textarea name="note" maxlength="500"></textarea></label>',
+        (fields) => api("workspace/eligibility/review", {
+          edition_id: selectedEditionId,
+          action: approving ? "approve" : "return",
+          ...(approving ? {} : {note: fields.get("note") || ""}),
+        }));
+      return;
+    }
+    if (action === "eligible-proposal-accept" || action === "eligible-proposal-reject") {
+      const accept = action === "eligible-proposal-accept";
+      modal(accept ? "Link to verified catalogue song" : "Reject suggested song",
+        accept
+          ? '<p class="hint">First verify the proposed song in Song catalogue, then enter its verified song ID. The match must belong to this station.</p>' +
+            field("Verified catalogue song ID", "song_id", "", "number")
+          : "<p>Rejecting a suggestion does not delete it from the audit history.</p>",
+        (fields) => api("workspace/eligibility/suggestion/review", {
+          suggestion_id: Number(id), action: accept ? "accept" : "reject",
+          ...(accept ? {song_id: Number(fields.get("song_id"))} : {}),
+        }));
+      return;
+    }
+    if (action === "presenter-create") {
+      const options = showsCache.filter((item) =>
+        item.kind !== "legacy" && !item.is_archived
+      ).map((item) => [item.id, item.name]);
+      modal("Create presenter account",
+        field("Presenter username", "username") +
+        '<label class="field">Strong password<input name="password" type="password" required minlength="12" maxlength="128" autocomplete="new-password"></label>' +
+        showSelectField("Assigned chart show", "chart_show_id", options, options[0]?.[0]) +
+        '<p class="hint">The presenter will only access this station and programme. The password is saved securely as a hash.</p>',
+        (fields) => api("workspace/presenters/create", {
+          username: fields.get("username"), password: fields.get("password"),
+          chart_show_id: Number(fields.get("chart_show_id")),
+        }));
+      return;
+    }
+    if (action === "presenter-assign" || action === "presenter-reassign") {
+      const options = showsCache.filter((item) =>
+        item.kind !== "legacy" && !item.is_archived
+      ).map((item) => [item.id, item.name]);
+      if (!options.length) { toast("Create a chart show first."); return; }
+      modal("Assign presenter to programme",
+        showSelectField("Chart show", "chart_show_id", options, options[0][0]) +
+        '<p class="hint">Only the central administrator can change this assignment. The new programme takes effect on the next request.</p>',
+        (fields) => api("workspace/presenters/assign", {
+          user_id: Number(id), chart_show_id: Number(fields.get("chart_show_id")),
+        }));
+      return;
+    }
     if (action === "show-select") {
       selectedShowId = Number(id);
       chartPeriod = "weekly";
@@ -1000,6 +1107,14 @@
     if (e.target.closest("#modal-content .show-form") &&
         ["kind", "schedule_mode"].includes(e.target.name)) {
       syncShowFormVisibility();
+    }
+    if (e.target.id === "eligibility-show-select") {
+      selectedShowId = Number(e.target.value);
+      selectedEditionId = null;
+      eligibilityResults = [];
+      eligibilityQuery = "";
+      render();
+      return;
     }
     if (e.target.id === "chart-show-select") {
       selectedShowId = Number(e.target.value);
