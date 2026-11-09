@@ -90,6 +90,7 @@ class PresenterEligibleEditionsTests(TestCase):
             "eligibility/review", {"edition_id": eid, "action": "approve"},
         )
         self.assertEqual(response.status_code, 200, response.content)
+        self.saturday.refresh_from_db()
         return EligibleEdition.objects.get(pk=eid)
 
     def raw_vote(self, song, sender, show=None):
