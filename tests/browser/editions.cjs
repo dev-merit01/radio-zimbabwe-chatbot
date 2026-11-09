@@ -95,6 +95,9 @@ const assert = require('node:assert/strict');
   await page.locator('#modal-content [name="chart_show_id"]').waitFor();
   await page.getByRole('button', {name:'Cancel', exact:true}).click();
   await page.locator('nav [data-page="archives"]').click();
+  // Eligible songs keeps the selected programme, so explicitly return to the
+  // historical chart when testing the original legacy publication controls.
+  await page.locator('#chart-show-select').selectOption({label:'Historical station chart'});
   await page.getByRole('button', {name:'Save Saturday chart',exact:true}).click();
   assert.ok((await page.locator('#modal').innerText()).includes('Sunday'));
   await page.getByRole('button', {name:'Cancel',exact:true}).click();
