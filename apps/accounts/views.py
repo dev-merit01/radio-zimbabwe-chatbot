@@ -21,7 +21,7 @@ def safe_next(request, value):
 
 
 from .forms import LoginForm, RegistrationForm
-from .models import Station, station_choices, station_exists, station_label
+from .models import station_choices, station_exists, station_label
 
 
 def login_view(request):
