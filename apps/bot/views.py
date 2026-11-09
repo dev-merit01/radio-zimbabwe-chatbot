@@ -11,7 +11,7 @@ from django.utils import timezone
 from django.http import JsonResponse
 from django.core.exceptions import RequestDataTooBig
 from django.views.decorators.csrf import csrf_exempt
-from apps.accounts.models import Station
+from apps.accounts.models import station_exists
 from apps.voting.models import InboundEvent
 from .parsing import (
     _extract_bird_message,
@@ -54,10 +54,15 @@ def authorised(request, provider):
 
 
 def bird_station_for_message(message):
-    """Find the station from the Bird receiving number, not a station claim."""
+    """Route by the authenticated Bird recipient, never untrusted payload station.
+
+    Database routes allow new stations without editing Railway env variables.
+    The original seven environment routes remain a compatibility fallback.
+    Unknown numbers are ignored if any routing is configured.
+    """
+    from apps.accounts.models import BroadcastStation
+
     routes = getattr(settings, "BIRD_NUMBER_STATION_MAP", {})
-    if not routes:
-        return getattr(settings, "BIRD_STATION", "")
     if not isinstance(routes, dict):
         return None
     recipient = message.get("to")
@@ -69,7 +74,20 @@ def bird_station_for_message(message):
     number = number.strip().removeprefix("+")
     if not number or not number.isascii() or not number.isdigit():
         return None
-    return routes.get(number) or routes.get("+" + number)
+    station = BroadcastStation.objects.filter(
+        bird_number=number, is_active=True,
+    ).values_list("slug", flat=True).first()
+    if station:
+        return station
+    if routes:
+        return routes.get(number) or routes.get("+" + number)
+    # With any database route present, an unknown number is never assigned to
+    # the default legacy station, even when the environment map is empty.
+    if BroadcastStation.objects.filter(
+        is_active=True, bird_number__isnull=False,
+    ).exists():
+        return None
+    return getattr(settings, "BIRD_STATION", "")
 
 
 def receive(request, provider):
@@ -88,13 +106,13 @@ def receive(request, provider):
         if not isinstance(payload, dict):
             raise ValueError()
         station = getattr(settings, f"{provider.upper()}_STATION")
-        if provider == "bird" and getattr(settings, "BIRD_NUMBER_STATION_MAP", {}):
+        if provider == "bird":
             message = payload.get("payload", payload.get("data", payload))
             station = bird_station_for_message(message)
             if station is None:
                 # Unknown Bird recipients must never affect any station's votes.
                 return JsonResponse({"ok": True, "ignored": True, "reason": "Unmapped Bird destination"})
-        if station not in Station.values:
+        if not station_exists(station, active_only=True):
             return JsonResponse({"error": "Invalid station configuration"}, status=503)
         if provider == "telegram":
             # Only new private messages. Edits, callbacks and channel posts are not votes.
