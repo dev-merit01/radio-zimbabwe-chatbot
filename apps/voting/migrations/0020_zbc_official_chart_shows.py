@@ -142,15 +142,16 @@ def seed_official_chart_shows(apps, schema_editor):
             show.campaign_end = december_close if december else None
         show.save()
 
-    # Pristine generic demos with no programme in the supplied document are
-    # hidden as archived (never deleted); all historic data is still intact.
-    # Luzibo Radio was not present in the document: do not modify its shows.
-    for station in ("khulumani_fm", "central_radio"):
-        for code in ("SAT20", "GOS20", "EOY"):
-            show = ChartShow.objects.filter(station=station, code=code).first()
-            if show and _unused_template(show, references):
-                show.is_archived = True
-                show.save(update_fields=["is_archived", "updated_at"])
+    # Archive only unused *weekly* sample shows on Central Radio. Keep
+    # unconfirmed year-end examples on Khulumani and Central Radio disabled:
+    # earlier station requirements include annual countdowns, whereas this
+    # particular schedule leaves their dates and presenters unconfirmed.
+    # Luzibo Radio was not provided, so its configuration remains untouched.
+    for code in ("SAT20", "GOS20"):
+        show = ChartShow.objects.filter(station="central_radio", code=code).first()
+        if show and _unused_template(show, references):
+            show.is_archived = True
+            show.save(update_fields=["is_archived", "updated_at"])
 
 
 class Migration(migrations.Migration):
