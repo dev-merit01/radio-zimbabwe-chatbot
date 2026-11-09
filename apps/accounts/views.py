@@ -21,7 +21,7 @@ def safe_next(request, value):
 
 
 from .forms import LoginForm, RegistrationForm
-from .models import Station
+from .models import Station, station_choices, station_exists, station_label
 
 
 def login_view(request):
@@ -132,12 +132,12 @@ def switch_station(request):
 
     if request.method == "GET":
         return JsonResponse({"current_station": get_active_station(request),
-            "stations": [{"value": s, "label": label} for s, label in Station.choices]})
+            "stations": [{"value": s, "label": label} for s, label in station_choices()]})
     if request.method != "POST":
         return JsonResponse({"error": "POST required"}, status=405)
     station = request.POST.get("station")
     next_url = safe_next(request, request.POST.get("next", "/"))
-    if station not in Station.values:
+    if not station_exists(station, active_only=not request.user.is_superuser):
         return JsonResponse({"error": "Invalid station selected."}, status=400)
     previous = get_active_station(request)
     if station == previous:
@@ -164,7 +164,7 @@ def switch_station(request):
     request.session.cycle_key()
     ReviewAudit.objects.create(station=station, actor=request.user,
         action="station_switch", details={"from": previous})
-    messages.success(request, f"Switched to {Station(station).label}")
+    messages.success(request, f"Switched to {station_label(station)}")
     return redirect(next_url)
 
 
@@ -210,6 +210,6 @@ def profile_view(request):
     profile = getattr(request.user, "profile", None)
     return render(request, "accounts/profile.html", {
         "profile_form": profile_form, "password_form": password_form,
-        "assigned_station": profile.get_station_display() if profile else "Administrator access",
+        "assigned_station": station_label(profile.station) if profile else "Administrator access",
         "current_station": get_active_station_display(request),
     })
