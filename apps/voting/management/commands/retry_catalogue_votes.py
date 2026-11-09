@@ -7,7 +7,7 @@ from django.core.management.base import BaseCommand
 from django.db import transaction
 from django.utils import timezone
 
-from apps.accounts.models import Station
+from apps.accounts.models import station_choices
 from apps.voting.catalogue_matching import automatic_candidate, ranked_candidates
 from apps.voting.models import MatchKeyMapping, RawVote, ReviewAudit, VoteJob
 from apps.voting.pipeline import lock_station, unresolved_mapping
@@ -23,7 +23,7 @@ class Command(BaseCommand):
     def handle(self, *args, **options):
         if not settings.AI_ALL_VOTES:
             return
-        for station in Station.values:
+        for station, _ in station_choices(active_only=True):
             with transaction.atomic():
                 lock_station(station)
                 if ReviewAudit.objects.filter(
