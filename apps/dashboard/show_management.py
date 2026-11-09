@@ -179,6 +179,19 @@ def save_show(request):
             show.raw_votes.exists() or show.published_charts.exists()
         ):
             raise ValueError("Cannot change the type of a show containing votes or archives.")
+        if show and show.eligible_editions.filter(status="locked").exists():
+            # Preserve period boundaries for immutable candidate lists.
+            if (
+                show.schedule_mode != mode
+                or show.broadcast_weekday != broadcast
+                or show.chart_size != size
+                or show.campaign_start != start
+                or show.campaign_end != end
+            ):
+                raise ValueError(
+                    "Approved candidate lists lock the programme's schedule "
+                    "and chart size. Archive the show before changing them."
+                )
         show = show or ChartShow(station=station)
         show.name = name
         show.code = code
