@@ -8,6 +8,7 @@ from apps.charts.periods import campaign_local_dates
 from django.apps import apps
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
+from django.utils import timezone
 
 from apps.charts.routing import route_vote
 from apps.voting.models import ChartShow
@@ -51,6 +52,7 @@ class ZBCOfficialChartLineupTests(TestCase):
                 "campaign_end": data["campaign_end"],
                 "is_enabled": data["is_enabled"],
                 "manual_open": data["manual_open"],
+                "confirm_live_code_change": data.get("confirm_live_code_change", False),
             }), content_type="application/json",
         )
 
@@ -158,6 +160,52 @@ class ZBCOfficialChartLineupTests(TestCase):
         gospel.refresh_from_db()
         self.assertEqual(gospel.code, "ALT10")
         self.assertTrue(gospel.is_enabled)
+
+    def test_live_code_changes_require_explicit_admin_confirmation(self):
+        gospel = ChartShow.objects.get(
+            station="national_fm", name="National FM Gospel 10"
+        )
+        gospel.schedule_mode = "manual"
+        gospel.manual_open = True
+        gospel.is_enabled = True
+        gospel.save(update_fields=["schedule_mode", "manual_open", "is_enabled"])
+        refused = self.post_show(gospel, code="NG11")
+        self.assertEqual(refused.status_code, 400)
+        gospel.refresh_from_db()
+        self.assertEqual(gospel.code, "NG10")
+        approved = self.post_show(
+            gospel, code="NG11", confirm_live_code_change=True
+        )
+        self.assertEqual(approved.status_code, 200, approved.content)
+        gospel.refresh_from_db()
+        self.assertEqual(gospel.code, "NG11")
+        self.assertTrue(gospel.accepts_at(timezone.now()))
+
+    def test_power_fm_top40_rankings_and_publication_size(self):
+        from datetime import timedelta
+        from django.utils import timezone
+        from apps.charts.publishing import publish_edition
+
+        self.client.post("/accounts/switch-station/", {"station": "power_fm"})
+        show = ChartShow.objects.get(station="power_fm", name="Power FM Top 40")
+        response = self.client.get("/api/chart/today", {
+            "show_id": show.pk, "limit": 100,
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.json()["limit"], 40)
+        most_recent_saturday = timezone.localdate() - timedelta(
+            days=(timezone.localdate().weekday() - 5) % 7
+        )
+        with self.assertRaisesMessage(ValueError, "configured as Top 40"):
+            publish_edition(
+                "power_fm", most_recent_saturday, self.admin,
+                20, chart_show=show,
+            )
+        with self.assertRaisesMessage(ValueError, "No verified votes"):
+            publish_edition(
+                "power_fm", most_recent_saturday, self.admin,
+                40, chart_show=show,
+            )
 
     def test_unconfirmed_annual_dates_are_not_invented(self):
         self.assertIsNone(ChartShow.objects.get(
