@@ -2146,3 +2146,85 @@ dialog:has(.show-form) {
   .show-broadcast, .show-presenter { font-size: 12px; }
   .show-vote-example { font-size: 11px; }
 }
+
+/* Central network station manager — scales from the original seven to
+   additional independently configured station workspaces. */
+.network-page {
+  display: grid;
+  gap: 20px;
+  max-width: 1440px;
+}
+.network-intro {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  flex-wrap: wrap; gap: 18px; padding: 22px 25px;
+  background: #f9fbfe; border: 1px solid #dbe5f2; border-radius: 12px;
+}
+.network-intro h2 {
+  font-size: 22px; font-weight: 780; color: #142a4b; margin: 0 0 8px;
+}
+.network-intro p {
+  max-width: 670px; margin: 0; color: #566b83; line-height: 1.55; font-size: 13px;
+}
+.network-metrics { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 12px; }
+.network-metrics > div {
+  background: #fff; padding: 17px 20px;
+  border: 1px solid #dbe5f2; border-radius: 11px;
+  display: flex; flex-direction: column; gap: 5px;
+}
+.network-metrics span { color: #62758c; font-size: 12px; }
+.network-metrics strong { font-size: 25px; color: #133e75; font-weight: 780; }
+.network-grid { display:grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap:14px; }
+.network-station-card {
+  background: #fff; border: 1px solid #dce6f2; border-radius: 12px;
+  padding: 19px; min-width: 0; display: flex; flex-direction: column;
+  gap: 16px; box-shadow: 0 3px 13px rgb(21 39 72 / 4%);
+}
+.network-station-header {
+  display: flex; gap: 12px; justify-content: space-between;
+  align-items: flex-start; flex-wrap: wrap;
+}
+.network-station-header > div { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.network-station-header strong {
+  font-size: 17px; font-weight: 730; color:#1b385a; overflow-wrap: anywhere;
+}
+.network-station-header small { font-size: 11px; color: #73839a; font-family: ui-monospace, monospace; }
+.network-station-details {
+  display:flex; gap:12px; flex-wrap:wrap; padding: 10px 0;
+  border-top:1px solid #edf0f7; border-bottom: 1px solid #edf0f7;
+}
+.network-station-details p {
+  flex: 1 1 100px; margin:0; display:flex; flex-direction:column; gap:4px; min-width:0;
+}
+.network-station-details span { color:#677e96; font-size:11px; }
+.network-station-details strong { color:#1b3957; font-size:13px; overflow-wrap:anywhere; }
+.network-station-details small { color:#8b9aad; font-size:10px; }
+.network-station-actions { display:flex; align-items:center; flex-wrap:wrap; gap:8px; margin-top:auto; }
+.network-selected { font-size:12px; font-weight:700; color:#165c4a; }
+.network-guidance { padding: 22px 25px; }
+.network-guidance > h2 { font-size:17px; color:#153554; margin:0 0 13px; }
+.network-guidance > .hint { padding:12px 0 0; font-size:12px; line-height:1.55; }
+.network-steps { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+.network-steps p {
+  background:#f6f9ff; padding:13px 15px; border-radius:8px;
+  line-height:1.5; color:#4c637d; font-size:12px; margin:0;
+}
+.network-steps b { color:#0b57ad; padding-right:5px; }
+.network-station-form { display:grid; gap:9px; padding:6px 0; }
+.network-station-form .field { margin:0; }
+.network-station-form input, .network-station-form select {
+  width:100%; min-height:42px; border-radius:7px; border:1px solid #becfe0;
+  padding:9px 11px; margin-top:6px; color:#18365a; background:#fff; font-size:14px;
+}
+.network-station-form .hint { line-height:1.5; font-size:12px; color:#657a90; }
+.network-permanent-id { margin:0 0 4px; color:#2b4e76; font-size:13px; }
+.network-permanent-id small { color:#748ca4; }
+@media (max-width:1100px) {
+  .network-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+}
+@media (max-width:690px) {
+  .network-grid,.network-steps { grid-template-columns:1fr; }
+  .network-metrics { grid-template-columns:repeat(3,minmax(0,1fr)); }
+  .network-metrics > div { padding:12px 9px; }
+  .network-metrics strong { font-size:20px; }
+  .network-intro,.network-guidance { padding:17px; }
+}
