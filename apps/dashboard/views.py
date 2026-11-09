@@ -8,6 +8,7 @@ from datetime import timedelta, date
 from apps.voting.models import CleanedSongTally, CleanedSong, WeeklyChart
 from apps.accounts.context_processors import get_active_station
 from apps.charts.routing import get_selected_show
+from apps.charts.periods import campaign_local_dates
 from apps.accounts.permissions import presenter_show
 from apps.charts.show_rankings import counts_for_show, ranked_songs
 from apps.charts.multiplier import station_multiplier, score_for_votes
@@ -28,8 +29,9 @@ def chart_today_for_show(show, limit):
     today = timezone.localdate()
     multiplier = station_multiplier(show.station)
     if show.kind == "year_end":
-        start = show.campaign_start.date() if show.campaign_start else date(today.year, 1, 1)
-        end = today
+        campaign_start, campaign_end = campaign_local_dates(show)
+        start = campaign_start or date(today.year, 1, 1)
+        end = min(today, campaign_end) if campaign_end else today
         kind = "year_end"
     else:
         end = today + timedelta(days=(show.broadcast_weekday - today.weekday()) % 7)
