@@ -2024,3 +2024,18 @@ dialog:has(.show-form) {
 .show-spam-panel [data-action="spam-dismiss"] {
   color: #8c4b14;
 }
+
+
+/* Match voting period metadata to the heading and chart toolbar's inset. */
+.chart-period-meta {
+  margin: 0;
+  padding: 15px 22px;
+  line-height: 1.6;
+  border-bottom: 1px solid #eef0ea;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 740px) {
+  .chart-period-meta {
+    padding: 13px 16px;
+  }
+}
