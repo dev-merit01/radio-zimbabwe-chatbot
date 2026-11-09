@@ -412,7 +412,7 @@ def publish(request):
 
     data = json.loads(request.body)
     station = get_active_station(request)
-    show = station_show(station, data.get("show_id"))
+    show = station_show(station, data.get("show_id"), user=request.user)
     chart, created = publish_edition(
         station,
         date.fromisoformat(data["chart_date"]),
