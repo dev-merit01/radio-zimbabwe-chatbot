@@ -1,6 +1,9 @@
 """The uploaded official ZBC lineup is complete, safe to rerun and editable."""
 import importlib
 import json
+from datetime import date
+
+from apps.charts.periods import campaign_local_dates
 
 from django.apps import apps
 from django.contrib.auth import get_user_model
@@ -76,12 +79,8 @@ class ZBCOfficialChartLineupTests(TestCase):
             self.assertTrue(2 <= len(show.code) <= 16)
             if december:
                 self.assertEqual(
-                    show.campaign_start.strftime("%Y-%m-%d %H:%M"),
-                    "2026-12-01 00:00",
-                )
-                self.assertEqual(
-                    show.campaign_end.strftime("%Y-%m-%d %H:%M"),
-                    "2027-01-01 00:00",
+                    campaign_local_dates(show),
+                    (date(2026, 12, 1), date(2026, 12, 31)),
                 )
             elif kind == "year_end":
                 self.assertIsNone(show.campaign_start)
