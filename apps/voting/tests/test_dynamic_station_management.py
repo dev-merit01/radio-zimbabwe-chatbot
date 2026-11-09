@@ -125,10 +125,6 @@ class DynamicStationProvisioningTests(TestCase):
             pk=show_id, station=slug, code="MW20"
         ).exists())
         self.assertFalse(ChartShow.objects.get(pk=show_id).is_enabled)
-        self.assertEqual(
-            self.client.get("/api/workspace/shows").json()["shows"][1]["station"],
-            slug,
-        ) if False else None
 
     def test_activate_station_and_receive_signed_bird_votes(self):
         slug = self.make_station()
