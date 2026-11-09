@@ -1,7 +1,6 @@
 """The uploaded official ZBC lineup is complete, safe to rerun and editable."""
 import importlib
 import json
-from datetime import date
 
 from django.apps import apps
 from django.contrib.auth import get_user_model
@@ -125,10 +124,6 @@ class ZBCOfficialChartLineupTests(TestCase):
         self.assertEqual(gospel.broadcast_start.strftime("%H:%M"), "09:30")
         self.assertIsNone(gospel.broadcast_end)
         self.assertEqual(self.post_show(gospel, chart_size=30).status_code, 400)
-        self.assertEqual(
-            self.client.get("/api/workspace/shows").json()["shows"][0]["presenter_name"],
-            "New Presenter",
-        ) if False else None
 
     def test_chart_codes_route_to_proper_station_without_listener_replies(self):
         gospel = ChartShow.objects.get(station="national_fm", name="National FM Gospel 10")
