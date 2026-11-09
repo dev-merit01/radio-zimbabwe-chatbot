@@ -8,6 +8,7 @@ from datetime import timedelta, date
 from apps.voting.models import CleanedSongTally, CleanedSong, WeeklyChart
 from apps.accounts.context_processors import get_active_station
 from apps.charts.routing import get_selected_show
+from apps.accounts.permissions import presenter_show
 from apps.charts.show_rankings import counts_for_show, ranked_songs
 from apps.charts.multiplier import station_multiplier, score_for_votes
 
@@ -267,6 +268,9 @@ def chart_detail(request, chart_id):
     except WeeklyChart.DoesNotExist:
         return JsonResponse({"error": "Chart not found"}, status=404)
 
+    assigned = presenter_show(request.user)
+    if assigned and chart.chart_show_id != assigned.pk:
+        return JsonResponse({"error": "Chart not found"}, status=404)
     entries = chart.entries.all().order_by("rank")
 
     data = []
@@ -315,6 +319,12 @@ def chart_detail(request, chart_id):
 @login_required
 def stats_overview(request):
     """API endpoint returning overall statistics."""
+    if presenter_show(request.user):
+        # Global station statistics contain other programmes; a presenter
+        # must use the assigned-show overview endpoint instead.
+        return JsonResponse(
+            {"error": "Use your assigned programme overview."}, status=403,
+        )
     today = timezone.localdate()
     year = today.year
     week_start, week_end = get_current_week_dates()
