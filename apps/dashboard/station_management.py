@@ -12,13 +12,11 @@ from django.conf import settings
 from django.db import IntegrityError, transaction
 from django.db.models import Count
 from django.http import JsonResponse
-from django.utils import timezone
 from django.views.decorators.http import require_GET, require_POST
 
 from apps.accounts.models import BroadcastStation
 from apps.charts.routing import legacy_show
 from apps.voting.models import ChartShow, ReviewAudit, StationVotingConfig
-from apps.voting.pipeline import lock_station
 from .workspace import api_access
 
 
