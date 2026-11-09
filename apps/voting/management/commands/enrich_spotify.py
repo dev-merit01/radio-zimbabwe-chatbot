@@ -1,6 +1,6 @@
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
-from apps.accounts.models import Station
+from apps.accounts.models import station_choices
 from apps.voting.models import CleanedSong, ReviewAudit
 from apps.voting.pipeline import lock_station
 from apps.spotify.search import resolve_with_confidence, is_high_confidence
@@ -10,7 +10,7 @@ class Command(BaseCommand):
     help = "Add Spotify metadata without changing song identity, approval or vote mappings."
 
     def add_arguments(self, parser):
-        parser.add_argument("--station", required=True, choices=Station.values)
+        parser.add_argument("--station", required=True, choices=[slug for slug, _ in station_choices()])
         parser.add_argument("--limit", type=int, default=25)
         parser.add_argument("--song-id", type=int)
 

@@ -10,7 +10,7 @@ from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
-from apps.accounts.models import Station
+from apps.accounts.models import station_choices
 from apps.voting.models import CleanedSong, ReviewAudit
 from apps.voting.pipeline import lock_station
 
@@ -37,7 +37,7 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         group = parser.add_mutually_exclusive_group(required=True)
-        group.add_argument('--station', choices=Station.values)
+        group.add_argument('--station', choices=[slug for slug, _ in station_choices()])
         group.add_argument('--all-stations', action='store_true')
 
     def handle(self, *args, **options):
@@ -54,7 +54,7 @@ class Command(BaseCommand):
             seen.add(key)
             if len(record['artist']) > 256 or len(record['title']) > 256 or len(record['artist'] + ' - ' + record['title']) > 512:
                 raise CommandError('Catalogue entry exceeds database field limits')
-        stations = Station.values if options['all_stations'] else [options['station']]
+        stations = [slug for slug, _ in station_choices(active_only=True)] if options['all_stations'] else [options['station']]
         for station in stations:
             with transaction.atomic():
                 lock_station(station)

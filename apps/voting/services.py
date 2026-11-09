@@ -298,9 +298,9 @@ def validate_submission(text):
 
 class VotingService:
     def __init__(self, channel: str, user_ref: str, station="radio_zimbabwe"):
-        from apps.accounts.models import Station
+        from apps.accounts.models import station_exists
 
-        if station not in Station.values:
+        if not station_exists(station, active_only=True):
             raise ValueError("Unknown station")
         self.channel, self.user_ref, self.station = channel, user_ref, station
 

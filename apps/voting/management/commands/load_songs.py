@@ -127,9 +127,9 @@ class Command(BaseCommand):
     )
 
     def add_arguments(self, parser):
-        from apps.accounts.models import Station
+        from apps.accounts.models import station_choices
 
-        parser.add_argument("--station", required=True, choices=Station.values)
+        parser.add_argument("--station", required=True, choices=[slug for slug, _ in station_choices()])
 
     def handle(self, *args, **options):
         from django.db import transaction

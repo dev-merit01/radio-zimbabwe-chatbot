@@ -13,6 +13,36 @@ class Station(models.TextChoices):
     LUZIBO_RADIO = 'luzibo_radio', 'Luzibo Radio'
 
 
+
+
+class BroadcastStation(models.Model):
+    """Authoritative station directory for AirVote.
+
+    The legacy Station enum is retained only as the fixed identifiers for the
+    original seven stations. New stations live in this table. Never rename
+    slug identifiers: every vote, account, show and audit references them.
+    """
+
+    slug = models.CharField(max_length=32, primary_key=True)
+    name = models.CharField(max_length=100)
+    is_active = models.BooleanField(default=False)
+    bird_number = models.CharField(
+        max_length=20, unique=True, null=True, blank=True,
+        help_text="Inbound WhatsApp number, international digits without '+'.",
+    )
+    logo_url = models.URLField(max_length=500, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["name", "slug"]
+
+    def __str__(self):
+        return self.name
+
+
+
+
 class AccountProfile(models.Model):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='profile')
     station = models.CharField(max_length=32, choices=Station.choices, default=Station.RADIO_ZIMBABWE)
@@ -24,7 +54,7 @@ class AccountProfile(models.Model):
         verbose_name_plural = 'Account Profiles'
 
     def __str__(self) -> str:
-        return f"{self.user.username} ({self.get_station_display()})"
+        return f"{self.user.username} ({station_label(self.station)})"
 
 
 class StationAccess(models.Model):
@@ -54,3 +84,31 @@ class PresenterAssignment(models.Model):
 
     def __str__(self):
         return f"{self.user.username}: {self.chart_show}"
+
+
+def station_choices(*, active_only=False):
+    """Station choices from the database for registration and switching."""
+    qs = BroadcastStation.objects.all()
+    if active_only:
+        qs = qs.filter(is_active=True)
+    return [(row.slug, row.name) for row in qs.order_by("name", "slug")]
+
+
+def station_exists(slug, *, active_only=False):
+    if not isinstance(slug, str) or not slug or len(slug) > 32:
+        return False
+    active = BroadcastStation.objects.filter(slug=slug).values_list(
+        "is_active", flat=True
+    ).first()
+    if active is None:
+        # The historical seven station IDs remain valid if an old database
+        # has not been seeded yet, or in isolated transactional test resets.
+        # A deliberately deactivated database row is NOT overridden.
+        return slug in Station.values
+    return bool(active) if active_only else True
+
+
+def station_label(slug):
+    return BroadcastStation.objects.filter(slug=slug).values_list(
+        "name", flat=True
+    ).first() or dict(Station.choices).get(slug, slug)

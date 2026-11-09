@@ -550,16 +550,16 @@ def submit_vote(request):
 @api_access("admin")
 def administration(request):
     from django.contrib.auth import get_user_model
-    from apps.accounts.models import Station
+    from apps.accounts.models import station_choices, station_label
     votes = dict(RawVote.objects.values("station").annotate(n=Count("id")).values_list("station", "n"))
     pending = dict(CleanedSong.objects.filter(status="pending").values("station").annotate(n=Count("id")).values_list("station", "n"))
     flagged = dict(SuspectedSpamVote.objects.filter(state="pending").values("station").annotate(n=Count("id")).values_list("station", "n"))
     users = get_user_model().objects.filter(is_superuser=False, profile__isnull=False)
     return JsonResponse({
         "summary": {"votes": sum(votes.values()), "pending_songs": sum(pending.values()), "flagged_votes": sum(flagged.values()), "active_accounts": users.filter(is_active=True).count(), "pending_accounts": users.filter(is_active=False).count()},
-        "stations": [{"id": value, "name": label, "votes": votes.get(value, 0), "pending": pending.get(value, 0), "spam": flagged.get(value, 0)} for value, label in Station.choices],
+        "stations": [{"id": value, "name": label, "votes": votes.get(value, 0), "pending": pending.get(value, 0), "spam": flagged.get(value, 0)} for value, label in station_choices()],
         "accounts": [{"id": u.pk, "username": u.username, "name": u.get_full_name(),
-                      "station": u.profile.get_station_display(), "active": u.is_active}
+                      "station": station_label(u.profile.station), "active": u.is_active}
                      for u in get_user_model().objects.filter(is_superuser=False, profile__isnull=False).select_related("profile").order_by("is_active", "username")[:200]],
     })
 

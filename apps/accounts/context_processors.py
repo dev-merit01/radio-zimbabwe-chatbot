@@ -1,6 +1,8 @@
 from django.templatetags.static import static
 
-from .models import Station, StationAccess
+from .models import (
+    Station, StationAccess, BroadcastStation, station_exists, station_choices, station_label,
+)
 
 
 _STATION_LOGOS = {
@@ -54,7 +56,7 @@ def get_active_station(request) -> str:
 
         session = getattr(request, "session", None)
         switched = session.get("switched_station") if session else None
-        if switched in Station.values:
+        if station_exists(switched, active_only=not user.is_superuser):
             if user.is_superuser:
                 return switched
             version = session.get("station_access_version")
@@ -66,7 +68,7 @@ def get_active_station(request) -> str:
 
         # Regular users use their profile station
         profile = getattr(user, "profile", None)
-        if profile and getattr(profile, "station", None):
+        if profile and station_exists(getattr(profile, "station", None), active_only=True):
             return profile.station
 
         return Station.RADIO_ZIMBABWE
@@ -81,19 +83,27 @@ def get_active_station(request) -> str:
 def get_active_station_display(request) -> str:
     """Get the display name for the active station."""
     station = get_active_station(request)
-    return _STATION_NAMES.get(station, "Radio Zimbabwe")
+    return station_label(station)
 
 
 def station_branding(request):
     """Context processor for station branding in templates."""
     try:
         station = get_active_station(request)
-        station_name = _STATION_NAMES.get(station, "Radio Zimbabwe")
+        station_row = BroadcastStation.objects.filter(slug=station).values(
+            "name", "logo_url",
+        ).first()
+        station_name = station_row["name"] if station_row else _STATION_NAMES.get(
+            station, station
+        )
         station_logo = _STATION_LOGOS.get(
-            station, _STATION_LOGOS[Station.RADIO_ZIMBABWE]
+            station, "images/airvote/app-icon.png"
         )
         fallback_url = static(station_logo)
-        display_url = _STATION_LOGO_IMAGES.get(station, fallback_url)
+        display_url = (
+            (station_row or {}).get("logo_url")
+            or _STATION_LOGO_IMAGES.get(station, fallback_url)
+        )
 
         # Every signed-in station user can request a password-protected switch
         user = getattr(request, "user", None)
@@ -112,7 +122,7 @@ def station_branding(request):
             "active_station": station,
             "can_switch_station": can_switch_station,
             "presenter_chart_show_name": assigned.name if assigned else None,
-            "station_choices": Station.choices if can_switch_station else [],
+            "station_choices": station_choices() if can_switch_station else [],
         }
     except Exception:
         # Absolute fallback: keep templates rendering even if Station/model/session/user is misbehaving

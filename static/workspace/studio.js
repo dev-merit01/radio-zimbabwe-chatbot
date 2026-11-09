@@ -32,6 +32,7 @@
     eligibility: "Eligible songs",
     presenters: "Presenter accounts",
     administration: "Admin control",
+    stations: "Manage stations",
     incoming: "Incoming votes",
     review: "Review queue",
     catalogue: "Song catalogue",
@@ -305,6 +306,58 @@
             : '<div class="empty"><h3>Create your first candidate list</h3>' +
                 '<p>Prepare a list for an upcoming broadcast before voting opens.</p></div>') +
           '</div>';
+      } else if (page === "stations") {
+        const d = await read("workspace/stations");
+        if (current !== generation) return;
+        window.airvoteNetworkStations = d.stations;
+        const active = d.stations.filter((station) => station.is_active).length;
+        const stationCards = d.stations.map((station) => {
+          const selected = station.slug === overview.station;
+          const number = station.effective_bird_number
+            ? "+" + station.effective_bird_number
+            : "Not connected";
+          const connection = station.number_source === "database"
+            ? "Managed in AirVote"
+            : station.number_source === "environment"
+              ? "Existing Railway connection"
+              : "Needs Bird number";
+          return '<article class="network-station-card">' +
+            '<div class="network-station-header"><div><strong>' +
+              esc(station.name) + '</strong><small>' + esc(station.slug) +
+              '</small></div><span class="show-status ' +
+              (station.is_active ? "show-status--live" : "show-status--disabled") + '">' +
+              (station.is_active ? "Active" : "Setup required") +
+              '</span></div>' +
+            '<div class="network-station-details">' +
+              '<p><span>WhatsApp</span><strong>' + esc(number) +
+              '</strong><small>' + esc(connection) + '</small></p>' +
+              '<p><span>Chart shows</span><strong>' + num(station.chart_shows) +
+              '</strong></p>' +
+              '</div>' +
+            '<div class="network-station-actions">' +
+              (selected ? '<span class="network-selected">Current workspace</span>' :
+                btn("Open workspace", "admin-station", station.slug)) +
+              btn("Configure station", "network-station-edit", station.slug) +
+            '</div></article>';
+        }).join("");
+        html = '<div class="network-page">' +
+          '<div class="network-intro"><div><h2>Station management</h2>' +
+          '<p>Configure additional radio stations without installing another system. ' +
+          'Each station has independent votes, programme codes and presenter permissions.</p>' +
+          '</div>' + btn("+ Add station", "network-station-new") + '</div>' +
+          '<div class="network-metrics">' +
+          '<div><span>Registered stations</span><strong>' + num(d.stations.length) + '</strong></div>' +
+          '<div><span>Active stations</span><strong>' + num(active) + '</strong></div>' +
+          '<div><span>Awaiting setup</span><strong>' + num(d.stations.length - active) + '</strong></div>' +
+          '</div><div class="network-grid">' + stationCards + '</div>' +
+          '<section class="panel network-guidance"><h2>Set up a new station</h2>' +
+          '<div class="network-steps">' +
+          '<p><b>1.</b> Create a station. AirVote generates its permanent ID automatically.</p>' +
+          '<p><b>2.</b> Open the station workspace and create its chart shows. Give each show a distinct voting code, voting schedule and presenter.</p>' +
+          '<p><b>3.</b> Assign presenter accounts and approve eligible song lists before the first edition.</p>' +
+          '<p><b>4.</b> Connect the Bird receiving number, then activate the station and enable its shows.</p>' +
+          '</div><p class="hint">A phone number must already be connected to Bird and its signed webhook configured. Adding a number here only routes incoming messages; it does not purchase or connect a WhatsApp number.</p></section>' +
+          '</div>';
       } else if (page === "presenters") {
         const d = await read("workspace/presenters");
         if (current !== generation) return;
@@ -507,6 +560,7 @@
           ["Active accounts", num(d.summary.active_accounts), "Approved station team members"],
         ].map(([label,value,note]) => `<div class="admin-metric"><span>${label}</span><strong>${value}</strong><small>${note}</small></div>`).join("")}</div>
         <div class="admin-grid"><div class="admin-main">
+        ${panel("Network configuration", '<p>Expand AirVote to any number of radio stations, then configure shows and presenter access independently.</p>', btn("Manage stations", "network-manage"))}
         ${panel("Station directory", `<div class="station-directory">${d.stations.map(station => `<article class="station-tile ${station.id === overview.station ? "selected" : ""}"><div class="station-tile-heading"><span class="station-monogram">${esc(station.name.split(" ").map(w=>w[0]).join("").slice(0,2))}</span><div><h3>${esc(station.name)}</h3><small>${station.id === overview.station ? "Current workspace" : "Independent station workspace"}</small></div></div><div class="station-tile-stats"><span><strong>${num(station.votes)}</strong> received votes</span><span><strong>${num(station.pending)}</strong> to review</span><span><strong>${num(station.spam)}</strong> spam flags</span></div>${station.id === overview.station ? '<span class="access-badge">Selected</span>' : btn("Open station", "admin-station", station.id)}</article>`).join("")}</div>`)}
         ${panel("Accounts & access", `<div class="admin-section-intro"><p>Approve access for the station shown. Account management includes station assignments, password resets and deactivation.</p></div>` + table(["Team member", "Assigned station", "Access", "Action"], d.accounts.map(u => `<tr><td><strong>${esc(u.name || u.username)}</strong><br><small>@${esc(u.username)}</small></td><td>${esc(u.station)}</td><td><span class="access-badge ${u.active ? "" : "pending"}">${u.active ? "Active" : "Awaiting activation"}</span></td><td>${u.active ? '<a class="account-link" href="/admin/auth/user/' + u.id + '/change/">Manage account →</a>' : btn("Approve access", "approve-account", u.id)}</td></tr>`)), '<a class="button secondary" href="/admin/auth/user/">Manage accounts</a>')}
         </div><aside class="admin-aside">
@@ -639,6 +693,7 @@
       catalogue: "Search, edit and manage your station’s music.",
       archives: "Immutable published charts for the selected programme.",
       shows: "Programmes, voting codes, schedules and per-show settings.",
+      stations: "Create stations, connect WhatsApp numbers and manage station settings.",
       eligibility: "Prepare verified candidate lists, propose new songs and submit for administrator approval.",
       presenters: "Assign each presenter to exactly one station and chart show.",
       administration: "Manage accounts and oversee voting across every station.",
@@ -683,6 +738,29 @@
   }
   const field = (label, name, value = "", type = "text") =>
     `<label class="field">${label}<input required maxlength="240" name="${name}" type="${type}" value="${esc(value)}"></label>`;
+  function stationFormFields(station = {}) {
+    const existing = Boolean(station.slug);
+    const name = '<label class="field">Station name<input name="name" minlength="3" maxlength="100" required value="' +
+      esc(station.name || "") + '" placeholder="e.g. Midlands Radio"></label>';
+    const number = '<label class="field">Bird WhatsApp receiving number (optional during setup)' +
+      '<input name="bird_number" inputmode="tel" maxlength="20" autocomplete="off" value="' +
+      esc(station.bird_number || station.effective_bird_number || "") +
+      '" placeholder="263790000000"></label>';
+    const logo = '<label class="field">Station logo HTTPS image URL (optional)' +
+      '<input name="logo_url" type="url" maxlength="500" value="' +
+      esc(station.logo_url || "") + '" placeholder="https://example.org/station-logo.png"></label>';
+    const status = existing
+      ? showSelectField("Station status", "station_active",
+        [["false", "Disabled — setup / maintenance"], ["true", "Active — accept configured votes"]],
+        String(Boolean(station.is_active)))
+      : '<p class="hint">New stations are initially disabled. AirVote will generate a permanent station ID. Configure its chart shows and Bird number before activation.</p>';
+    return '<div class="network-station-form">' +
+      (existing ? '<p class="network-permanent-id"><strong>Permanent ID:</strong> ' +
+        esc(station.slug) + ' <small>(cannot be changed)</small></p>' : "") +
+      name + number + logo + status +
+      '<p class="hint">The Bird number identifies the station; voting codes then identify each chart show. A number already reserved for another station cannot be reassigned here. Existing Railway-configured numbers remain connected until that configuration is retired.</p>' +
+      '</div>';
+  }
   const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
   const showSelectField = (label, name, options, current) =>
     '<label class="field">' + esc(label) + '<select name="' + name + '">' +
@@ -1029,6 +1107,51 @@
       } catch (err) {
         toast(err.message);
       }
+      return;
+    }
+    if (action === "network-manage") {
+      navigate("stations");
+      return;
+    }
+    if (action === "network-station-new") {
+      modal("Create a radio station", stationFormFields(),
+        async (fields) => {
+          const result = await api("workspace/stations/create", {
+            name: fields.get("name"),
+            bird_number: fields.get("bird_number") || "",
+            logo_url: fields.get("logo_url") || "",
+          });
+          const select = $("station-select");
+          if (select && result.station && !Array.from(select.options).some(
+            (option) => option.value === result.station.slug
+          )) {
+            select.add(new Option(result.station.name, result.station.slug));
+          }
+        });
+      return;
+    }
+    if (action === "network-station-edit") {
+      const station = (window.airvoteNetworkStations || []).find(
+        (item) => item.slug === id
+      );
+      if (!station) { toast("Station is no longer available."); return; }
+      modal("Configure " + station.name, stationFormFields(station),
+        async (fields) => {
+          const result = await api("workspace/stations/update", {
+            slug: station.slug, name: fields.get("name"),
+            bird_number: fields.get("bird_number") || "",
+            logo_url: fields.get("logo_url") || "",
+            is_active: fields.get("station_active") === "true",
+          });
+          const option = Array.from($("station-select")?.options || []).find(
+            (item) => item.value === result.station.slug
+          );
+          if (option) option.textContent = result.station.name;
+          if (result.station.slug === $("station-select")?.value) {
+            const heading = document.querySelector(".station strong");
+            if (heading) heading.textContent = result.station.name;
+          }
+        });
       return;
     }
     if (action === "admin-station") {
