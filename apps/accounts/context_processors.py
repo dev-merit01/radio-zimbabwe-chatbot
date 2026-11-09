@@ -71,7 +71,10 @@ def get_active_station(request) -> str:
 
         return Station.RADIO_ZIMBABWE
     except Exception:
-        # Never let a context processor-dependent helper break page rendering
+        # Authenticated users must fail closed rather than silently seeing
+        # Radio Zimbabwe if assignment retrieval is unavailable.
+        if getattr(getattr(request, "user", None), "is_authenticated", False):
+            raise
         return Station.RADIO_ZIMBABWE
 
 
@@ -108,6 +111,7 @@ def station_branding(request):
             "branding_station_logo_fallback_url": fallback_url,
             "active_station": station,
             "can_switch_station": can_switch_station,
+            "presenter_chart_show_name": assigned.name if assigned else None,
             "station_choices": Station.choices if can_switch_station else [],
         }
     except Exception:
