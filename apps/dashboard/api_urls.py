@@ -1,7 +1,7 @@
 from django.urls import path
 from .views import chart_today, dashboard, chart_archives, chart_detail, stats_overview
 
-from . import desktop, workspace, show_management, eligibility, presenter_management
+from . import desktop, workspace, show_management, eligibility, presenter_management, station_management
 
 urlpatterns = [
     path("desktop/status", desktop.status),
@@ -25,6 +25,9 @@ urlpatterns = [
     path("workspace/unassigned/dismiss", show_management.dismiss_unassigned),
     path("workspace/spam", show_management.suspicious_votes),
     path("workspace/spam/review", show_management.review_suspicious_vote),
+    path("workspace/stations", station_management.list_stations),
+    path("workspace/stations/create", station_management.create_station),
+    path("workspace/stations/update", station_management.update_station),
     path("workspace/administration", workspace.administration),
     path("workspace/accounts/<int:user_id>/approve", workspace.approve_account),
     path("workspace/station-password", workspace.station_password),
