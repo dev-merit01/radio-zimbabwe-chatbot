@@ -749,6 +749,11 @@
       '</fieldset>' +
       '<fieldset class="show-form-section show-form-activation">' +
         '<legend>Programme availability</legend>' +
+        (show.is_enabled ? '<label class="show-form-check">' +
+          '<input type="checkbox" name="confirm_live_code_change">' +
+          'I understand that changing the code while voting is open ' +
+          'will require listeners to use the new code. Earlier votes will be preserved.' +
+          '</label>' : "") +
         '<label class="show-form-check"><input type="checkbox" name="is_enabled" ' +
         (show.is_enabled ? "checked" : "") + '> Enable this programme to receive votes</label>' +
       '</fieldset>' +
@@ -790,6 +795,7 @@
     campaign_start: fields.get("campaign_start") || null,
     campaign_end: fields.get("campaign_end") || null,
     is_enabled: fields.has("is_enabled"), manual_open: fields.has("manual_open"),
+    confirm_live_code_change: fields.has("confirm_live_code_change"),
   });
   document.addEventListener("click", async (e) => {
     const nav = e.target.closest("[data-page]");
