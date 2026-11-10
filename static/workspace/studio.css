@@ -2324,3 +2324,21 @@ dialog:has(.show-form) {
   .chart-movement-summary { padding: 12px 16px; }
   .chart-movement { padding: 5px 7px; font-size: 10px; }
 }
+
+.eligible-previous-note {
+  margin: 12px 20px;
+  color: #526680;
+  background: #f4f7fb;
+  padding: 10px 14px;
+  border-left: 3px solid #6c8cb6;
+  border-radius: 3px 7px 7px 3px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.eligible-previous-note strong {
+  color: #24456d;
+  font-weight: 730;
+}
+@media (max-width: 740px) {
+  .eligible-previous-note { margin: 12px 15px; }
+}
