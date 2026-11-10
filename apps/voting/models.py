@@ -66,7 +66,7 @@ class ChartShow(models.Model):
     chart_size = models.PositiveSmallIntegerField(default=20)
     daily_limit = models.PositiveSmallIntegerField(default=5)
     is_archived = models.BooleanField(default=False)
-    # Activated only after an edition shortlist is approved and locked.
+    # Activated after a presenter publishes the first eligible song list.
     eligibility_enforced = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -120,11 +120,12 @@ class ChartShow(models.Model):
 
 
 class EligibleEdition(models.Model):
-    """Approved candidate shortlist for one immutable show voting period."""
+    """Presenter-published shortlist for one immutable show voting period."""
 
+    # Preserve the 'locked' persisted value for existing ranking/audit queries.
+    # Historical submitted/returned rows are migrated back to editable drafts.
     STATUS = [
-        ("draft", "Draft"), ("submitted", "Awaiting approval"),
-        ("returned", "Returned for revision"), ("locked", "Approved and locked"),
+        ("draft", "Draft"), ("locked", "Published"),
     ]
     station = models.CharField(max_length=32, choices=Station.choices, db_index=True)
     chart_show = models.ForeignKey(

@@ -281,15 +281,12 @@
         eligibilityCreateDate = d.suggested_chart_date;
         eligibilityBroadcastDay = d.broadcast_weekday;
         eligibilityShowName = d.chart_show;
-        const canEdit = selected && ["draft", "returned"].includes(selected.status);
-        const canReview = d.is_admin && selected?.status === "submitted";
+        const canEdit = d.can_prepare && selected && ["draft", "returned", "submitted"].includes(selected.status);
         const weekday = days[d.broadcast_weekday] || "Broadcast day";
         const count = selected?.candidates?.length || 0;
         const currentIds = new Set(selected?.candidates?.map((item) => item.id) || []);
-        const statusLabels = {
-          draft: "Draft · in progress", returned: "Returned for changes",
-          submitted: "Awaiting approval", locked: "Approved · locked",
-        };
+        const editionLabel = (item) => item.status === "locked"
+          ? (item.voting_open ? "Voting Open" : "Published") : "Draft · in progress";
         const statusClass = selected?.status === "locked" ? "approved"
           : selected?.status === "submitted" ? "submitted"
           : selected?.status === "returned" ? "returned" : "draft";
@@ -313,7 +310,7 @@
             '" data-action="eligible-select" data-id="' + item.id + '"' +
             ' aria-pressed="' + String(selectedEditionId === item.id) + '">' +
             '<span>' + esc(item.chart_date) + '</span>' +
-            '<small>' + esc(statusLabels[item.status] || item.status) +
+            '<small>' + esc(editionLabel(item)) +
             ' · ' + num(item.candidate_count) + ' songs</small></button>'
           ).join("")
           : '<p class="eligible-none">No chart editions yet. Create the first one below.</p>';
@@ -322,9 +319,9 @@
           '<h2>Choose the songs that can compete</h2>' +
           '<p>Select verified songs for an upcoming edition. You can include more candidates than ' +
           'the Top ' + num(d.chart_size) + ' chart positions. Listener votes determine the final rankings.</p></div>' +
-          '<div class="eligible-steps" aria-label="Three-step approval process">' +
-          '<span><b>1</b> Build shortlist</span><span><b>2</b> Submit list</span>' +
-          '<span><b>3</b> Admin approval</span></div></section>';
+          '<div class="eligible-steps" aria-label="Three-step publishing process">' +
+          '<span><b>1</b> Create edition</span><span><b>2</b> Choose songs</span>' +
+          '<span><b>3</b> Publish list</span></div></section>';
         const selectorPanel = panel("Programme and editions",
           '<div class="eligible-selector-body">' +
           '<div class="eligible-selector-top">' + programmeSelect +
@@ -334,10 +331,10 @@
           esc(d.kind === "year_end" ? "Annual countdown" : weekday) + '</strong></span>' +
           '<span>ELIGIBILITY<strong class="' +
           (d.eligibility_enforced ? "eligible-enabled" : "eligible-inactive") + '">' +
-          (d.eligibility_enforced ? "Active" : "Awaiting first approval") +
+          (d.eligibility_enforced ? "Enabled" : "Not yet published") +
           '</strong></span></div></div>' +
           '<div class="eligible-editions-title"><strong>Chart editions</strong>' +
-          '<span>Select an edition to prepare or review its shortlist</span></div>' +
+          '<span>Select an edition to prepare or view its eligible songs</span></div>' +
           '<div class="eligible-edition-list">' + editionItems + '</div>' +
           (!d.can_create && d.kind === "year_end"
             ? '<p class="eligible-setup-notice">This annual programme needs a future voting campaign configured by the administrator before a new edition can be created.</p>'
@@ -359,17 +356,16 @@
         if (selected) {
           const details = '<div class="eligible-details">' +
             '<div class="eligible-statusline"><span class="eligible-status eligible-status--' +
-            statusClass + '">' + esc(statusLabels[selected.status] || selected.status) +
+            statusClass + '">' + esc(editionLabel(selected)) +
             '</span><span>Voting dates: <strong>' + esc(selected.voting_start) +
             '</strong> to <strong>' + esc(selected.voting_end) + '</strong></span></div>' +
             (selected.note ? '<p class="eligible-review-note"><strong>Review note:</strong> ' +
               esc(selected.note) + '</p>' : "") +
             (selected.status === "locked"
-              ? '<p class="eligible-locked">Approved and locked by ' +
-                esc(selected.approved_by) + '. The candidate list cannot be edited after approval.</p>'
-              : selected.status === "submitted"
-                ? '<p class="eligible-review-note">Submitted for administrator review. Editing is temporarily disabled.</p>'
-                : "") + '</div>';
+              ? '<p class="eligible-locked">Published by ' +
+                esc(selected.published_by || selected.prepared_by) +
+                '. This list is protected once published.</p>'
+              : '') + '</div>';
           const previousNote = '<p class="eligible-previous-note">' +
             (selected.previous_chart?.available
               ? 'Last official edition: <strong>' + esc(selected.previous_chart.chart_date) +
@@ -385,7 +381,7 @@
                   '</td><td>' + (item.previous_votes == null ? '—' : num(item.previous_votes)) +
                   '</td><td>' + (canEdit
                     ? btn("Remove", "eligible-remove", item.id)
-                    : '<span class="eligible-row-state">Approved candidate</span>') +
+                    : '<span class="eligible-row-state">Eligible song</span>') +
                   '</td></tr>'))
             : '<div class="eligible-candidate-empty">Your shortlist is empty. ' +
               'Search verified songs below and click <strong>Add to shortlist</strong>.</div>';
@@ -430,19 +426,12 @@
               btn("Propose a new song", "eligible-suggest") + '</div></div>'
             : "";
           const submitBar = canEdit
-            ? '<div class="eligible-submit-bar"><div><strong>Ready for review?</strong>' +
-              '<span>Review the candidates, then send the list to the administrator.</span></div>' +
+            ? '<div class="eligible-submit-bar"><div><strong>Ready to publish?</strong>' +
+              '<span>Check your verified songs, then publish directly. No administrator approval is needed.</span></div>' +
               '<button class="button primary" data-action="eligible-submit"' +
-              (count === 0 && !selected.suggestions.some((item) => item.status === "pending")
-                ? ' disabled title="Add a verified song or propose a new song first"' : "") +
-              '>Submit shortlist for approval</button></div>'
-            : canReview
-              ? '<div class="eligible-submit-bar"><div><strong>Administrator decision</strong>' +
-                '<span>Verify all songs and resolve outstanding proposals before approval.</span></div>' +
-                '<div class="eligible-review-actions">' +
-                btn("Return for changes", "eligible-return") +
-                '<button class="button primary" data-action="eligible-approve">Approve and lock</button>' +
-                '</div></div>' : "";
+              (count === 0 ? ' disabled title="Add at least one verified song first"' : "") +
+              '>Publish eligible list</button></div>'
+            : "";
           const suggestions = selected.suggestions.length
             ? '<div class="eligible-suggestions"><h3>Proposed songs awaiting verification</h3>' +
               table(["Artist", "Song", "Review status", "Action"],
@@ -450,7 +439,7 @@
                   '<tr><td>' + esc(item.artist) + '</td><td>' +
                   esc(item.title) + '</td><td>' + esc(item.status) +
                   '</td><td>' +
-                  (d.is_admin && item.status === "pending" && selected.status !== "locked"
+                  (d.is_admin && item.status === "pending"
                     ? btn("Link verified song", "eligible-proposal-accept", item.id) +
                       btn("Reject", "eligible-proposal-reject", item.id)
                     : '<span class="eligible-row-state">—</span>') +
@@ -515,7 +504,7 @@
           '<div class="network-steps">' +
           '<p><b>1.</b> Create a station. AirVote generates its permanent ID automatically.</p>' +
           '<p><b>2.</b> Open the station workspace and create its chart shows. Give each show a distinct voting code, voting schedule and presenter.</p>' +
-          '<p><b>3.</b> Assign presenter accounts and approve eligible song lists before the first edition.</p>' +
+          '<p><b>3.</b> Assign presenter accounts so presenters can select and publish eligible songs before voting opens.</p>' +
           '<p><b>4.</b> Connect the Bird receiving number, then activate the station and enable its shows.</p>' +
           '</div><p class="hint">A phone number must already be connected to Bird and its signed webhook configured. Adding a number here only routes incoming messages; it does not purchase or connect a WhatsApp number.</p></section>' +
           '</div>';
@@ -855,7 +844,7 @@
       archives: "Immutable published charts for the selected programme.",
       shows: "Programmes, voting codes, schedules and per-show settings.",
       stations: "Create stations, connect WhatsApp numbers and manage station settings.",
-      eligibility: "Prepare verified candidate lists, propose new songs and submit for administrator approval.",
+      eligibility: "Choose verified songs for each chart edition and publish eligible lists directly.",
       presenters: "Assign each presenter to exactly one station and chart show.",
       administration: "Manage accounts and oversee voting across every station.",
       activity: "A record of catalogue changes and chart publications.",
@@ -1099,23 +1088,10 @@
       return;
     }
     if (action === "eligible-submit") {
-      modal("Submit candidate list for approval",
-        "<p>The central administrator will check the songs and lock the approved list before voting begins.</p>",
+      modal("Publish eligible list",
+        "<p>This makes the selected verified songs eligible for the programme. You can publish without administrator approval. Once published, the list cannot be changed during voting.</p>",
         () => api("workspace/eligibility/submit", {
           edition_id: selectedEditionId,
-        }));
-      return;
-    }
-    if (action === "eligible-approve" || action === "eligible-return") {
-      const approving = action === "eligible-approve";
-      modal(approving ? "Approve and lock song list" : "Return for revision",
-        approving
-          ? "<p>Once approved, this edition's songs are locked. Only these songs can count in the chart. The list must be approved before voting starts.</p>"
-          : '<label class="field">Reason for revision<textarea name="note" maxlength="500"></textarea></label>',
-        (fields) => api("workspace/eligibility/review", {
-          edition_id: selectedEditionId,
-          action: approving ? "approve" : "return",
-          ...(approving ? {} : {note: fields.get("note") || ""}),
         }));
       return;
     }

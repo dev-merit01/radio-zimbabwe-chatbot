@@ -220,7 +220,7 @@ def save_show(request):
                 or show.campaign_end != end
             ):
                 raise ValueError(
-                    "Approved candidate lists lock the programme's schedule "
+                    "Published candidate lists lock the programme's schedule "
                     "and chart size. Archive the show before changing them."
                 )
         show = show or ChartShow(station=station)

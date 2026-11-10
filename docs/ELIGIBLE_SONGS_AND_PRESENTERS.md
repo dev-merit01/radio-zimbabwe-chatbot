@@ -1,75 +1,71 @@
-# AirVote presenter accounts & station-approved eligible songs
+# AirVote presenter accounts and published eligible songs
 
-## Roles
+## Permissions
 
-- **Central administrator:** keeps the existing superuser login; chooses any of the
-  seven stations and any chart show. This account is not assigned to one show.
-- **Presenter:** has a separate username/password and a mandatory, one-to-one
-  assignment to one chart show. The station is derived from that show. Station
-  switching, another show's API ID, another show's archives and station-wide
-  administration are forbidden on the server, not just hidden in the interface.
-- **Existing station accounts:** continue working as station-team accounts.
-  The administrator can assign an existing account to a specific show using
-  **Presenter accounts**; this does not reveal or reset its password.
+- **Central administrator:** manages stations, programme configuration,
+  presenter accounts, voting schedules and station-level catalogue verification.
+  The administrator does **not** approve individual eligible song lists.
+- **Presenter:** uses an individually assigned login for one chart programme.
+  The station is derived from that programme. Server-side checks prevent
+  editing lists belonging to another presenter, show or station.
+- **Station accounts:** continue working as configured. An existing station
+  user can be assigned to a specific show without changing its password.
 
-## Prepare each edition before voting
+## Prepare and publish each chart edition
 
-1. Central administrator signs in, chooses the station, and opens
-   **Presenter accounts**. Create a unique presenter account for the specific
-   chart show, or assign an existing account. Send their password privately;
-   do not publish it with station voting codes.
-2. Presenter signs in; their station and chart show are selected automatically.
-   No selection or station password is required.
-3. Open **Eligible songs**, create an edition with its scheduled broadcast
-   date (e.g. Saturday Top 20), search the verified station catalogue, and add
-   the chosen songs to a draft shortlist.
-4. Missing music can be proposed with its artist and title. The administrator
-   first verifies the real recording in the station's catalogue, then links
-   the suggestion to the verified song. Artist fame or compulsory airplay is
-   **not** a qualification criterion; song authenticity, programme suitability,
-   and broadcast availability are reviewed fairly.
-5. Presenter submits the list. Administrator can return it with a reason, or
-   approve and lock it **before voting opens**. Pending song suggestions must
-   be resolved before approval. The list cannot be edited once locked.
-6. When the first approved edition is locked, the programme's
-   `eligibility_enforced` flag turns on. It applies only to that programme.
-   Existing historical station votes and programme results are unaffected
-   until that programme's first approval. Every future edition must have an
-   approved shortlist for songs to count toward its official rankings.
+1. The administrator assigns a presenter login to the programme.
+2. The presenter opens **Eligible songs** and creates an edition for the
+   upcoming broadcast date. The eligible candidate count may exceed the
+   published Top 20, Top 40 or Top 50 chart size.
+3. The presenter searches the station's **verified music catalogue** and
+   adds, removes or replaces songs while the edition is a **Draft**.
+4. The presenter clicks **Publish eligible list** directly. **There is no
+   administrator approval step.** Publication activates eligibility for that
+   programme and freezes the list for the edition.
+5. When the programme's configured voting schedule opens within that edition,
+   its display status becomes **Voting Open**. List publication is not itself
+   a command to start or change the voting schedule.
+6. The presenter prepares the next edition as a new draft.
 
-## Ranking and nominations
+The interface displays **Draft**, **Published** and **Voting Open**. Internally
+the database retains the historical `locked` status value for published
+editions so ranking queries and prior integrations remain compatible. An
+upgrade migration returns previously `submitted` or `returned` editions to
+editable drafts, preserving their selected candidate songs.
 
-- Bird keeps using **one WhatsApp number per station** and programme-specific
-  voting codes. There are **no automatic replies**.
-- OpenAI verifies incoming music identification as before, but the official
-  Top 20/50 ranking additionally filters to the **administrator-locked edition
-  candidate IDs**. This separates song *verification* from chart *eligibility*.
-- A vote for a song outside the shortlist is preserved in the raw receipt/audit
-  data and displayed as **nomination interest**, not counted in the official
-  chart. It is **never carried into another edition**.
-- Legitimate voting for an approved emerging artist may still put that song
-  at number 1. Fame or airplay is not used to artificially rearrange votes.
-- Rankings and official archives retain their original station/show scoping
-  and duplicate checks. Existing spam and vote-multiplier policies remain
-  unchanged.
-- The admin cannot approve a shortlist after that edition has received votes
-  or started voting. Once editions are locked, changes to programme chart size,
-  broadcast day or schedule are restricted to protect historical comparability.
+## Music verification is not approval of a shortlist
 
-## Safe initial deployment
+Presenters may propose music not yet in the verified catalogue. An administrator
+may verify the authenticity of the new recording and link a proposal to a
+catalogue song. A pending suggestion **does not block publication** of the
+verified songs already chosen. Songs verified after an edition was published
+may be considered for a future edition, but are never added retroactively to
+a published eligible list.
 
-Both migrations add new schema only; no existing accounts are changed, no
-previous votes are reassigned, and no current programme becomes restricted
-automatically. The administrator must **create or assign presenters and approve
-the first future shortlist** to activate eligibility for each show.
+## Voting integrity and historical preservation
 
-Before announcing programme voting, test one presenter sign-in, one approved
-song, one out-of-list nomination and the end-of-year campaign under the
-selected station. Only then activate code-based voting for the station.
+- Bird continues to receive one WhatsApp number per station and configured
+  chart-show voting codes, with no automatic listener replies.
+- OpenAI matches incoming votes to verified catalogue songs. Only songs in
+  the published eligible list for that exact station, programme and voting
+  period count towards its official chart ranking.
+- A vote for a song outside the published list is kept in the raw receipt
+  data and may show as nomination interest. It is not transferred to the next
+  edition or added to the official chart.
+- The presenter **cannot publish** an edition after votes have been received
+  for that edition's voting period or while that edition's voting window is
+  currently open. This prevents retrospective song exclusions.
+- Only verified songs from the programme's station may be published, and
+  published eligible lists cannot overlap for a programme.
+- Published lists are immutable; changes to a future edition require a new
+  draft. Existing historical votes and archived results are not rewritten.
+- Each publish action is recorded in the audit trail with the presenter and
+  candidate count. Duplicate-vote and spam controls remain independent.
 
-## Limitations
+## Deployment
 
-This release provides individual account assignment, verified-catalogue
-search, dated shortlists, new-song proposals, administrator verification/
-approval and locked-chart filtering. Bulk Excel importing and advanced
-programme-specific audio-quality checking remain later enhancements.
+Run Django migrations before the updated application starts. There is no new
+administrator approval workflow to configure. Test with a presenter login:
+create a future edition, add verified songs, publish, confirm that the list
+appears as **Published**, and check ranking eligibility. Also confirm that
+publishing a list after voting starts is refused.
