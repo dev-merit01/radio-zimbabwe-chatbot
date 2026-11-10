@@ -87,10 +87,13 @@ def semantic_candidates(station, artist, title, *, limit=8, exclude_ids=()):
     if len(query) < 3:
         return []
     model = settings.OPENAI_EMBEDDING_MODEL
-    records = SongEmbedding.objects.filter(
+    corpus = SongEmbedding.objects.filter(
         station=station, model=model, song__station=station,
         song__status="verified",
-    ).select_related("song").iterator(chunk_size=100)
+    )
+    if not corpus.exists():
+        return []  # Never incur per-vote API cost before precomputation.
+    records = corpus.select_related("song").iterator(chunk_size=100)
     key = "airvote:embedding:" + fingerprint(model + "|" + query)
     vector = cache.get(key)
     if vector is None:
