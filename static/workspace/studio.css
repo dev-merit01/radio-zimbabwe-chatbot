@@ -188,9 +188,9 @@ svg {
   padding: 12px 13px;
   border: 0;
   background: none;
-  color: #6a7871;
+  color: #526d5b;
   text-align: left;
-  font-size: 12px;
+  font-size: 13px;
   border-radius: 8px;
   margin: 3px 0;
   font-weight: 550;
@@ -348,7 +348,7 @@ main {
   margin-bottom: 29px;
 }
 .eyebrow {
-  font-size: 9px;
+  font-size: 10px;
   letter-spacing: 1.7px;
   color: #7e8e7f;
   font-weight: 700;
@@ -371,7 +371,7 @@ p {
   line-height: 1.6;
 }
 .page-heading p {
-  font-size: 12px;
+  font-size: 13px;
   color: var(--muted);
   margin: 0;
 }
@@ -383,7 +383,7 @@ p {
   border-radius: 7px;
   border: 1px solid transparent;
   padding: 9px 14px;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 650;
   white-space: nowrap;
   min-height: 36px;
@@ -955,7 +955,7 @@ dialog::backdrop {
   color: #a14e35;
 }
 .hint {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--muted);
 }
 .row-actions {
