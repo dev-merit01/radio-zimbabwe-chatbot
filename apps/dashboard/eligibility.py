@@ -1,4 +1,4 @@
-"""Edition shortlists: presenter drafts, administrator approval, immutable eligibility."""
+"""Presenter-owned chart shortlists: draft, publish, immutable eligibility."""
 import json
 from datetime import date, timedelta
 
@@ -95,6 +95,13 @@ def _serialize(edition, details=False):
         "prepared_by": edition.prepared_by.username if edition.prepared_by else "",
         "approved_by": edition.approved_by.username if edition.approved_by else "",
         "approved_at": edition.approved_at.isoformat() if edition.approved_at else None,
+        "published_by": edition.approved_by.username if edition.approved_by else "",
+        "published_at": edition.approved_at.isoformat() if edition.approved_at else None,
+        "voting_open": bool(
+            edition.status == "locked"
+            and edition.voting_start <= timezone.localdate() <= edition.voting_end
+            and edition.chart_show.accepts_at(timezone.now())
+        ),
         "note": edition.note,
         "candidate_count": edition.candidates.count(),
     }
@@ -239,8 +246,8 @@ def edit_candidate(request):
         station = get_active_station(request)
         lock_station(station)
         edition = _edition(request, edition_id, lock=True)
-        if edition.status not in ("draft", "returned"):
-            raise ValueError("This candidate list is submitted or locked.")
+        if edition.status not in ("draft", "returned", "submitted"):
+            raise ValueError("Published candidate lists cannot be edited.")
         song = CleanedSong.objects.filter(
             pk=song_id, station=edition.station, status="verified"
         ).first()
@@ -276,7 +283,7 @@ def suggest_song(request):
         station = get_active_station(request)
         lock_station(station)
         edition = _edition(request, edition_id, lock=True)
-        if edition.status not in ("draft", "returned"):
+        if edition.status not in ("draft", "returned", "submitted"):
             raise ValueError("This list is no longer open for suggestions.")
         if CleanedSong.objects.filter(
             station=station, canonical_name__iexact=f"{artist.strip()} - {title.strip()}",
@@ -297,6 +304,11 @@ def suggest_song(request):
 @require_POST
 @api_access()
 def submit_edition(request):
+    """Publish a presenter's verified shortlist without an admin approval step.
+
+    Keep the historical 'locked' database value and approved_* columns for
+    compatibility with existing chart queries and deployed installations.
+    """
     if not _permitted(request):
         return JsonResponse({"error": "Presenter assignment required."}, status=403)
     data = json.loads(request.body)
@@ -307,17 +319,66 @@ def submit_edition(request):
         station = get_active_station(request)
         lock_station(station)
         edition = _edition(request, edition_id, lock=True)
-        if edition.status not in ("draft", "returned"):
-            raise ValueError("This list cannot be resubmitted.")
-        if not edition.candidates.exists() and not edition.suggestions.filter(status="pending").exists():
-            raise ValueError("Add verified songs or propose a new song first.")
-        edition.status = "submitted"
-        edition.save(update_fields=["status", "updated_at"])
+        if edition.chart_show.is_archived:
+            raise ValueError("Archived programmes cannot publish candidate lists.")
+        if edition.status not in ("draft", "returned", "submitted"):
+            raise ValueError("This edition is already published.")
+        current_window = _edition_window(edition.chart_show, edition.chart_date)
+        if current_window != (edition.voting_start, edition.voting_end):
+            raise ValueError("Programme dates changed. Create a new candidate list.")
+        if edition.voting_end < timezone.localdate():
+            raise ValueError("Cannot publish a past edition.")
+        # Never apply a new eligibility filter retroactively to recorded votes.
+        if RawVote.objects.filter(
+            station=station, chart_show=edition.chart_show,
+            vote_date__range=(edition.voting_start, edition.voting_end),
+        ).exists() or InboundEvent.objects.filter(
+            station=station, chart_show=edition.chart_show,
+            received_at__date__range=(edition.voting_start, edition.voting_end),
+        ).exists():
+            raise ValueError(
+                "Votes have already been received for this edition. "
+                "Prepare the candidate list for the next edition."
+            )
+        if (edition.voting_start <= timezone.localdate() <= edition.voting_end
+                and edition.chart_show.accepts_at(timezone.now())):
+            raise ValueError(
+                "Voting is currently open for this edition. "
+                "Publish the next edition before its voting period opens."
+            )
+        if not edition.candidates.exists():
+            raise ValueError("Add at least one verified catalogue song before publishing.")
+        if edition.candidates.exclude(
+            song__station=station, song__status="verified",
+        ).exists():
+            raise ValueError("All selected songs must still be verified for this station.")
+        if EligibleEdition.objects.filter(
+            chart_show=edition.chart_show, status="locked",
+            voting_start__lte=edition.voting_end,
+            voting_end__gte=edition.voting_start,
+        ).exclude(pk=edition.pk).exists():
+            raise ValueError("A published edition already covers these voting dates.")
+        # Pending new-song proposals do not hold up a presenter's verified list.
+        # Admin verification of such proposals remains separate and cannot
+        # retroactively add a song to an already-published edition.
+        edition.status = "locked"
+        edition.approved_by = request.user
+        edition.approved_at = timezone.now()
+        edition.note = ""
+        edition.save(update_fields=[
+            "status", "approved_by", "approved_at", "note", "updated_at",
+        ])
+        show = edition.chart_show
+        if not show.eligibility_enforced:
+            show.eligibility_enforced = True
+            show.save(update_fields=["eligibility_enforced", "updated_at"])
         ReviewAudit.objects.create(
-            station=station, actor=request.user, action="edition_submitted",
-            details={"edition_id": edition.pk},
+            station=station, actor=request.user, action="edition_published",
+            details={"edition_id": edition.pk, "show_id": edition.chart_show_id,
+                     "candidate_count": edition.candidates.count()},
         )
-    return JsonResponse({"ok": True, "status": edition.status})
+    return JsonResponse({"ok": True, "status": edition.status,
+                         "published_by": request.user.username})
 
 
 @require_POST
@@ -335,8 +396,6 @@ def review_suggestion(request):
         ).select_related("edition").first()
         if not proposal:
             raise ValueError("Suggestion not found or already reviewed.")
-        if proposal.edition.status == "locked":
-            raise ValueError("The approved shortlist is locked.")
         song = None
         if action == "accept":
             song_id = data.get("song_id")
@@ -347,9 +406,11 @@ def review_suggestion(request):
             ).first()
             if not song:
                 raise ValueError("Verify the proposed song in the catalogue first.")
-            EditionCandidate.objects.get_or_create(
-                edition=proposal.edition, song=song,
-            )
+            # Verification after publication never changes the frozen list.
+            if proposal.edition.status != "locked":
+                EditionCandidate.objects.get_or_create(
+                    edition=proposal.edition, song=song,
+                )
         proposal.status = "accepted" if song else "rejected"
         proposal.matched_song = song
         proposal.reviewed_by = request.user
@@ -368,66 +429,8 @@ def review_suggestion(request):
 @require_POST
 @api_access("admin")
 def review_edition(request):
-    data = json.loads(request.body)
-    edition_id, action = data.get("edition_id"), data.get("action")
-    if type(edition_id) is not int or action not in ("approve", "return"):
-        raise ValueError("Invalid candidate list review.")
-    with transaction.atomic():
-        station = get_active_station(request)
-        lock_station(station)
-        edition = _edition(request, edition_id, lock=True)
-        if edition.status != "submitted":
-            raise ValueError("Only submitted candidate lists may be reviewed.")
-        if action == "return":
-            edition.status = "returned"
-            edition.note = str(data.get("note", ""))[:500]
-            edition.save(update_fields=["status", "note", "updated_at"])
-        else:
-            # No switching eligibility on after listeners have already
-            # participated in this period; no silent retroactive exclusions.
-            current_window = _edition_window(edition.chart_show, edition.chart_date)
-            if current_window != (edition.voting_start, edition.voting_end):
-                raise ValueError("Programme dates changed. Create a new shortlist.")
-            if RawVote.objects.filter(
-                station=station, chart_show=edition.chart_show,
-                vote_date__range=(edition.voting_start, edition.voting_end),
-            ).exists() or InboundEvent.objects.filter(
-                station=station, chart_show=edition.chart_show,
-                received_at__date__range=(edition.voting_start, edition.voting_end),
-            ).exists():
-                raise ValueError("Voting has already started for this edition. "
-                                 "Prepare the candidate list for the next edition.")
-            if edition.voting_start < timezone.localdate():
-                raise ValueError("A shortlist must be approved before its voting period.")
-            if edition.voting_start == timezone.localdate() and edition.chart_show.accepts_at(timezone.now()):
-                raise ValueError("Voting is currently open. Approval must precede voting.")
-            if edition.suggestions.filter(status="pending").exists():
-                raise ValueError("Review all suggested songs before approving this shortlist.")
-            if not edition.candidates.exists():
-                raise ValueError("An approved edition must contain verified songs.")
-            if edition.candidates.exclude(
-                song__station=station, song__status="verified"
-            ).exists():
-                raise ValueError("All selected songs must still be verified for this station.")
-            if EligibleEdition.objects.filter(
-                chart_show=edition.chart_show, status="locked",
-                voting_start__lte=edition.voting_end,
-                voting_end__gte=edition.voting_start,
-            ).exclude(pk=edition.pk).exists():
-                raise ValueError("A locked edition already covers these voting dates.")
-            edition.status = "locked"
-            edition.approved_by = request.user
-            edition.approved_at = timezone.now()
-            edition.save(update_fields=[
-                "status", "approved_by", "approved_at", "updated_at",
-            ])
-            show = edition.chart_show
-            show.eligibility_enforced = True
-            show.save(update_fields=["eligibility_enforced", "updated_at"])
-        ReviewAudit.objects.create(
-            station=station, actor=request.user,
-            action="edition_approved" if action == "approve" else "edition_returned",
-            details={"edition_id": edition.pk, "show_id": edition.chart_show_id,
-                     "candidate_count": edition.candidates.count()},
-        )
-    return JsonResponse({"ok": True, "status": edition.status})
+    """Retired endpoint kept to give older clients an actionable response."""
+    return JsonResponse({
+        "error": "Administrator shortlist approval has been retired. "
+                 "The presenter publishes the eligible list directly.",
+    }, status=410)
