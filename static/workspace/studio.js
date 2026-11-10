@@ -459,10 +459,10 @@
             details + stats + previousNote + candidateContent +
             searchPanel + suggestions + submitBar);
         }
-        const nominations = selected?.nomination_interest?.length
+        const nominations = d.nomination_interest?.length
           ? panel("Unlisted song nominations",
             '<p class="eligible-note-inset">These requests are recorded as nomination interest, not as official chart votes.</p>' +
-            table(["Song requested", "Submissions"], selected.nomination_interest.map((item) =>
+            table(["Song requested", "Submissions"], d.nomination_interest.map((item) =>
               '<tr><td>' + esc(item.display_name) + '</td><td>' + num(item.n) + '</td></tr>')))
           : "";
         html = '<div class="eligible-page">' + intro + selectorPanel +
@@ -1049,6 +1049,8 @@
     if (action === "eligible-select") {
       selectedEditionId = Number(id);
       eligibilityResults = [];
+      eligibilityQuery = "";
+      eligibilitySearched = false;
       render();
       return;
     }
