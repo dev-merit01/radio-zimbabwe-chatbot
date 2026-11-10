@@ -278,10 +278,32 @@ def chart_detail(request, chart_id):
     assigned = presenter_show(request.user)
     if assigned and chart.chart_show_id != assigned.pk:
         return JsonResponse({"error": "Chart not found"}, status=404)
-    entries = chart.entries.all().order_by("rank")
+    entries = list(chart.entries.all().order_by("rank"))
+    # Newly published charts store their comparison ID and classification.
+    # Previously published archives retain their old rank snapshots; infer
+    # absent labels from their own preceding station/programme editions.
+    snapshotted = all(entry.movement_status for entry in entries)
+    previous = (
+        chart.comparison_chart if snapshotted else
+        chart.comparison_chart or previous_published_chart(
+            chart.chart_show, chart.week_start, chart.week_end,
+            annual=chart.is_year_end,
+        )
+    ) if chart.chart_show else None
+    historical_ids = (
+        published_history_ids(
+            chart.chart_show, chart.week_start, annual=chart.is_year_end,
+            song_ids=[entry.cleaned_song_id for entry in entries
+                      if entry.cleaned_song_id is not None],
+        ) if chart.chart_show else set()
+    )
 
     data = []
     for entry in entries:
+        movement = archived_movement(
+            entry, has_comparison=bool(previous),
+            charted_before=entry.cleaned_song_id in historical_ids,
+        )
         data.append(
             {
                 "rank": entry.rank,
@@ -293,10 +315,9 @@ def chart_detail(request, chart_id):
                 "spotify_track_id": entry.spotify_track_id,
                 "count": entry.vote_count,
                 "score": score_for_votes(entry.vote_count, chart.vote_multiplier),
-                "previous_rank": entry.previous_rank,
+                **movement,
                 "weeks_on_chart": entry.weeks_on_chart,
                 "peak_rank": entry.peak_rank,
-                "movement": entry.movement,
             }
         )
 
@@ -314,6 +335,8 @@ def chart_detail(request, chart_id):
                 "total_votes": chart.total_votes,
                 "total_score": score_for_votes(chart.total_votes, chart.vote_multiplier),
                 "vote_multiplier": chart.vote_multiplier,
+                "comparison": comparison_metadata(previous, annual=chart.is_year_end),
+                "chart_show_id": chart.chart_show_id,
                 "finalized_at": chart.finalized_at.isoformat()
                 if chart.finalized_at
                 else None,
