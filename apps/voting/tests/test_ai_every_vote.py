@@ -90,6 +90,22 @@ class EveryVoteAiTests(TestCase):
         self.assertFalse(MatchKeyMapping.objects.exists())
         self.assertFalse(CleanedSongTally.objects.exists())
 
+    def test_openai_string_id_and_confidence_are_normalised_before_approval(self):
+        song = self.song()
+        vote = self.vote()
+        with patch(
+            "apps.voting.ai.call_openai_api",
+            return_value=(
+                '{"matched":true,"matched_song_id":"' + str(song.pk) +
+                '","confidence":"High","reasoning":"Exact catalogue identity"}'
+            ),
+        ) as openai:
+            process_vote(vote)
+        openai.assert_called_once()
+        vote.refresh_from_db()
+        self.assertEqual(vote.ai_status, "approved")
+        self.assertEqual(CleanedSongTally.objects.get(cleaned_song=song).count, 1)
+
     def test_foreign_station_song_id_never_counts(self):
         other = self.song(station="national_fm")
         vote = self.vote(text="Example Artist - Morning Sunshine")
