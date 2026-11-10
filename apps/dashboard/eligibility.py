@@ -12,6 +12,7 @@ from apps.accounts.context_processors import get_active_station
 from apps.accounts.permissions import presenter_show, require_presenter_show
 from apps.charts.routing import station_show
 from apps.charts.periods import campaign_local_dates
+from apps.charts.movement import previous_published_chart, comparison_metadata
 from apps.voting.models import (
     CandidateSongSuggestion, CleanedSong, EditionCandidate,
     EligibleEdition, InboundEvent, MatchKeyMapping, RawVote, ReviewAudit,
@@ -76,9 +77,31 @@ def _serialize(edition, details=False):
         "candidate_count": edition.candidates.count(),
     }
     if details:
+        # A presenter can see how a candidate performed on the immediately
+        # preceding official show, even before the new edition begins.
+        # This is reference information, not a current-edition ranking.
+        previous = previous_published_chart(
+            edition.chart_show, edition.voting_start, edition.voting_end,
+            annual=(edition.chart_show.kind == "year_end"),
+        )
+        previous_entries = (
+            {item.cleaned_song_id: item for item in previous.entries.all()
+             if item.cleaned_song_id is not None} if previous else {}
+        )
+        data["previous_chart"] = comparison_metadata(
+            previous, annual=(edition.chart_show.kind == "year_end"),
+        )
         data["candidates"] = [
             {"id": row.song_id, "artist": row.song.artist,
-             "title": row.song.title, "status": row.song.status}
+             "title": row.song.title, "status": row.song.status,
+             "previous_rank": (
+                 previous_entries[row.song_id].rank
+                 if row.song_id in previous_entries else None
+             ),
+             "previous_votes": (
+                 previous_entries[row.song_id].vote_count
+                 if row.song_id in previous_entries else None
+             )}
             for row in edition.candidates.select_related("song")
             .order_by("song__artist", "song__title", "pk")
         ]

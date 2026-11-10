@@ -28,6 +28,48 @@ const assert = require('node:assert/strict');
   await page.getByLabel('Password', {exact: true}).fill('local-browser-test-only');
   await page.getByRole('button', {name: 'Sign in', exact: true}).click();
   await page.locator('#chart-options').waitFor();
+  // Isolated browser rendering test: API fixture affects this page only,
+  // never database votes, published charts or the running backend.
+  const movementRoute = '**/api/chart/today?*';
+  await page.route(movementRoute, async (route) => {
+    const response = await route.fetch();
+    const payload = await response.json();
+    payload.comparison = {
+      available: true, chart_id: 4567,
+      chart_date: '2026-11-07', label: 'Previous weekly chart',
+    };
+    payload.top100 = [
+      {rank:1,title:'Alpha',artists:'Artist One',count:120,
+       previous_rank:2,movement_status:'up',movement_delta:1,movement:'+1'},
+      {rank:2,title:'Bravo',artists:'Artist Two',count:100,
+       previous_rank:1,movement_status:'down',movement_delta:-1,movement:'-1'},
+      {rank:3,title:'Charlie',artists:'Artist Three',count:90,
+       previous_rank:null,movement_status:'new',movement_delta:null,movement:'new'},
+      {rank:4,title:'Delta',artists:'Artist Four',count:80,
+       previous_rank:null,movement_status:'re_entry',movement_delta:null,movement:'re-entry'},
+      {rank:5,title:'Echo',artists:'Artist Five',count:70,
+       previous_rank:5,movement_status:'same',movement_delta:0,movement:'='},
+    ];
+    await route.fulfill({response, body:JSON.stringify(payload),
+      contentType:'application/json'});
+  });
+  await page.getByRole('button',{name:'Show chart',exact:true}).click();
+  await page.locator('.chart-movement--up').waitFor();
+  assert.equal(await page.locator('.chart-movement--up').innerText(), '↑ 1');
+  assert.equal(await page.locator('.chart-movement--down').innerText(), '↓ 1');
+  assert.equal(await page.locator('.chart-movement--new').innerText(), 'NEW');
+  assert.equal(await page.locator('.chart-movement--re_entry').innerText(), 'RE-ENTRY');
+  assert.equal(await page.locator('.chart-movement--same').innerText(), '→ SAME');
+  assert.equal(await page.locator('tbody tr').first().locator('.chart-previous-rank').innerText(), '#2');
+  assert.equal(await page.locator('.chart-movement--up').getAttribute('aria-label'),
+    'Up 1 position; previously position 2');
+  const upColour = await page.locator('.chart-movement--up').evaluate((el)=>getComputedStyle(el).color);
+  const downColour = await page.locator('.chart-movement--down').evaluate((el)=>getComputedStyle(el).color);
+  assert.notEqual(upColour,downColour,'Positive and negative movement must be visually distinct.');
+  await page.screenshot({path:'/tmp/airvote-chart-position-movement.png',fullPage:true});
+  await page.unroute(movementRoute);
+  await page.getByRole('button',{name:'Show chart',exact:true}).click();
+  await page.locator('.chart-movement--up').waitFor({state:'detached'});
   const chartInsets = await page.evaluate(() => {
     const toolbar = document.querySelector('#chart-options');
     const note = document.querySelector('.chart-period-meta');

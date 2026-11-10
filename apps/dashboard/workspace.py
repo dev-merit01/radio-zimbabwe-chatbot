@@ -459,13 +459,27 @@ def export_chart(request):
     writer = csv.writer(output)
     multiplier = data.get("chart", data).get("vote_multiplier", 1)
     writer.writerow(
-        ["Rank", "Title", "Artist", "Votes"] +
-        (["Weighted score (x" + str(multiplier) + ")"] if multiplier != 1 else [])
+        ["Position", "Title", "Artist", "Verified votes"] +
+        (["Weighted score (x" + str(multiplier) + ")"] if multiplier != 1 else []) +
+        ["Previous position", "Position change", "Chart status"]
     )
+    status_labels = {
+        "up": "UP", "down": "DOWN", "same": "UNCHANGED",
+        "new": "NEW ENTRY", "re_entry": "RE-ENTRY",
+        "no_previous": "NO PRIOR EDITION",
+    }
     for row in rows:
+        previous = row.get("previous_rank")
+        delta = row.get("movement_delta")
         writer.writerow(
             [row["rank"], safe(row["title"]), safe(row["artists"]), row["count"]] +
-            ([row.get("score", row["count"] * multiplier)] if multiplier != 1 else [])
+            ([row.get("score", row["count"] * multiplier)] if multiplier != 1 else []) +
+            [
+                previous if previous is not None else "",
+                ("+" + str(delta) if delta > 0 else str(delta))
+                if delta is not None else "",
+                status_labels.get(row.get("movement_status"), "NOT AVAILABLE"),
+            ]
         )
     response = HttpResponse(
         "\ufeff" + output.getvalue(), content_type="text/csv; charset=utf-8"
