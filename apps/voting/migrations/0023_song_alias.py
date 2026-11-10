@@ -14,9 +14,9 @@ class Migration(migrations.Migration):
             fields=[
                 ("id", models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name="ID")),
                 ("station", models.CharField(max_length=32, db_index=True, choices=[
-                    ("national_fm", "National FM"), ("power_fm", "Power FM"),
-                    ("classic_263", "Classic 263"), ("central_radio", "Central Radio"),
-                    ("khulumani_fm", "Khulumani FM"), ("radio_zimbabwe", "Radio Zimbabwe"),
+                    ("radio_zimbabwe", "Radio Zimbabwe"), ("national_fm", "National FM"),
+                    ("power_fm", "Power FM"), ("classic_263", "Classic 263"),
+                    ("central_radio", "Central Radio"), ("khulumani_fm", "Khulumani FM"),
                     ("luzibo_radio", "Luzibo Radio"),
                 ])),
                 ("kind", models.CharField(max_length=12, choices=[
