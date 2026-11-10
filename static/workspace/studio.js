@@ -18,7 +18,8 @@
   let chartSize = 20, chartPeriod = "weekly";
   let selectedShowId = null, showsCache = [], showPolicyEnabled = false, activeVoteMultiplier = 1;
   let lastChartShowId = null;
-  let selectedEditionId = null, eligibilityResults = [], eligibilityQuery = "";
+  let selectedEditionId = null, eligibilityResults = [], eligibilityQuery = "", eligibilitySearched = false;
+  let eligibilityCreateDate = null, eligibilityBroadcastDay = null, eligibilityShowName = "";
   let page = "overview",
     pagination = 1,
     query = "",
@@ -262,119 +263,210 @@
         }
       } else if (page === "eligibility") {
         const show = showsCache.find((item) => item.id === selectedShowId);
-        if (show?.kind === "legacy") throw new Error("Select a chart show, not the historical chart.");
+        if (show?.kind === "legacy")
+          throw new Error("Choose a chart show instead of the historical chart.");
         if (window.eligibilityLastShowId !== selectedShowId) {
           window.eligibilityLastShowId = selectedShowId;
           selectedEditionId = null;
           eligibilityResults = [];
           eligibilityQuery = "";
+          eligibilitySearched = false;
         }
         const url = "workspace/eligibility?show_id=" + selectedShowId +
           (selectedEditionId ? "&edition_id=" + selectedEditionId : "");
         const d = await read(url);
         if (current !== generation) return;
         const selected = d.selected;
-        if (selected) selectedEditionId = selected.id;
+        selectedEditionId = selected?.id || null;
+        eligibilityCreateDate = d.suggested_chart_date;
+        eligibilityBroadcastDay = d.broadcast_weekday;
+        eligibilityShowName = d.chart_show;
         const canEdit = selected && ["draft", "returned"].includes(selected.status);
         const canReview = d.is_admin && selected?.status === "submitted";
+        const weekday = days[d.broadcast_weekday] || "Broadcast day";
+        const count = selected?.candidates?.length || 0;
+        const currentIds = new Set(selected?.candidates?.map((item) => item.id) || []);
+        const statusLabels = {
+          draft: "Draft · in progress", returned: "Returned for changes",
+          submitted: "Awaiting approval", locked: "Approved · locked",
+        };
+        const statusClass = selected?.status === "locked" ? "approved"
+          : selected?.status === "submitted" ? "submitted"
+          : selected?.status === "returned" ? "returned" : "draft";
+        const createButton = d.can_create
+          ? '<button class="button primary" data-action="eligible-new">+ Create edition</button>'
+          : "";
         const programmeSelect = d.is_admin
-          ? '<label class="field">Select programme<select id="eligibility-show-select">' +
-            showsCache.filter((show) => show.kind !== "legacy").map((item) =>
+          ? '<label class="eligible-programme-field">Chart programme' +
+            '<select id="eligibility-show-select" aria-label="Select chart programme">' +
+            showsCache.filter((item) => item.kind !== "legacy" && !item.is_archived).map((item) =>
               '<option value="' + item.id + '"' +
               (item.id === selectedShowId ? " selected" : "") + '>' +
               esc(item.name) + '</option>'
             ).join("") + '</select></label>'
-          : '<div class="eligible-assigned"><strong>Assigned programme:</strong> ' +
-            esc(d.chart_show) + '</div>';
-        html = '<div class="eligible-page">' +
-          panel("Programme candidate lists",
-            '<p class="hint">The presenter prepares candidates and the administrator approves the eligible list before voting starts. Listener votes alone determine the rankings.</p>' +
-            programmeSelect +
-            '<div class="eligible-overview"><span>Chart positions: <strong>Top ' +
-              num(d.chart_size) + '</strong></span><span>Eligibility protection: <strong>' +
-              (d.eligibility_enforced ? "Enabled" : "Not activated") +
-              '</strong></span></div>' +
-            '<div class="eligible-edition-list">' +
-              (d.editions.length ? d.editions.map((item) =>
-                '<button class="eligible-edition-option ' +
-                (selectedEditionId === item.id ? "is-selected" : "") +
-                '" data-action="eligible-select" data-id="' + item.id + '">' +
-                '<strong>' + esc(item.chart_date) + '</strong> · ' +
-                esc(item.status) + ' · ' + num(item.candidate_count) +
-                ' songs</button>'
-              ).join("") : '<p class="hint">No editions prepared for this programme.</p>') +
-            '</div>',
-            d.can_prepare ? btn("Create new edition", "eligible-new") : "") +
-          (selected
-            ? panel("Candidate list · " + selected.chart_date,
-              '<div class="eligible-details">' +
-              '<p><strong>Status:</strong> ' + esc(selected.status) +
-              ' · <strong>Voting period:</strong> ' + esc(selected.voting_start) +
-              ' to ' + esc(selected.voting_end) + '</p>' +
-              (selected.note ? '<p class="hint"><strong>Admin notes:</strong> ' +
+          : '<div class="eligible-assigned"><span>YOUR ASSIGNED PROGRAMME</span>' +
+            '<strong>' + esc(d.chart_show) + '</strong></div>';
+        const editionItems = d.editions.length
+          ? d.editions.map((item) =>
+            '<button class="eligible-edition-option' +
+            (selectedEditionId === item.id ? " is-selected" : "") +
+            '" data-action="eligible-select" data-id="' + item.id + '"' +
+            ' aria-pressed="' + String(selectedEditionId === item.id) + '">' +
+            '<span>' + esc(item.chart_date) + '</span>' +
+            '<small>' + esc(statusLabels[item.status] || item.status) +
+            ' · ' + num(item.candidate_count) + ' songs</small></button>'
+          ).join("")
+          : '<p class="eligible-none">No chart editions yet. Create the first one below.</p>';
+        const intro = '<section class="eligible-intro" aria-label="Eligible songs workflow">' +
+          '<div class="eligible-intro-heading"><span>CHART SHOW PREPARATION</span>' +
+          '<h2>Choose the songs that can compete</h2>' +
+          '<p>Select verified songs for an upcoming edition. You can include more candidates than ' +
+          'the Top ' + num(d.chart_size) + ' chart positions. Listener votes determine the final rankings.</p></div>' +
+          '<div class="eligible-steps" aria-label="Three-step approval process">' +
+          '<span><b>1</b> Build shortlist</span><span><b>2</b> Submit list</span>' +
+          '<span><b>3</b> Admin approval</span></div></section>';
+        const selectorPanel = panel("Programme and editions",
+          '<div class="eligible-selector-body">' +
+          '<div class="eligible-selector-top">' + programmeSelect +
+          '<div class="eligible-overview">' +
+          '<span>CHART SIZE<strong>Top ' + num(d.chart_size) + '</strong></span>' +
+          '<span>BROADCAST<strong>' +
+          esc(d.kind === "year_end" ? "Annual countdown" : weekday) + '</strong></span>' +
+          '<span>ELIGIBILITY<strong class="' +
+          (d.eligibility_enforced ? "eligible-enabled" : "eligible-inactive") + '">' +
+          (d.eligibility_enforced ? "Active" : "Awaiting first approval") +
+          '</strong></span></div></div>' +
+          '<div class="eligible-editions-title"><strong>Chart editions</strong>' +
+          '<span>Select an edition to prepare or review its shortlist</span></div>' +
+          '<div class="eligible-edition-list">' + editionItems + '</div>' +
+          (!d.can_create && d.kind === "year_end"
+            ? '<p class="eligible-setup-notice">This annual programme needs a future voting campaign configured by the administrator before a new edition can be created.</p>'
+            : "") +
+          '</div>', createButton);
+        const startPanel = '<section class="eligible-start">' +
+          '<div class="eligible-start-symbol" aria-hidden="true">♪</div>' +
+          '<div><h3>No shortlist prepared yet</h3>' +
+          '<p>Start with a chart edition dated for the next ' +
+          esc(d.kind === "year_end" ? "annual broadcast" : weekday + " broadcast") +
+          '. Then search the verified music catalogue and choose competing songs.</p>' +
+          (d.can_create
+            ? '<p class="eligible-date-preview">Suggested chart date: <strong>' +
+              esc(d.suggested_chart_date) + '</strong></p>' +
+              '<button class="button primary" data-action="eligible-new">Create first edition</button>'
+            : '<p class="eligible-date-preview">Ask the administrator to configure the programme schedule before preparing an edition.</p>') +
+          '</div></section>';
+        let candidatePanel = "";
+        if (selected) {
+          const details = '<div class="eligible-details">' +
+            '<div class="eligible-statusline"><span class="eligible-status eligible-status--' +
+            statusClass + '">' + esc(statusLabels[selected.status] || selected.status) +
+            '</span><span>Voting dates: <strong>' + esc(selected.voting_start) +
+            '</strong> to <strong>' + esc(selected.voting_end) + '</strong></span></div>' +
+            (selected.note ? '<p class="eligible-review-note"><strong>Review note:</strong> ' +
               esc(selected.note) + '</p>' : "") +
-              (selected.status === "locked"
-                ? '<p class="eligible-locked">Approved and locked by ' +
-                  esc(selected.approved_by) + '. No changes to this shortlist are permitted.</p>'
-                : "") + '</div>' +
-              '<p class="eligible-previous-note">' +
-              (selected.previous_chart?.available
-                ? 'Previous published edition: <strong>' +
-                  esc(selected.previous_chart.chart_date) +
-                  '</strong>. These are historical positions, not this edition’s results.'
-                : 'Previous edition: not published or unavailable. Historical positions cannot be compared yet.') +
-              '</p>' +
-              (selected.candidates.length
-                ? table(["Artist", "Song", "Last chart", "Prior votes", "Catalogue status", "Action"],
-                    selected.candidates.map((item) =>
-                      '<tr><td>' + esc(item.artist) + '</td><td>' +
-                      esc(item.title) + '</td><td class="chart-previous-rank">' +
-                      (item.previous_rank == null ? '—' : '#' + num(item.previous_rank)) +
-                      '</td><td>' + (item.previous_votes == null ? '—' : num(item.previous_votes)) +
-                      '</td><td>' + esc(item.status) +
-                      '</td><td>' +
-                      (canEdit ? btn("Remove", "eligible-remove", item.id) : "Locked") +
-                      '</td></tr>'))
-                : '<p class="show-queue-empty">No verified candidate songs selected yet.</p>') +
-              (canEdit ? '<div class="eligible-actions">' +
-                btn("Find verified songs", "eligible-find") +
-                btn("Propose a new song", "eligible-suggest") +
-                btn("Submit for approval", "eligible-submit") +
-                '</div>' : "") +
-              (canReview ? '<div class="eligible-actions">' +
-                btn("Approve and lock", "eligible-approve") +
-                btn("Return for revision", "eligible-return") +
-                '</div>' : "") +
-              (canEdit ? '<div class="eligible-search"><label class="field">Search verified catalogue' +
-                '<input id="eligible-search-input" placeholder="Artist or song title" value="' +
-                  esc(eligibilityQuery) + '"></label>' +
-                (eligibilityResults.length
-                  ? table(["Artist", "Song", "Action"], eligibilityResults.map((item) =>
-                      '<tr><td>' + esc(item.artist) + '</td><td>' + esc(item.title) +
-                      '</td><td>' + btn("Add", "eligible-add", item.id) + '</td></tr>'))
-                  : '<p class="hint">Search by artist or title to add a verified catalogue entry.</p>') +
-              '</div>' : "") +
-              (selected.suggestions.length ? '<div class="eligible-suggestions"><h3>New song suggestions</h3>' +
-                table(["Artist", "Song", "Status", "Action"], selected.suggestions.map((item) =>
+            (selected.status === "locked"
+              ? '<p class="eligible-locked">Approved and locked by ' +
+                esc(selected.approved_by) + '. The candidate list cannot be edited after approval.</p>'
+              : selected.status === "submitted"
+                ? '<p class="eligible-review-note">Submitted for administrator review. Editing is temporarily disabled.</p>'
+                : "") + '</div>';
+          const previousNote = '<p class="eligible-previous-note">' +
+            (selected.previous_chart?.available
+              ? 'Last official edition: <strong>' + esc(selected.previous_chart.chart_date) +
+                '</strong>. Previous positions are for reference only.'
+              : 'No immediately preceding published chart is available for comparison.') +
+            '</p>';
+          const candidateContent = selected.candidates.length
+            ? table(["Artist", "Song", "Previous position", "Prior votes", "Action"],
+                selected.candidates.map((item) =>
+                  '<tr><td>' + esc(item.artist) + '</td><td><strong>' +
+                  esc(item.title) + '</strong></td><td class="chart-previous-rank">' +
+                  (item.previous_rank == null ? '—' : '#' + num(item.previous_rank)) +
+                  '</td><td>' + (item.previous_votes == null ? '—' : num(item.previous_votes)) +
+                  '</td><td>' + (canEdit
+                    ? btn("Remove", "eligible-remove", item.id)
+                    : '<span class="eligible-row-state">Approved candidate</span>') +
+                  '</td></tr>'))
+            : '<div class="eligible-candidate-empty">Your shortlist is empty. ' +
+              'Search verified songs below and click <strong>Add to shortlist</strong>.</div>';
+          const stats = '<div class="eligible-list-stats">' +
+            '<div><strong>' + num(count) + '</strong><span>selected candidates</span></div>' +
+            '<div><strong>Top ' + num(d.chart_size) + '</strong><span>published chart</span></div>' +
+            '<p>The shortlist may contain more than ' + num(d.chart_size) +
+            ' songs. Only the highest-ranked ' + num(d.chart_size) +
+            ' appear in the official countdown.</p></div>';
+          const searchPanel = canEdit
+            ? '<div class="eligible-search">' +
+              '<div class="eligible-search-heading"><h3>Add verified songs</h3>' +
+              '<p>Search by artist or song title in this station’s verified catalogue.</p></div>' +
+              '<form id="eligible-search-form" class="eligible-search-controls">' +
+              '<label for="eligible-search-input" class="sr-only">Search verified songs</label>' +
+              '<input id="eligible-search-input" name="q" type="search" maxlength="100" required' +
+              ' placeholder="Enter an artist or song title" value="' + esc(eligibilityQuery) + '">' +
+              '<button class="button primary" type="submit">Search catalogue</button></form>' +
+              (eligibilitySearched
+                ? '<div class="eligible-results-head"><strong>' +
+                  (eligibilityResults.length
+                    ? num(eligibilityResults.length) + ' verified songs found'
+                    : 'No matching verified songs') + '</strong><span>' +
+                  (eligibilityResults.length
+                    ? 'Showing up to 30 results. Refine your search to find more.'
+                    : 'Check the spelling or propose a new song below.') +
+                  '</span></div>' +
+                  (eligibilityResults.length
+                    ? table(["Artist", "Song", "Select"],
+                        eligibilityResults.map((item) =>
+                          '<tr><td>' + esc(item.artist) + '</td><td>' +
+                          '<strong>' + esc(item.title) + '</strong></td><td>' +
+                          (currentIds.has(item.id)
+                            ? '<span class="eligible-added">✓ Added</span>'
+                            : btn("Add to shortlist", "eligible-add", item.id)) +
+                          '</td></tr>'))
+                    : '<p class="eligible-no-results">No matching verified songs in this station’s catalogue.</p>')
+                : '<p class="eligible-search-tip">Start by searching for an artist or song. ' +
+                  'Only verified songs can be added directly.</p>') +
+              '<div class="eligible-search-footer">' +
+              '<span>Song not listed or not verified yet?</span>' +
+              btn("Propose a new song", "eligible-suggest") + '</div></div>'
+            : "";
+          const submitBar = canEdit
+            ? '<div class="eligible-submit-bar"><div><strong>Ready for review?</strong>' +
+              '<span>Review the candidates, then send the list to the administrator.</span></div>' +
+              '<button class="button primary" data-action="eligible-submit"' +
+              (count === 0 && !selected.suggestions.some((item) => item.status === "pending")
+                ? ' disabled title="Add a verified song or propose a new song first"' : "") +
+              '>Submit shortlist for approval</button></div>'
+            : canReview
+              ? '<div class="eligible-submit-bar"><div><strong>Administrator decision</strong>' +
+                '<span>Verify all songs and resolve outstanding proposals before approval.</span></div>' +
+                '<div class="eligible-review-actions">' +
+                btn("Return for changes", "eligible-return") +
+                '<button class="button primary" data-action="eligible-approve">Approve and lock</button>' +
+                '</div></div>' : "";
+          const suggestions = selected.suggestions.length
+            ? '<div class="eligible-suggestions"><h3>Proposed songs awaiting verification</h3>' +
+              table(["Artist", "Song", "Review status", "Action"],
+                selected.suggestions.map((item) =>
                   '<tr><td>' + esc(item.artist) + '</td><td>' +
-                    esc(item.title) + '</td><td>' + esc(item.status) +
-                    '</td><td>' + (d.is_admin && item.status === "pending" &&
-                     selected.status !== "locked" ?
-                      btn("Link verified song", "eligible-proposal-accept", item.id) +
+                  esc(item.title) + '</td><td>' + esc(item.status) +
+                  '</td><td>' +
+                  (d.is_admin && item.status === "pending" && selected.status !== "locked"
+                    ? btn("Link verified song", "eligible-proposal-accept", item.id) +
                       btn("Reject", "eligible-proposal-reject", item.id)
-                      : "") + '</td></tr>')) + '</div>' : ""),
-              "") +
-            panel("Nominations outside the shortlist",
-              '<p class="hint">Incoming song requests that do not match the eligible list remain nomination interest; they cannot enter official rankings. No vote is carried into a later edition.</p>' +
-              (d.nomination_interest?.length
-                ? table(["Song requested", "Submissions"], d.nomination_interest.map((item) =>
-                    '<tr><td>' + esc(item.display_name) + '</td><td>' +
-                    num(item.n) + '</td></tr>'))
-                : '<p class="show-queue-empty">No unlisted song requests in this edition.</p>'),
-              "")
-            : '<div class="empty"><h3>Create your first candidate list</h3>' +
-                '<p>Prepare a list for an upcoming broadcast before voting opens.</p></div>') +
-          '</div>';
+                    : '<span class="eligible-row-state">—</span>') +
+                  '</td></tr>')) + '</div>' : "";
+          candidatePanel = panel("Shortlist · " + selected.chart_date,
+            details + stats + previousNote + candidateContent +
+            searchPanel + suggestions + submitBar);
+        }
+        const nominations = selected?.nomination_interest?.length
+          ? panel("Unlisted song nominations",
+            '<p class="eligible-note-inset">These requests are recorded as nomination interest, not as official chart votes.</p>' +
+            table(["Song requested", "Submissions"], selected.nomination_interest.map((item) =>
+              '<tr><td>' + esc(item.display_name) + '</td><td>' + num(item.n) + '</td></tr>')))
+          : "";
+        html = '<div class="eligible-page">' + intro + selectorPanel +
+          (selected ? candidatePanel + nominations : startPanel) + '</div>';
       } else if (page === "stations") {
         const d = await read("workspace/stations");
         if (current !== generation) return;
@@ -961,21 +1053,26 @@
       return;
     }
     if (action === "eligible-new") {
-      modal("Create candidate list", field("Broadcast/chart date", "chart_date", "", "date"),
-        (fields) => api("workspace/eligibility/create", {
-          chart_show_id: selectedShowId, chart_date: fields.get("chart_date"),
-        }));
+      const upcoming = eligibilityCreateDate || "";
+      const weekday = days[eligibilityBroadcastDay] || "the broadcast day";
+      modal("Create a chart edition",
+        '<p class="eligible-modal-guide">Choose the broadcast date for <strong>' +
+        esc(eligibilityShowName) + '</strong>. Weekly editions must fall on ' +
+        esc(weekday) + '. You can prepare more eligible songs than the final chart positions.</p>' +
+        field("Chart broadcast date", "chart_date", upcoming, "date"),
+        async (fields) => {
+          const result = await api("workspace/eligibility/create", {
+            chart_show_id: selectedShowId, chart_date: fields.get("chart_date"),
+          });
+          selectedEditionId = result.edition.id;
+          eligibilityQuery = "";
+          eligibilityResults = [];
+          eligibilitySearched = false;
+        });
       return;
     }
     if (action === "eligible-find") {
-      eligibilityQuery = document.getElementById("eligible-search-input")?.value?.trim() || "";
-      if (!eligibilityQuery) { toast("Enter an artist or song title."); return; }
-      try {
-        const d = await api("workspace/songs?status=verified&q=" +
-          encodeURIComponent(eligibilityQuery) + "&page=1");
-        eligibilityResults = d.items || [];
-        await render();
-      } catch (error) { toast(error.message); }
+      await findEligibleSongs();
       return;
     }
     if (action === "eligible-add" || action === "eligible-remove") {
@@ -1346,6 +1443,7 @@
       selectedEditionId = null;
       eligibilityResults = [];
       eligibilityQuery = "";
+      eligibilitySearched = false;
       render();
       return;
     }
@@ -1356,7 +1454,32 @@
       render();
     }
   });
+  async function findEligibleSongs() {
+    const input = document.getElementById("eligible-search-input");
+    eligibilityQuery = input?.value?.trim() || "";
+    if (!eligibilityQuery) {
+      toast("Enter an artist or song title to search.");
+      input?.focus();
+      return;
+    }
+    try {
+      const result = await api("workspace/songs?status=verified&q=" +
+        encodeURIComponent(eligibilityQuery) + "&page=1");
+      eligibilityResults = result.items || [];
+      eligibilitySearched = true;
+      await render();
+      const nextInput = document.getElementById("eligible-search-input");
+      nextInput?.focus({preventScroll: true});
+    } catch (error) {
+      toast(error.message);
+    }
+  }
   document.addEventListener("submit", (e) => {
+    if (e.target.id === "eligible-search-form") {
+      e.preventDefault();
+      findEligibleSongs();
+      return;
+    }
     if (e.target.id === "chart-options") {
       e.preventDefault();
       const values = new FormData(e.target);
