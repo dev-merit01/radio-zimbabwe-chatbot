@@ -55,9 +55,10 @@ are sent.
   must use Top 50. Published chart sizes are immutable.
 - Voting schedule is separate: set repeating weekly hours, manual open/close
   or a fixed campaign date range, and configure the daily vote limit.
-- Presenter username assignment and shortlist approval are separately managed
-  in **Presenter accounts** and **Eligible songs**; a name in the ZBC timetable
-  does not create credentials or bypass administrator approval.
+- Presenter username assignment is managed in **Presenter accounts**; a name in
+  the ZBC timetable does not create credentials. Once assigned, presenters
+  publish their own verified eligible song lists in **Eligible songs** without
+  administrator approval.
 
 **All newly configured and repurposed sample shows start disabled.** The
 administrator must review their show names/codes, schedule voting windows,
