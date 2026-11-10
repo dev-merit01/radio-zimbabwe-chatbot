@@ -359,7 +359,26 @@ def process_vote_with_ai(vote):
             "primary_artist": lead, "featured_artists": featured,
             "title": song.title, "aliases": approved_aliases.get(song.pk, [])[:6],
         })
-    result = match_vote_with_llm(vote.artist_raw, vote.song_raw, candidates)
+    from .verified_cache import remember_verified_spelling, reusable_song
+
+    # Reusing a model-verified spelling is opt-in. It still must be unique in
+    # the COMPLETE current station catalogue and compatible with any reviewed
+    # match-key mapping. No cached event, count or listener identity is reused.
+    cached_song = reusable_song(vote)
+    if cached_song and (
+        cached_song.pk not in {song.pk for song in shortlist}
+        or (mapping and not unresolved_mapping(mapping)
+            and mapping.cleaned_song_id != cached_song.pk)
+    ):
+        cached_song = None
+    if cached_song:
+        result = {
+            "matched": True, "matched_song_id": cached_song.pk,
+            "confidence": "high",
+            "reasoning": "Verified phrase cache; current catalogue uniqueness checked",
+        }
+    else:
+        result = match_vote_with_llm(vote.artist_raw, vote.song_raw, candidates)
     reason = str(result.get("reasoning", ""))
     if reason.startswith(("LLM error:", "LLM response parsing error:")):
         raise RuntimeError("AI verification unavailable")
@@ -461,16 +480,23 @@ def process_vote_with_ai(vote):
             if chosen:
                 ReviewAudit.objects.create(
                     station=station, actor=None, action="auto_match",
-                    details={"vote_id":vote.pk,"song_id":chosen.pk,"method":"ai"},
+                    details={"vote_id":vote.pk,"song_id":chosen.pk,
+                             "method":"verified_cache" if cached_song else "ai"},
                 )
         approved = chosen is not None and mapping.cleaned_song_id == chosen.pk
+        if approved and not cached_song:
+            remember_verified_spelling(current, chosen)
         current.ai_status = "approved" if approved else "review"
         current.save(update_fields=["ai_status"])
         LLMDecisionLog.objects.create(
-            station=station, input_text=vote.raw_input, input_type="raw_vote",
+            station=station, input_text=vote.raw_input,
+            input_type="cached_verified_vote" if cached_song else "raw_vote",
             action="match" if approved else "new",
             confidence="high" if approved else result.get("confidence", "none"),
-            reasoning=("AI per-vote decision: " + reason)[:2000],
+            reasoning=(
+                ("Cached earlier OpenAI decision: " if cached_song
+                 else "AI per-vote decision: ") + reason
+            )[:2000],
             matched_song=mapping.cleaned_song,
             matched_song_name=mapping.cleaned_song.canonical_name,
             was_applied=approved,
