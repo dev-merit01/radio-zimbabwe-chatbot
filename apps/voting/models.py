@@ -633,8 +633,8 @@ class SongAlias(models.Model):
     class Meta:
         unique_together = ("station", "kind", "normalised", "song")
         indexes = [
-            models.Index(fields=["station", "kind", "normalised"], name="voting_songa_station_512778_idx"),
-            models.Index(fields=["station", "song", "is_approved"], name="voting_songa_station_76d1d8_idx"),
+            models.Index(fields=["station", "kind", "normalised"], name="vote_alias_st_kind_norm_idx"),
+            models.Index(fields=["station", "song", "is_approved"], name="vote_alias_st_song_ap_idx"),
         ]
 
     def save(self, *args, **kwargs):
