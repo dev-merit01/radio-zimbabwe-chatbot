@@ -460,7 +460,7 @@ def export_chart(request):
     multiplier = data.get("chart", data).get("vote_multiplier", 1)
     writer.writerow(
         ["Position", "Title", "Artist", "Verified votes"] +
-        (["Weighted points (x" + str(multiplier) + ")"] if multiplier != 1 else []) +
+        (["Weighted score (x" + str(multiplier) + ")"] if multiplier != 1 else []) +
         ["Previous position", "Position change", "Chart status"]
     )
     status_labels = {
