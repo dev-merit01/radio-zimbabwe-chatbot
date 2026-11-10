@@ -903,6 +903,11 @@ class WeeklyChart(models.Model):
         ChartShow, null=True, blank=True, on_delete=models.PROTECT,
         related_name="published_charts",
     )
+    # Freeze the actual edition used for position comparisons at publication.
+    comparison_chart = models.ForeignKey(
+        "self", null=True, blank=True, on_delete=models.PROTECT,
+        related_name="compared_by",
+    )
     chart_date = models.DateField(null=True, blank=True, help_text="Saturday broadcast or December year-end publication date; blank for legacy archives")
 
     # Week identification
@@ -975,7 +980,20 @@ class WeeklyChartEntry(models.Model):
 
     # Movement tracking
     previous_rank = models.IntegerField(
-        null=True, blank=True, help_text="Rank from previous week"
+        null=True, blank=True,
+        help_text="Position in the directly preceding published edition",
+    )
+    movement_status = models.CharField(
+        max_length=16, blank=True, default="",
+        choices=[
+            ("up", "Climbing"),
+            ("down", "Falling"),
+            ("same", "Unchanged"),
+            ("new", "New entry"),
+            ("re_entry", "Re-entry"),
+            ("no_previous", "No comparison available"),
+        ],
+        help_text="Frozen position movement when this chart was published.",
     )
     weeks_on_chart = models.IntegerField(
         default=1, help_text="Consecutive weeks on chart"
@@ -999,15 +1017,14 @@ class WeeklyChartEntry(models.Model):
 
     @property
     def movement(self):
-        """Calculate movement from previous week."""
+        """Legacy display code. Movement status is snapshotted on publication."""
         if self.previous_rank is None:
-            return "new"
+            return {
+                "re_entry": "re-entry",
+                "no_previous": "—",
+            }.get(self.movement_status, "new")
         diff = self.previous_rank - self.rank
-        if diff > 0:
-            return f"+{diff}"
-        elif diff < 0:
-            return str(diff)
-        return "="
+        return f"+{diff}" if diff > 0 else str(diff) if diff < 0 else "="
 
 
 class WorkItem(models.Model):
