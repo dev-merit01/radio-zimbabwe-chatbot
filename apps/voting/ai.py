@@ -85,7 +85,9 @@ RULES:
    is "Unknown Artist", the title field contains the original unseparated text:
    it may be artist then song, song then artist, or a title-only vote. Resolve
    it against the candidates; "jnr spraga daka" or "Spraga Dak" can mean
-   "Jnr Spragga - Daka" when no other candidate competes.
+   "Jnr Spragga - Daka" when no other candidate competes. Similarly,
+   "Friman Gitar" can be "Freeman HKD - Gitare" when that is the unique
+   clearly supported catalogue match.
    A title-only vote is valid only when exactly one candidate clearly matches
    that full title, including a small typo in a distinctive multi-word title.
    For example, "Jola Nengirozi" can refer to "Jolai Nengirozi" when the
