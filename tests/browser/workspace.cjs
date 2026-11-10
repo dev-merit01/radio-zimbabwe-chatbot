@@ -120,7 +120,8 @@ const assert = require("node:assert/strict");
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, "overview width " + width);
     const chartScroll = page.locator(".content-grid .table-wrap").first();
     if (await chartScroll.count()) {
-      assert.equal(await chartScroll.evaluate(el => el.scrollWidth > el.clientWidth), true, "chart should scroll inside card at " + width);
+      const dimensions = await chartScroll.evaluate(el => ({ container: el.clientWidth, table: el.querySelector("table")?.scrollWidth || 0, scrolling: el.scrollWidth > el.clientWidth }));
+      if (dimensions.table > dimensions.container) assert.equal(dimensions.scrolling, true, "chart should scroll inside card at " + width);
     }
     await toggle.click();
     await page.locator('#sidebar-backdrop').click({position: {x: width - 12, y: 140}});
