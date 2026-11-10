@@ -422,3 +422,135 @@ class PhoneticArtistMatchingTests(TestCase):
         self.ai_approve(first)
         self.ai_approve(second)
         self.assertEqual(CleanedSongTally.objects.get(cleaned_song=self.song).count, 1)
+
+
+@override_settings(AI_ALL_VOTES=True, AUTO_AI_MATCH=True, ALLOW_REPEAT_SONG=True)
+class EverydayListenerInputTests(TestCase):
+    """Keep the AI-first workflow useful for real radio listeners."""
+
+    def setUp(self):
+        self.guitar = CleanedSong.objects.create(
+            station="radio_zimbabwe", artist="Freeman HKD", title="Gitare",
+            canonical_name="Freeman HKD - Gitare", status="verified",
+        )
+        self.favour = CleanedSong.objects.create(
+            station="radio_zimbabwe", artist="Freeman HKD",
+            title="Wakandiitira Favour",
+            canonical_name="Freeman HKD - Wakandiitira Favour",
+            status="verified",
+        )
+
+    def vote(self, text, listener):
+        response = VotingService("whatsapp", listener).handle_incoming_text(text)
+        self.assertIn("Submission received", response)
+        return RawVote.objects.filter(user__user_ref=listener).latest("pk")
+
+    def test_common_nonstandard_votes_are_approved_only_through_openai(self):
+        variations = (
+            "vote for Friman Gitar",
+            "please vote for Friman Gitar",
+            "my vote is Friman Gitar",
+            "I choose Gitare Freeman HKD",
+            "Gitare - Freeman HKD",
+            "Friman - Gitara",
+        )
+        for n, raw in enumerate(variations):
+            with self.subTest(text=raw):
+                vote = self.vote(raw, str(n))
+                with patch(
+                    "apps.voting.ai.match_vote_with_llm",
+                    return_value={
+                        "matched": True, "matched_song_id": self.guitar.pk,
+                        "confidence": "high", "reasoning": "Strong unique catalogue match",
+                    },
+                ) as api:
+                    process_vote(vote)
+                api.assert_called_once()
+                self.assertIn(
+                    self.guitar.pk,
+                    [x["id"] for x in api.call_args.args[2]],
+                )
+                vote.refresh_from_db()
+                self.assertEqual(vote.ai_status, "approved")
+        self.assertEqual(
+            CleanedSongTally.objects.get(cleaned_song=self.guitar).count,
+            len(variations),
+        )
+
+    def test_title_only_with_small_transcription_error(self):
+        vote = self.vote("vote for Wakanditira Favour", "title-only")
+        with patch(
+            "apps.voting.ai.match_vote_with_llm",
+            return_value={
+                "matched": True, "matched_song_id": self.favour.pk,
+                "confidence": "high", "reasoning": "Distinctive long title",
+            },
+        ) as ai:
+            process_vote(vote)
+        self.assertIn(self.favour.pk, [x["id"] for x in ai.call_args.args[2]])
+        vote.refresh_from_db()
+        self.assertEqual(vote.ai_status, "approved")
+        self.assertEqual(
+            CleanedSongTally.objects.get(cleaned_song=self.favour).count, 1
+        )
+
+    def test_competing_or_unrelated_titles_are_not_auto_approved(self):
+        CleanedSong.objects.create(
+            station="radio_zimbabwe", artist="Freeman HKD", title="Gitara",
+            canonical_name="Freeman HKD - Gitara", status="verified",
+        )
+        for n, raw in enumerate(("vote for Friman Gitar", "Winky D - Gitare")):
+            vote = self.vote(raw, f"ambiguous-{n}")
+            with patch(
+                "apps.voting.ai.match_vote_with_llm",
+                return_value={
+                    "matched": True, "matched_song_id": self.guitar.pk,
+                    "confidence": "high", "reasoning": "Confident selection",
+                },
+            ):
+                process_vote(vote)
+            vote.refresh_from_db()
+            self.assertEqual(vote.ai_status, "review")
+        self.assertFalse(CleanedSongTally.objects.exists())
+
+    def test_unavailable_model_does_not_turn_vote_into_manual_review(self):
+        vote = self.vote("vote for Friman Gitar", "unavailable")
+        with patch("apps.voting.ai.call_openai_api", return_value=""):
+            with self.assertRaises(RuntimeError):
+                process_vote(vote)
+        vote.refresh_from_db()
+        self.assertEqual(vote.ai_status, "awaiting")
+        self.assertFalse(CleanedSongTally.objects.exists())
+
+    def test_formerly_pending_nonstandard_vote_retries_once(self):
+        vote = self.vote("vote for Friman Gitar", "stranded")
+        with patch(
+            "apps.voting.ai.match_vote_with_llm",
+            return_value={
+                "matched": False, "confidence": "none",
+                "reasoning": "Old shortlist excluded correct song",
+            },
+        ):
+            process_vote(vote)
+        vote.refresh_from_db()
+        self.assertEqual(vote.ai_status, "review")
+        call_command("retry_catalogue_votes", stdout=StringIO())
+        vote.refresh_from_db()
+        self.assertEqual(vote.ai_status, "awaiting")
+        with patch(
+            "apps.voting.ai.match_vote_with_llm",
+            return_value={
+                "matched": True, "matched_song_id": self.guitar.pk,
+                "confidence": "high", "reasoning": "Clear catalogue match",
+            },
+        ):
+            process_vote(vote)
+        vote.refresh_from_db()
+        self.assertEqual(vote.ai_status, "approved")
+        self.assertEqual(
+            MatchKeyMapping.objects.get(match_key=vote.match_key).cleaned_song_id,
+            self.guitar.pk,
+        )
+        self.assertEqual(
+            CleanedSongTally.objects.get(cleaned_song=self.guitar).count, 1
+        )
