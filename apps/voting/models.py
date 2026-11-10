@@ -608,6 +608,38 @@ class CleanedSong(models.Model):
 
 
 
+
+class VerifiedVoteCache(models.Model):
+    """Short-lived evidence that a *particular spelling* was verified earlier.
+
+    A cache is NEVER a vote and contains no listener identity. Every receipt
+    still gets its own RawVote, anti-spam checks, chart routing and deduplication.
+    The worker must revalidate identity and catalogue ambiguity before reuse.
+    """
+    station = models.CharField(max_length=32, choices=Station.choices, db_index=True)
+    normalised_text = models.CharField(max_length=512)
+    song = models.ForeignKey(
+        CleanedSong, on_delete=models.CASCADE, related_name="verified_vote_cache"
+    )
+    artist_snapshot = models.CharField(max_length=256)
+    title_snapshot = models.CharField(max_length=256)
+    verified_at = models.DateTimeField(default=timezone.now)
+    expires_at = models.DateTimeField(db_index=True)
+    source = models.CharField(max_length=12, default="openai")
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["station", "normalised_text"],
+                name="unique_verified_vote_spelling",
+            ),
+        ]
+        indexes = [
+            models.Index(fields=["station", "expires_at"], name="vote_cache_station_exp_idx"),
+        ]
+
+
+
 class SongEmbedding(models.Model):
     """Precomputed catalogue representation; no listener details are stored."""
     station = models.CharField(max_length=32, choices=Station.choices, db_index=True)
