@@ -62,6 +62,28 @@ def _edition_window(show, chart_date):
     raise ValueError("Historical charts cannot use candidate lists.")
 
 
+def _next_edition_date(show):
+    """A useful, valid default date for a presenter's next candidate list."""
+    today = timezone.localdate()
+    if show.kind == "weekly":
+        # Never suggest today's already-started broadcast; instead select the
+        # next occurrence, skipping dates with existing shortlists.
+        days_ahead = (show.broadcast_weekday - today.weekday()) % 7 or 7
+        proposed = today + timedelta(days=days_ahead)
+        existing_dates = set(EligibleEdition.objects.filter(
+            station=show.station, chart_show=show, chart_date__gte=proposed
+        ).values_list("chart_date", flat=True))
+        while proposed in existing_dates:
+            proposed += timedelta(days=7)
+        return proposed
+    if show.kind == "year_end" and show.campaign_start and show.campaign_end:
+        start, end = campaign_local_dates(show)
+        if end and end > today:
+            return end
+    return None
+
+
+
 def _serialize(edition, details=False):
     data = {
         "id": edition.pk, "chart_show_id": edition.chart_show_id,
@@ -137,14 +159,17 @@ def list_editions(request):
     )
     if requested and not chosen:
         raise ValueError("Candidate list not found.")
+    next_chart_date = _next_edition_date(show) if not show.is_archived else None
     payload = {
         "station": show.station, "chart_show_id": show.pk,
         "chart_show": show.name, "chart_size": show.chart_size,
         "broadcast_weekday": show.broadcast_weekday,
         "kind": show.kind,
+        "suggested_chart_date": str(next_chart_date) if next_chart_date else None,
         "eligibility_enforced": show.eligibility_enforced,
         "is_admin": request.user.is_superuser,
         "can_prepare": _permitted(request) and not show.is_archived,
+        "can_create": _permitted(request) and not show.is_archived and bool(next_chart_date),
         "editions": [_serialize(e) for e in editions],
         "selected": _serialize(chosen, True) if chosen else None,
     }
