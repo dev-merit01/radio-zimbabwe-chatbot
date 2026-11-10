@@ -12,6 +12,10 @@ from apps.charts.periods import campaign_local_dates
 from apps.accounts.permissions import presenter_show
 from apps.charts.show_rankings import counts_for_show, ranked_songs
 from apps.charts.multiplier import station_multiplier, score_for_votes
+from apps.charts.movement import (
+    previous_published_chart, published_history_ids,
+    movement_for_rank, archived_movement, comparison_metadata,
+)
 
 
 def get_current_week_dates():
@@ -37,35 +41,36 @@ def chart_today_for_show(show, limit):
         end = today + timedelta(days=(show.broadcast_weekday - today.weekday()) % 7)
         start = end - timedelta(days=6)
         kind = "weekly"
-    previous = (
-        WeeklyChart.objects.filter(
-            station=show.station, chart_show=show,
-            week_start=start - timedelta(days=7),
-            is_finalized=True, is_year_end=False,
-        ).first() if kind == "weekly" else None
+    previous = previous_published_chart(
+        show, start, end, annual=(kind == "year_end"),
     )
     previous_ranks = (
-        {row.cleaned_song_id: row.rank for row in previous.entries.all()}
+        {row.cleaned_song_id: row.rank for row in previous.entries.all()
+         if row.cleaned_song_id is not None}
         if previous else {}
     )
     # Never display more positions than the approved programme size.
     limit = min(limit, show.chart_size)
     ranked = ranked_songs(show, start, end, limit)
+    historical_ids = published_history_ids(
+        show, start, annual=(kind == "year_end"),
+        song_ids=[song.pk for song, _ in ranked],
+    )
     data = []
     for rank, (song, count) in enumerate(ranked, 1):
-        old = previous_ranks.get(song.pk)
-        difference = old - rank if old else None
-        movement = ("new" if difference is None else
-                    "=" if difference == 0 else
-                    f"+{difference}" if difference > 0 else str(difference))
+        movement = movement_for_rank(
+            rank, previous_ranks.get(song.pk),
+            has_comparison=bool(previous),
+            charted_before=song.pk in historical_ids,
+        )
         data.append({
             "rank": rank, "title": music_name(song.title),
             "artists": music_name(song.artist),
             "display_name": f"{music_name(song.artist)} - {music_name(song.title)}",
             "album": song.album or "", "image_url": song.image_url or "",
             "spotify_track_id": song.spotify_track_id or "",
-            "count": count, "score": score_for_votes(count, multiplier), "previous_rank": old,
-            "movement": movement, "is_verified": True,
+            "count": count, "score": score_for_votes(count, multiplier),
+            **movement, "is_verified": True,
         })
     totals = counts_for_show(show, start, end)
     return JsonResponse({
@@ -76,6 +81,7 @@ def chart_today_for_show(show, limit):
         "total_score": score_for_votes(sum(totals.values()), multiplier),
         "vote_multiplier": multiplier,
         "chart_type": kind, "chart_show": show.name, "chart_show_id": show.pk,
+        "comparison": comparison_metadata(previous, annual=(kind == "year_end")),
         "limit": limit, "top100": data,
     })
 
@@ -106,19 +112,16 @@ def chart_today(request):
     if show.kind != "legacy":
         return chart_today_for_show(show, limit)
 
-    # Get previous week's chart for movement calculation
-    prev_week_start = week_start - timedelta(days=7)
-
-    # Build previous week's rankings (station-scoped)
-    prev_rankings = {}
-    prev_chart = WeeklyChart.objects.filter(
-        station=station, week_start=prev_week_start, is_finalized=True, is_year_end=False
-    ).first()
-
-    if prev_chart and period == "weekly":
-        for entry in prev_chart.entries.all():
-            if entry.cleaned_song_id:
-                prev_rankings[entry.cleaned_song_id] = entry.rank
+    # Compare only the preceding official edition of this exact station
+    # and permanent chart-show identity. Never mix weekly/year-end results.
+    prev_chart = previous_published_chart(
+        show, week_start, week_end, annual=(period == "year_end"),
+    )
+    prev_rankings = (
+        {entry.cleaned_song_id: entry.rank for entry in prev_chart.entries.all()
+         if entry.cleaned_song_id is not None}
+        if prev_chart else {}
+    )
 
     # Get votes for the current week only (station-scoped)
     cleaned_songs = (
@@ -137,20 +140,18 @@ def chart_today(request):
         .order_by("-week_votes", "canonical_name", "id")[:limit]
     )
 
+    historical_ids = published_history_ids(
+        show, week_start, annual=(period == "year_end"),
+        song_ids=[song.pk for song in cleaned_songs],
+    )
     # Only show verified/cleaned songs on the dashboard
     data = []
     for rank, song in enumerate(cleaned_songs, start=1):
-        prev_rank = prev_rankings.get(song.id)
-        if prev_rank:
-            diff = prev_rank - rank
-            if diff > 0:
-                movement = f"+{diff}"
-            elif diff < 0:
-                movement = str(diff)
-            else:
-                movement = "="
-        else:
-            movement = "new"
+        movement = movement_for_rank(
+            rank, prev_rankings.get(song.id),
+            has_comparison=bool(prev_chart),
+            charted_before=song.pk in historical_ids,
+        )
 
         data.append(
             {
@@ -163,8 +164,7 @@ def chart_today(request):
                 "spotify_track_id": song.spotify_track_id or "",
                 "count": song.week_votes or 0,
                 "score": score_for_votes(song.week_votes or 0, multiplier),
-                "previous_rank": prev_rank,
-                "movement": movement,
+                **movement,
                 "is_verified": True,
             }
         )
@@ -196,6 +196,9 @@ def chart_today(request):
             "total_score": score_for_votes(total_week_votes, multiplier),
             "vote_multiplier": multiplier,
             "chart_type": period,
+            "comparison": comparison_metadata(
+                prev_chart, annual=(period == "year_end"),
+            ),
             "limit": limit,
             "top100": data,  # Keep key for backward compatibility
         }
