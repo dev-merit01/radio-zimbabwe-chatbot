@@ -83,7 +83,7 @@ def ranked_candidates(station, artist, title, limit=8):
             .iterator(chunk_size=500)
         )
         for song in songs:
-            a, t = normalise(song.artist), normalise(song.title)
+            t = normalise(song.title)
             if variants(title) != variants(t):
                 continue
             if artist == "unknown artist":
