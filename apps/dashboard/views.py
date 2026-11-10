@@ -225,7 +225,7 @@ def chart_today(request):
             "limit": limit,
             "top100": data,  # Keep key for backward compatibility
         }, request.user
-    )
+    ))
 
 
 @login_required
@@ -285,7 +285,7 @@ def chart_archives(request):
             "available_years": list(available_years),
             "charts": data,
         }, request.user
-    )
+    ))
 
 
 @login_required
@@ -366,7 +366,7 @@ def chart_detail(request, chart_id):
             },
             "entries": data,
         }, request.user
-    )
+    ))
 
 
 @login_required
