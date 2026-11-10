@@ -16,7 +16,7 @@ from django.test import TestCase, override_settings
 
 from apps.voting.calibration import DEFAULTS, active_thresholds
 from apps.voting.catalogue_matching import automatic_candidate, ranked_candidates
-from apps.voting.indexed_retrieval import narrowed_catalogue, trigram_available
+from apps.voting.indexed_retrieval import narrowed_catalogue
 from apps.voting.models import CleanedSong, MatchCalibration, SongEmbedding
 from apps.voting.semantic_matching import (
     embed_texts, embedding_text, fingerprint, semantic_candidates,
@@ -44,7 +44,14 @@ class IndexedRetrievalTests(TestCase):
         self.assertIn(self.target.pk, list(queryset.values_list("pk", flat=True)))
         if connection.vendor == "postgresql":
             self.assertTrue(filtered)
-            self.assertTrue(trigram_available())
+            # Native full-text indexes must exist regardless of whether a
+            # database administrator enabled the optional pg_trgm extension.
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "SELECT to_regclass('song_search_fts_idx'), "
+                    "to_regclass('alias_search_fts_idx')"
+                )
+                self.assertTrue(all(cursor.fetchone()))
             self.assertNotIn(self.other.pk, list(queryset.values_list("pk", flat=True)))
 
     @override_settings(AI_INDEXED_SEARCH_ENABLED=True)
