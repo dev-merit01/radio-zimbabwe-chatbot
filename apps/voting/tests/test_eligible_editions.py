@@ -152,7 +152,7 @@ class PresenterEligibleEditionsTests(TestCase):
         self.assertTrue(data["can_create"])
         self.assertTrue(data["suggested_chart_date"])
         results = client.get("/api/workspace/songs", {
-            "status": "verified", "q": "Known",
+            "status": "verified", "q": "Known Artist - Known Song",
         })
         self.assertEqual(results.status_code, 200, results.content)
         self.assertEqual(
