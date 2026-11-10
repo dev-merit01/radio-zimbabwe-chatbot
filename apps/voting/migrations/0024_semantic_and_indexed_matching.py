@@ -13,7 +13,14 @@ import django.db.models.deletion
 logger = logging.getLogger(__name__)
 
 
-INDEX_SQL = (
+# Native PostgreSQL full-text indexing needs no extra extension.
+# Optional pg_trgm indexes are added only when it was already installed by
+# a database administrator; migration never installs an extension itself.
+FTS_INDEX_SQL = (
+    "CREATE INDEX IF NOT EXISTS song_search_fts_idx ON voting_cleanedsong USING gin (to_tsvector('simple', coalesce(artist, '') || ' ' || coalesce(title, '')))",
+    "CREATE INDEX IF NOT EXISTS alias_search_fts_idx ON voting_songalias USING gin (to_tsvector('simple', coalesce(normalised, '')))",
+)
+TRIGRAM_INDEX_SQL = (
     "CREATE INDEX IF NOT EXISTS song_title_trgm_idx ON voting_cleanedsong USING gin (title gin_trgm_ops)",
     "CREATE INDEX IF NOT EXISTS song_artist_trgm_idx ON voting_cleanedsong USING gin (artist gin_trgm_ops)",
     "CREATE INDEX IF NOT EXISTS song_full_trgm_idx ON voting_cleanedsong USING gin (canonical_name gin_trgm_ops)",
@@ -26,13 +33,20 @@ def add_trigram_indexes(apps, schema_editor):
         return
     try:
         with schema_editor.connection.cursor() as cursor:
-            cursor.execute("CREATE EXTENSION IF NOT EXISTS pg_trgm")
-            for sql in INDEX_SQL:
+            for sql in FTS_INDEX_SQL:
                 cursor.execute(sql)
+            cursor.execute(
+                "SELECT EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_trgm')"
+            )
+            has_trigram = bool(cursor.fetchone()[0])
+            if has_trigram:
+                for sql in TRIGRAM_INDEX_SQL:
+                    cursor.execute(sql)
+            else:
+                logger.info("pg_trgm is not installed; native FTS indexes remain active.")
     except DatabaseError:
-        # This non-atomic migration allows production to remain available
-        # if the managed PostgreSQL role disallows extension installation.
-        logger.warning("pg_trgm unavailable; indexed retrieval will use a safe fallback.")
+        # Do not halt voting if a managed PostgreSQL role prohibits an index.
+        logger.warning("Search-index creation unavailable; falling back safely.")
 
 
 def remove_trigram_indexes(apps, schema_editor):
@@ -40,7 +54,8 @@ def remove_trigram_indexes(apps, schema_editor):
         return
     with schema_editor.connection.cursor() as cursor:
         for index in ("song_title_trgm_idx", "song_artist_trgm_idx",
-                      "song_full_trgm_idx", "alias_text_trgm_idx"):
+                      "song_full_trgm_idx", "alias_text_trgm_idx",
+                      "song_search_fts_idx", "alias_search_fts_idx"):
             cursor.execute(f"DROP INDEX IF EXISTS {index}")
 
 
