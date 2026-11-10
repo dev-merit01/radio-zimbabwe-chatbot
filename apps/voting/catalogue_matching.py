@@ -80,6 +80,24 @@ def artist_credits(artist):
     return pieces[0], (pieces[1] if len(pieces) > 1 else "")
 
 
+def distinctive_title_prefix(submitted, canonical):
+    """Recognise a long, exact leading phrase as a possible shortened title.
+
+    The artist may be omitted, but we must *never* approve solely because
+    a short common word starts a title. A unique long prefix still needs an
+    OpenAI confirmation and a full-catalogue ambiguity check.
+    """
+    submitted, canonical = normalise(submitted), normalise(canonical)
+    incoming, official = submitted.split(), canonical.split()
+    return (
+        len(submitted) >= 10
+        and len(incoming) < len(official)
+        and incoming == official[:len(incoming)]
+        and len(incoming[0]) >= 6
+        and (len(incoming) > 1 or len(incoming[0]) >= 10)
+    )
+
+
 def title_similarity(submitted, canonical, aliases=()):
     """Use word-boundary title prefixes for shortened radio votes.
 
@@ -189,11 +207,15 @@ def ranked_candidates(station, artist, title, limit=16, *, exhaustive=False):
                     for aa, tt in scores if aa >= 0.68 and tt >= 0.66
                 ]
                 only_title_score = title_similarity(title, t, aliases["title"])
-                title_only = title == t or title in aliases["title"] or (
+                title_only = (
+                    title == t or title in aliases["title"]
+                    or distinctive_title_prefix(title, t)
+                    or (
                     min(len(title), len(t)) >= 10
                     and len(title.split()) == len(t.split())
                     and len(t.split()) >= 2
                     and only_title_score >= 0.88
+                    )
                 )
                 if title_only:
                     # Artist score 0 denotes a title-only candidate; do not
@@ -301,6 +323,12 @@ def automatic_candidate(ranked, artist, title):
         # without an artist is only safe for a distinctive multi-word title,
         # with a clear lead over the runner-up. AI must still approve the vote.
         if t == 1.0:
+            return song
+        # A long, exact title prefix such as "Ndakainamatira" can be an
+        # unambiguous shorthand for "Ndakainamatira Nyaya Iyoyi", even
+        # without an artist. The candidate shortlist includes *all* songs
+        # sharing that prefix and the runner-up gap is checked above.
+        if t >= 0.95 and distinctive_title_prefix(title, song.title):
             return song
         return song if (
             t >= 0.88 and min(len(normalise(title)), len(normalise(song.title))) >= 10
