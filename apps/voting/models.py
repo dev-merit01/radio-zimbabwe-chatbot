@@ -607,6 +607,47 @@ class CleanedSong(models.Model):
         super().save(*args, **kwargs)
 
 
+class SongAlias(models.Model):
+    """Curated, station-scoped catalogue aliases; never created by an LLM alone.
+
+    Aliases are intentionally not unique across songs. When an expression
+    refers to multiple verified songs, retrieval returns competing candidates
+    and the vote remains in review.
+    """
+    KIND_CHOICES = (
+        ("full", "Full listener expression"),
+        ("artist", "Artist/stage-name alias"),
+        ("title", "Song title/short title"),
+    )
+    station = models.CharField(max_length=32, choices=Station.choices, db_index=True)
+    song = models.ForeignKey(
+        CleanedSong, on_delete=models.CASCADE, related_name="aliases"
+    )
+    kind = models.CharField(max_length=12, choices=KIND_CHOICES)
+    value = models.CharField(max_length=512)
+    normalised = models.CharField(max_length=512, db_index=True)
+    is_approved = models.BooleanField(default=False, db_index=True)
+    source = models.CharField(max_length=24, default="reviewer")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ("station", "kind", "normalised", "song")
+        indexes = [
+            models.Index(fields=["station", "kind", "normalised"]),
+            models.Index(fields=["station", "song", "is_approved"]),
+        ]
+
+    def save(self, *args, **kwargs):
+        from .catalogue_matching import normalise
+
+        self.normalised = normalise(self.value)
+        if not self.normalised:
+            raise ValueError("An alias must contain searchable text.")
+        if not self.song_id or self.song.station != self.station:
+            raise ValueError("Aliases must belong to a song in the same station.")
+        super().save(*args, **kwargs)
+
+
 class MatchKeyMapping(models.Model):
     """
     Maps raw match_keys to CleanedSong entries.
