@@ -295,6 +295,17 @@ def automatic_candidate(ranked, artist, title):
     # This also covers an unambiguous title-only vote after AI confirmation.
     if t == 1.0 and a >= 0.90:
         return song
+    # A single recognisable title word plus a strongly identified lead
+    # artist can be an unambiguous abbreviation: "Hulengende - Bhura" for
+    # "Bhura Dhanzi". The runner-up gap above must still hold.
+    short_words, full_words = normalise(title).split(), normalise(song.title).split()
+    if (
+        a >= 0.90 and t >= 0.95
+        and len(short_words) == 1 and len(full_words) > 1
+        and len(short_words[0]) >= 4
+        and full_words[0].startswith(short_words[0])
+    ):
+        return song
     if min(len(normalise(title)), len(normalise(song.title))) < 6:
         return None
     return song if a >= 0.90 and t >= 0.90 and score >= 0.94 else None
