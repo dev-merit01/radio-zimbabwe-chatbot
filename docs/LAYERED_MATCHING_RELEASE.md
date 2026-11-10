@@ -5,16 +5,18 @@ approval AI-first and preserving all verified song tallies and published charts.
 
 ## 1. PostgreSQL indexed retrieval (default enabled)
 
-Migration `0024_semantic_and_indexed_matching` attempts to enable the standard
-`pg_trgm` extension and GIN indexes over the verified catalogue title,
-artist, canonical name and approved alias text. Queries remain station scoped.
+Migration `0024_semantic_and_indexed_matching` creates built-in
+PostgreSQL GIN full-text indexes over verified artist/title text and aliases,
+without requiring a database extension. It optionally creates `pg_trgm`
+indexes only if a database administrator has already enabled that extension.
+The migration never installs database extensions. Queries remain station scoped.
 
-On managed databases without extension privileges, migration intentionally
-falls back to existing complete-catalogue matching. In that case inspect the
-Railway migration warning; do not assume an index was installed.
+Full-text prefix search and indexed substring/trigram matches provide candidate
+recall; when an extension is absent, native indexed full-text retrieval still
+works. Check the production migration logs before assuming the indexes exist.
 
-`AI_INDEXED_SEARCH_ENABLED=true` enables a bounded SQL token/trigram
-prefilter. If no strong candidates are found, a complete scan preserves recall.
+`AI_INDEXED_SEARCH_ENABLED=true` enables a bounded SQL full-text/token
+prefilter, with optional trigram operators where installed. If no strong candidates are found, a complete scan preserves recall.
 Before any non-exact OpenAI-confirmed vote is counted, an exhaustive station
 ambiguity check protects against competitors missed by the index.
 
