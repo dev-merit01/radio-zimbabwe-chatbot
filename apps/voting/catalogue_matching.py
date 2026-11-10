@@ -186,8 +186,8 @@ def automatic_candidate(ranked, artist, title):
     if (
         a >= 0.90 and t >= 0.84
         and len(normalise(title).split()) == len(normalise(song.title).split()) == 1
-        and 3 <= len(normalise(title)) <= 5
-        and 3 <= len(normalise(song.title)) <= 5
+        and min(len(normalise(title)), len(normalise(song.title))) >= 3
+        and max(len(normalise(title)), len(normalise(song.title))) <= 8
     ):
         return song
     # Exact short title plus a near-exact artist is strong evidence too.
