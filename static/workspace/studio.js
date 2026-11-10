@@ -829,6 +829,22 @@
     $("toast").classList.remove("hidden");
     toastTimer = setTimeout(() => $("toast").classList.add("hidden"), 5000);
   }
+
+  function setMobileNavigation(open, restoreFocus = false) {
+    const toggle = $("menu-toggle");
+    const sidebar = $("sidebar");
+    const backdrop = $("sidebar-backdrop");
+    const shouldOpen = open && window.matchMedia("(max-width: 700px)").matches;
+    const wasOpen = sidebar.classList.contains("open");
+    sidebar.classList.toggle("open", shouldOpen);
+    backdrop.hidden = !shouldOpen;
+    toggle.setAttribute("aria-expanded", String(shouldOpen));
+    document.body.classList.toggle("nav-open", shouldOpen);
+    document.documentElement.classList.toggle("nav-open", shouldOpen);
+    if (!shouldOpen && wasOpen && restoreFocus && window.matchMedia("(max-width: 700px)").matches) {
+      toggle.focus({ preventScroll: true });
+    }
+  }
   function navigate(next) {
     page = next;
     pagination = 1;
@@ -860,7 +876,7 @@
           else b.removeAttribute("aria-current");
         }
       });
-    $("sidebar").classList.remove("open");
+    setMobileNavigation(false);
     $("page-content").innerHTML = '<div class="loading">Loading…</div>';
     render();
   }
@@ -1538,15 +1554,23 @@
     $("station-dialog").addEventListener("close", () => { $("station-select").value = stationForm.dataset.current; });
     $("cancel-station").onclick = () => $("station-dialog").close();
   }
-  $("menu-toggle").onclick = () => $("sidebar").classList.toggle("open");
+  $("menu-toggle").onclick = () => {
+    setMobileNavigation(!$("sidebar").classList.contains("open"));
+    if ($("sidebar").classList.contains("open")) $("sidebar-close").focus({ preventScroll: true });
+  };
+  $("sidebar-close").onclick = () => setMobileNavigation(false, true);
+  $("sidebar-backdrop").onclick = () => setMobileNavigation(false, true);
   $("close-modal").onclick = $("cancel-modal").onclick = () =>
     $("modal").close();
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") $("sidebar").classList.remove("open");
+    if (e.key === "Escape" && $("sidebar").classList.contains("open")) {
+      setMobileNavigation(false, true);
+    }
   });
-  document.addEventListener("click", (e) => {
-    if (!e.target.closest("#sidebar, #menu-toggle"))
-      $("sidebar").classList.remove("open");
+  window.addEventListener("resize", () => {
+    if (window.innerWidth > 700 && $("sidebar").classList.contains("open")) {
+      setMobileNavigation(false);
+    }
   });
   window.addEventListener("online", render);
   window.addEventListener("offline", () => status(false));

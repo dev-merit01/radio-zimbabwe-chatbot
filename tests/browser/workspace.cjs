@@ -98,14 +98,41 @@ const assert = require("node:assert/strict");
     .locator("#connection")
     .getByText("Connected", { exact: true })
     .waitFor();
+  // Mobile must be usable at real Android WebView viewport sizes.
+  for (const width of [320, 360, 390, 430, 700]) {
+    await page.setViewportSize({ width, height: 640 });
+    const toggle = page.getByRole("button", { name: "Toggle navigation" });
+    await toggle.click();
+    assert.equal(await toggle.getAttribute("aria-expanded"), "true");
+    assert.equal(await page.locator("#sidebar-backdrop").isVisible(), true);
+    assert.equal(await page.evaluate(() => document.body.classList.contains("nav-open")), true);
+    assert.equal(await page.locator("#sidebar nav").evaluate(el => getComputedStyle(el).overflowY), "auto");
+    await page.locator("#sidebar-close").click();
+    assert.equal(await toggle.getAttribute("aria-expanded"), "false");
+    assert.equal(await page.locator("#sidebar-backdrop").isVisible(), false);
+    assert.equal(await page.evaluate(() => document.body.classList.contains("nav-open")), false);
+
+    // Open the current week's chart. It must not make the whole page pan.
+    await toggle.click();
+    await page.locator('nav [data-page="overview"]').click();
+    await page.locator('#page-content[aria-busy="false"]').waitFor();
+    assert.equal(await toggle.getAttribute("aria-expanded"), "false");
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, "overview width " + width);
+    const chartScroll = page.locator(".content-grid .table-wrap").first();
+    if (await chartScroll.count()) {
+      const dimensions = await chartScroll.evaluate(el => ({ container: el.clientWidth, table: el.querySelector("table")?.scrollWidth || 0, scrolling: el.scrollWidth > el.clientWidth }));
+      if (dimensions.table > dimensions.container) assert.equal(dimensions.scrolling, true, "chart should scroll inside card at " + width);
+    }
+    await toggle.click();
+    await page.locator('#sidebar-backdrop').click({position: {x: width - 12, y: 140}});
+    assert.equal(await toggle.getAttribute("aria-expanded"), "false");
+  }
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole("button", { name: "Toggle navigation" }).click();
   await page.locator('nav [data-page="review"]').click();
   await page.locator('#page-content[aria-busy="false"]').waitFor();
   assert.equal(
-    await page.evaluate(
-      () => document.documentElement.scrollWidth > innerWidth,
-    ),
+    await page.evaluate(() => document.documentElement.scrollWidth > innerWidth),
     false,
   );
   await page.screenshot({ path: "/tmp/rz-mobile.png", fullPage: true });
