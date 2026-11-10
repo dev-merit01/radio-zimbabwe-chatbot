@@ -25,6 +25,25 @@ def variants(value):
     )
 
 
+def artist_similarity(submitted, canonical):
+    """Compare artist spellings, including an omitted common stage-name prefix.
+
+    A missing "Jnr" or "DJ" is evidence only when the remaining artist name
+    is itself very similar. Both artist and title must still pass independent
+    checks, and competing catalogue songs are retained for ambiguity checks.
+    """
+    submitted, canonical = normalise(submitted), normalise(canonical)
+    score = SequenceMatcher(None, submitted, canonical, autojunk=False).ratio()
+    words = canonical.split()
+    if len(words) >= 2 and words[0] in {"jnr", "jr", "junior", "dj", "mc"}:
+        without_prefix = " ".join(words[1:])
+        score = max(
+            score,
+            SequenceMatcher(None, submitted, without_prefix, autojunk=False).ratio(),
+        )
+    return score
+
+
 def ranked_candidates(station, artist, title, limit=8):
     artist, title = normalise(artist), normalise(title)
 
@@ -49,7 +68,7 @@ def ranked_candidates(station, artist, title, limit=8):
                 pairs += [(right, left) for left, right in pairs]
                 scores = [
                     (
-                        SequenceMatcher(None, left, a, autojunk=False).ratio(),
+                        artist_similarity(left, a),
                         SequenceMatcher(None, right, t, autojunk=False).ratio(),
                     )
                     for left, right in pairs
@@ -60,7 +79,7 @@ def ranked_candidates(station, artist, title, limit=8):
                 # discard extra words or guess from a short fuzzy title.
                 candidates = [
                     ((aa + tt) / 2, aa, tt)
-                    for aa, tt in scores if aa >= 0.75 and tt >= 0.75
+                    for aa, tt in scores if aa >= 0.75 and tt >= 0.70
                 ]
                 title_similarity = SequenceMatcher(
                     None, title, t, autojunk=False
@@ -82,11 +101,13 @@ def ranked_candidates(station, artist, title, limit=8):
                 )
                 yield (score, artist_score, title_score, song)
                 continue
-            artist_score = SequenceMatcher(None, artist, a, autojunk=False).ratio()
+            artist_score = artist_similarity(artist, a)
             if artist_score < 0.75:
                 continue
             title_score = SequenceMatcher(None, title, t, autojunk=False).ratio()
-            if title_score < 0.75:
+            # Keep nearby short-title alternatives in the shortlist so a
+            # "Dak" vote cannot silently pick between "Daka" and "Dakar".
+            if title_score < 0.70:
                 continue
             yield ((artist_score + title_score) / 2, artist_score, title_score, song)
 
@@ -118,8 +139,25 @@ def automatic_candidate(ranked, artist, title):
             t >= 0.94 and min(len(normalise(title)), len(normalise(song.title))) >= 10
             and len(normalise(title).split()) >= 2
         ) else None
+    if normalise(artist) == "unknown artist":
+        # The incoming text can contain both parts without a dash or stage-name
+        # prefix ("Spraga Dak" -> "Jnr Spragga - Daka"). The split must strongly
+        # identify the artist AND almost identify the short title. AI must
+        # independently approve before the vote is counted.
+        if a >= 0.90 and t >= 0.84:
+            return song
+        return None
     if normalise(artist) == normalise(song.artist) and normalise(title) == normalise(
         song.title
+    ):
+        return song
+    # A one-character typo in a short title may be recovered only with a
+    # uniquely strong artist match. Competing songs fail the runner-up gap.
+    if (
+        a >= 0.90 and t >= 0.84
+        and len(normalise(title).split()) == len(normalise(song.title).split()) == 1
+        and 3 <= len(normalise(title)) <= 5
+        and 3 <= len(normalise(song.title)) <= 5
     ):
         return song
     # Exact short title plus a near-exact artist is strong evidence too.
