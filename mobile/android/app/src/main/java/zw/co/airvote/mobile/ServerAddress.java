@@ -9,16 +9,15 @@ public final class ServerAddress {
     private ServerAddress() {}
 
     public static String normalize(String input) {
-        if (input == null || input.isBlank()) {
+        if (input == null || input.trim().isEmpty()) {
             throw new IllegalArgumentException("Enter your station's HTTPS server address.");
         }
-        if (input.chars().anyMatch(ch -> Character.isISOControl((char) ch))) {
-            throw new IllegalArgumentException("The server address contains invalid characters.");
+        for (int index = 0; index < input.length(); index++) {
+            if (Character.isISOControl(input.charAt(index))) {
+                throw new IllegalArgumentException("The server address contains invalid characters.");
+            }
         }
         String raw = input.trim();
-        if (raw.chars().anyMatch(ch -> Character.isISOControl((char) ch))) {
-            throw new IllegalArgumentException("The server address contains invalid characters.");
-        }
         final URI uri;
         try {
             uri = new URI(raw);
