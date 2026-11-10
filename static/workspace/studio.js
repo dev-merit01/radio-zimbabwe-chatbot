@@ -317,11 +317,21 @@
                 ? '<p class="eligible-locked">Approved and locked by ' +
                   esc(selected.approved_by) + '. No changes to this shortlist are permitted.</p>'
                 : "") + '</div>' +
+              '<p class="eligible-previous-note">' +
+              (selected.previous_chart?.available
+                ? 'Previous published edition: <strong>' +
+                  esc(selected.previous_chart.chart_date) +
+                  '</strong>. These are historical positions, not this edition’s results.'
+                : 'Previous edition: not published or unavailable. Historical positions cannot be compared yet.') +
+              '</p>' +
               (selected.candidates.length
-                ? table(["Artist", "Song", "Catalogue status", "Action"],
+                ? table(["Artist", "Song", "Last chart", "Prior votes", "Catalogue status", "Action"],
                     selected.candidates.map((item) =>
                       '<tr><td>' + esc(item.artist) + '</td><td>' +
-                      esc(item.title) + '</td><td>' + esc(item.status) +
+                      esc(item.title) + '</td><td class="chart-previous-rank">' +
+                      (item.previous_rank == null ? '—' : '#' + num(item.previous_rank)) +
+                      '</td><td>' + (item.previous_votes == null ? '—' : num(item.previous_votes)) +
+                      '</td><td>' + esc(item.status) +
                       '</td><td>' +
                       (canEdit ? btn("Remove", "eligible-remove", item.id) : "Locked") +
                       '</td></tr>'))
