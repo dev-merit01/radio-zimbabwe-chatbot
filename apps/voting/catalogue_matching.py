@@ -25,23 +25,52 @@ def variants(value):
     )
 
 
-def artist_similarity(submitted, canonical):
-    """Compare artist spellings, including an omitted common stage-name prefix.
+def phonetic_spelling(value):
+    """Compare common spoken/transliterated spellings as an additional signal.
 
-    A missing "Jnr" or "DJ" is evidence only when the remaining artist name
-    is itself very similar. Both artist and title must still pass independent
-    checks, and competing catalogue songs are retained for ambiguity checks.
+    This is NOT an identity check. Only the AI + an unambiguous title and artist
+    match can approve a vote. Keep it deliberately small: broad phonetic keys
+    would collapse unrelated artists in a national music catalogue.
+    """
+    value = normalise(value)
+    for old, new in (
+        ("ph", "f"), ("ee", "i"), ("ea", "i"), ("ie", "i"),
+        ("oo", "u"), ("ou", "u"), ("ck", "k"),
+    ):
+        value = value.replace(old, new)
+    return value
+
+
+def artist_similarity(submitted, canonical):
+    """Compare artist spellings with optional stage prefixes/suffixes.
+
+    Listeners often drop an abbreviation from a performer's stage name
+    ("Friman" for "Freeman HKD"). Preserve the exact artist, compare a
+    well-supported alternative, and require title evidence as well.
     """
     submitted, canonical = normalise(submitted), normalise(canonical)
-    score = SequenceMatcher(None, submitted, canonical, autojunk=False).ratio()
+    if not submitted or not canonical:
+        return 0.0
+
     words = canonical.split()
+    alternatives = {canonical}
     if len(words) >= 2 and words[0] in {"jnr", "jr", "junior", "dj", "mc"}:
-        without_prefix = " ".join(words[1:])
-        score = max(
-            score,
-            SequenceMatcher(None, submitted, without_prefix, autojunk=False).ratio(),
+        alternatives.add(" ".join(words[1:]))
+    # These are branding suffixes/initialisms, not musical title words.
+    # Do not strip arbitrary artist tokens: e.g. "Winky D" must stay whole.
+    if len(words) >= 2 and words[-1] in {"hkd", "official", "music"}:
+        alternatives.add(" ".join(words[:-1]))
+
+    return max(
+        max(
+            SequenceMatcher(None, submitted, alternative, autojunk=False).ratio(),
+            SequenceMatcher(
+                None, phonetic_spelling(submitted),
+                phonetic_spelling(alternative), autojunk=False,
+            ).ratio(),
         )
-    return score
+        for alternative in alternatives
+    )
 
 
 def ranked_candidates(station, artist, title, limit=8):
@@ -68,7 +97,7 @@ def ranked_candidates(station, artist, title, limit=8):
                 pairs += [(right, left) for left, right in pairs]
                 scores = [
                     (
-                        artist_similarity(left, a),
+                        artist_similarity(left, song.artist),
                         SequenceMatcher(None, right, t, autojunk=False).ratio(),
                     )
                     for left, right in pairs
@@ -101,7 +130,7 @@ def ranked_candidates(station, artist, title, limit=8):
                 )
                 yield (score, artist_score, title_score, song)
                 continue
-            artist_score = artist_similarity(artist, a)
+            artist_score = artist_similarity(artist, song.artist)
             if artist_score < 0.75:
                 continue
             title_score = SequenceMatcher(None, title, t, autojunk=False).ratio()
@@ -141,8 +170,9 @@ def automatic_candidate(ranked, artist, title):
         ) else None
     if normalise(artist) == "unknown artist":
         # The incoming text can contain both parts without a dash or stage-name
-        # prefix ("Spraga Dak" -> "Jnr Spragga - Daka"). The split must strongly
-        # identify the artist AND almost identify the short title. AI must
+        # prefix/suffix ("Spraga Dak" -> "Jnr Spragga - Daka",
+        # "Friman Gitar" -> "Freeman HKD - Gitare"). The split must strongly
+        # identify the artist AND almost identify the title. AI must
         # independently approve before the vote is counted.
         if a >= 0.90 and t >= 0.84:
             return song
