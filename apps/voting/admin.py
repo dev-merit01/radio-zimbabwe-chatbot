@@ -7,6 +7,7 @@ from .models import (
     RawVote,
     RawSongTally,
     CleanedSong,
+    SongAlias,
     MatchKeyMapping,
     CleanedSongTally,
     VerifiedArtist,
@@ -79,3 +80,35 @@ class ArtistAdmin(admin.ModelAdmin):
         from .matching import clear_artist_cache
 
         clear_artist_cache()
+
+
+@admin.register(SongAlias)
+class SongAliasAdmin(admin.ModelAdmin):
+    """Only superusers may approve catalogue aliases; never trust AI guesses."""
+    list_display = ("value", "kind", "station", "song", "is_approved", "source")
+    list_filter = ("station", "kind", "is_approved")
+    search_fields = ("value", "song__canonical_name")
+    readonly_fields = ("normalised", "created_at")
+
+    def has_module_permission(self, request):
+        return request.user.is_superuser
+
+    def has_view_permission(self, request, obj=None):
+        return request.user.is_superuser
+
+    def has_add_permission(self, request):
+        return request.user.is_superuser
+
+    def has_change_permission(self, request, obj=None):
+        return request.user.is_superuser
+
+    def has_delete_permission(self, request, obj=None):
+        return request.user.is_superuser
+
+    def save_model(self, request, obj, form, change):
+        # The song is authoritative; prevent an alias crossing station IDs.
+        if obj.song.status != "verified":
+            raise ValueError("Only verified catalogue songs can receive aliases.")
+        obj.station = obj.song.station
+        obj.source = "reviewer"
+        super().save_model(request, obj, form, change)
