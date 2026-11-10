@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.AirVote" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:statusBarColor">#102744</item>
+        <item name="android:navigationBarColor">#F5F7FB</item>
+        <item name="android:windowLightNavigationBar">true</item>
+        <item name="android:colorAccent">#1476C8</item>
+        <item name="android:windowBackground">#F5F7FB</item>
+    </style>
+</resources>
