@@ -7,6 +7,8 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Build;
+import android.view.WindowInsets;
 import android.os.Environment;
 import android.view.View;
 import android.webkit.CookieManager;
@@ -63,6 +65,19 @@ public final class MainActivity extends Activity {
     public void onCreate(Bundle savedState) {
         super.onCreate(savedState);
         setContentView(R.layout.activity_main);
+        // Android 15+ enforces edge-to-edge for apps targeting API 35.
+        // Keep the toolbar and form fields outside system bars / keyboard.
+        if (Build.VERSION.SDK_INT >= 35) {
+            View root = findViewById(R.id.airvote_root);
+            root.setOnApplyWindowInsetsListener((view, insets) -> {
+                android.graphics.Insets bars = insets.getInsets(WindowInsets.Type.systemBars());
+                android.graphics.Insets keyboard = insets.getInsets(WindowInsets.Type.ime());
+                view.setPadding(bars.left, bars.top, bars.right,
+                        Math.max(bars.bottom, keyboard.bottom));
+                return insets;
+            });
+            root.requestApplyInsets();
+        }
         webView = findViewById(R.id.station_webview);
         serverField = findViewById(R.id.server_address);
         loadingMessage = findViewById(R.id.loading_message);
