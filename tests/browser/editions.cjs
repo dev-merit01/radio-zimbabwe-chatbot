@@ -162,7 +162,7 @@ const assert = require('node:assert/strict');
   await page.getByRole('button',{name:'Create first edition',exact:true}).click();
   await page.locator('#modal-content input[name="chart_date"]').waitFor();
   const suggestedDate = await page.locator('#modal-content input[name="chart_date"]').inputValue();
-  assert.match(suggestedDate,/^\\d{4}-\\d{2}-\\d{2}$/);
+  assert.match(suggestedDate,/^\d{4}-\d{2}-\d{2}$/);
   assert.equal(new Date(suggestedDate+'T12:00:00Z').getUTCDay(), 6,
     'Radio Zimbabwe Saturday edition must default to Saturday.');
   await page.getByRole('button',{name:'Save changes',exact:true}).click();
