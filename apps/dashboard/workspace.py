@@ -111,8 +111,10 @@ def overview(request):
             "can_add": request.user.is_superuser,
             "can_publish": request.user.is_superuser,
             "received": votes.count(), "verified_votes": sum(totals.values()),
-            "verified_score": score_for_votes(sum(totals.values()), multiplier),
-            "vote_multiplier": multiplier,
+            **({
+                "verified_score": score_for_votes(sum(totals.values()), multiplier),
+                "vote_multiplier": multiplier,
+            } if request.user.is_superuser else {}),
             "listeners": votes.values("user_id").distinct().count(),
             "pending_songs": CleanedSong.objects.filter(
                 station=station, status="pending"
@@ -149,10 +151,12 @@ def overview(request):
             "can_publish": request.user.is_superuser,
             "received": votes.count(),
             "verified_votes": accepted.aggregate(n=Sum("count"))["n"] or 0,
-            "verified_score": score_for_votes(
-                accepted.aggregate(n=Sum("count"))["n"] or 0, multiplier
-            ),
-            "vote_multiplier": multiplier,
+            **({
+                "verified_score": score_for_votes(
+                    accepted.aggregate(n=Sum("count"))["n"] or 0, multiplier
+                ),
+                "vote_multiplier": multiplier,
+            } if request.user.is_superuser else {}),
             "listeners": votes.values("user_id").distinct().count(),
             "pending_songs": CleanedSong.objects.filter(
                 station=station, status="pending"

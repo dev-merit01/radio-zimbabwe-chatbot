@@ -216,7 +216,7 @@
           '<div class="content-grid"><div>' +
           panel(
             chartPeriod === "year_end" ? "Year-to-date Top " + chartSize : "Live weekly Top " + chartSize,
-            `<form id="chart-options" class="toolbar"><label>Period <select name="period"><option value="weekly" ${chartPeriod === "weekly" ? "selected" : ""} ${selectedShow?.kind === "year_end" ? "disabled" : ""}>Weekly chart</option><option value="year_end" ${chartPeriod === "year_end" || selectedShow?.kind === "year_end" ? "selected" : ""}>Annual countdown</option></select></label><label>Chart size <select name="size">${(selectedShow?.kind === "legacy" ? [20, 50] : [selectedShow?.chart_size || 20]).map(size => `<option value="${size}" ${chartSize === size ? "selected" : ""}>Top ${size}</option>`).join("")}</select></label><button class="button secondary">Show chart</button></form><p class="hint chart-period-meta">${esc(data.week_start)} to ${esc(data.week_end)} · Verified votes only · ${data.vote_multiplier > 1 ? "Weighted scoring ×" + data.vote_multiplier + " (votes remain unchanged)" : "1 vote = 1 point"}</p>` +
+            `<form id="chart-options" class="toolbar"><label>Period <select name="period"><option value="weekly" ${chartPeriod === "weekly" ? "selected" : ""} ${selectedShow?.kind === "year_end" ? "disabled" : ""}>Weekly chart</option><option value="year_end" ${chartPeriod === "year_end" || selectedShow?.kind === "year_end" ? "selected" : ""}>Annual countdown</option></select></label><label>Chart size <select name="size">${(selectedShow?.kind === "legacy" ? [20, 50] : [selectedShow?.chart_size || 20]).map(size => `<option value="${size}" ${chartSize === size ? "selected" : ""}>Top ${size}</option>`).join("")}</select></label><button class="button secondary">Show chart</button></form><p class="hint chart-period-meta">${esc(data.week_start)} to ${esc(data.week_end)} · Verified votes only${permissions.is_admin ? " · " + (data.vote_multiplier > 1 ? "Weighted scoring ×" + data.vote_multiplier + " (votes remain unchanged)" : "1 vote = 1 point") : ""}</p>` +
               chartMovementSummary(data.top100, data.comparison) +
               chart(data.top100, data.comparison),
             `<a class="button secondary" href="/api/workspace/export?limit=${chartSize}&period=${chartPeriod}&show_id=${selectedShowId}">Export CSV</a>`,
@@ -608,10 +608,10 @@
           `<form id="search-form" class="toolbar"><label>Year <input name="q" type="number" min="1900" max="9999" value="${esc(d.year)}"></label><button class="button secondary">Load</button></form>` +
             (d.charts.length
               ? table(
-                  ["Edition", "Voting period", "Votes", "Weighted points", "Open"],
+                  ["Edition", "Voting period", "Votes", ...(permissions.is_admin ? ["Weighted points"] : []), "Open"],
                   d.charts.map(
                     (c) =>
-                      `<tr><td>${c.is_year_end ? "Year-end Top 50" : "Top " + c.chart_size + " · " + (c.chart_date || "Week " + c.week_number)}</td><td>${esc(c.week_start)} – ${esc(c.week_end)}</td><td>${num(c.total_votes)}</td><td>${num(c.total_score)} (×${c.vote_multiplier})</td><td>${btn("View chart", "archive", c.id)}</td></tr>`,
+                      `<tr><td>${c.is_year_end ? "Year-end Top 50" : "Top " + c.chart_size + " · " + (c.chart_date || "Week " + c.week_number)}</td><td>${esc(c.week_start)} – ${esc(c.week_end)}</td><td>${num(c.total_votes)}</td>${permissions.is_admin ? `<td>${num(c.total_score)} (×${c.vote_multiplier})</td>` : ""}<td>${btn("View chart", "archive", c.id)}</td></tr>`,
                   ),
                 )
               : empty),

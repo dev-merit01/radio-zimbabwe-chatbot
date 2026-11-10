@@ -61,7 +61,7 @@ def list_shows(request):
     return JsonResponse({
         "station": station, "is_admin": request.user.is_superuser,
         "require_codes": config.require_codes,
-        "vote_multiplier": config.vote_multiplier,
+        **({"vote_multiplier": config.vote_multiplier} if request.user.is_superuser else {}),
         "presenter_show_id": assigned.pk if assigned else None,
         "is_presenter": bool(assigned),
         "shows": [serialize(s) for s in
