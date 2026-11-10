@@ -135,6 +135,15 @@ def artist_similarity(submitted, canonical, aliases=()):
     words = canonical.split()
     primary, _featured = artist_credits(canonical)
     alternatives = {canonical, primary, *aliases}
+    # A listener may give a well-known leading stage-name token without the
+    # artist's second word: "Atenda My Man" vs "Atenda Chinx - My Man".
+    # Retrieval keeps ALL same-prefix competing artists; a solo artist word
+    # never identifies a song by itself.
+    leading = primary.split()
+    if len(submitted.split()) == 1 and len(submitted) >= 5 and (
+        len(leading) >= 2 and submitted == leading[0]
+    ):
+        alternatives.add(submitted)
     if len(words) >= 2 and words[0] in {"jnr", "jr", "junior", "dj", "mc"}:
         alternatives.add(" ".join(words[1:]))
     # These are branding suffixes/initialisms, not musical title words.
