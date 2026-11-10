@@ -46,7 +46,10 @@ class FreeformCatalogueTests(TestCase):
 
     def test_typo_missing_separator_reverse_and_short_title(self):
         for index, text in enumerate(
-            ("jnr spraga daka", "daka jnr spraga", "jnr spraga - daka", "daka")
+            (
+                "jnr spraga daka", "daka jnr spraga", "jnr spraga - daka",
+                "daka", "Spraga Dak", "dak spraga", "Jnr Spraga - Dak",
+            )
         ):
             with self.subTest(text=text):
                 vote = self.vote(text, str(index))
@@ -54,7 +57,49 @@ class FreeformCatalogueTests(TestCase):
                 self.assertIn(self.song.pk, [row["id"] for row in candidates])
                 vote.refresh_from_db()
                 self.assertEqual(vote.ai_status, "approved")
-        self.assertEqual(CleanedSongTally.objects.get(cleaned_song=self.song).count, 4)
+        self.assertEqual(CleanedSongTally.objects.get(cleaned_song=self.song).count, 7)
+
+    def test_shortened_title_competes_with_neighbouring_songs(self):
+        # Both Daka and Dakar could be shortened to "Dak". Even a confident
+        # AI selection must not silently count an ambiguous short-form vote.
+        CleanedSong.objects.create(
+            station="radio_zimbabwe", artist="Jnr Spragga", title="Dakar",
+            canonical_name="Jnr Spragga - Dakar", status="verified",
+        )
+        vote = self.vote("Spraga Dak")
+        self.approve(vote)
+        vote.refresh_from_db()
+        self.assertEqual(vote.ai_status, "review")
+        self.assertFalse(CleanedSongTally.objects.exists())
+
+    def test_existing_spraga_dak_pending_vote_is_recovered(self):
+        vote = self.vote("Spraga Dak")
+        with patch(
+            "apps.voting.ai.match_vote_with_llm",
+            return_value={"matched": False, "confidence": "none",
+                          "reasoning": "No good candidates in the old shortlist"},
+        ):
+            process_vote(vote)
+        vote.refresh_from_db()
+        self.assertEqual(vote.ai_status, "review")
+        placeholder = MatchKeyMapping.objects.get().cleaned_song
+        self.assertEqual(placeholder.status, "pending")
+
+        # The worker's one-time recovery runs at startup after deployment.
+        call_command("retry_catalogue_votes", stdout=StringIO())
+        vote.refresh_from_db()
+        self.assertEqual(vote.ai_status, "awaiting")
+        candidates = self.approve(vote)
+        self.assertIn(self.song.pk, [row["id"] for row in candidates])
+        vote.refresh_from_db()
+        placeholder.refresh_from_db()
+        self.assertEqual(vote.ai_status, "approved")
+        self.assertEqual(placeholder.status, "rejected")
+        self.assertEqual(MatchKeyMapping.objects.get().cleaned_song_id, self.song.pk)
+        self.assertEqual(CleanedSongTally.objects.get().count, 1)
+        # Reprocessing the same provider submission cannot add a second vote.
+        self.approve(vote)
+        self.assertEqual(CleanedSongTally.objects.get().count, 1)
 
     def test_ambiguous_title_remains_review_even_if_ai_selects(self):
         CleanedSong.objects.create(
