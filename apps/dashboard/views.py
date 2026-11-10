@@ -25,7 +25,7 @@ def limit_scoring_details(payload, user):
     Filtering at the API boundary also protects chart exports and clients
     that call the endpoints directly instead of using the AirVote workspace.
     """
-    if user.is_superuser:
+    if getattr(user, "is_superuser", False):
         return payload
     payload.pop("vote_multiplier", None)
     payload.pop("total_score", None)
