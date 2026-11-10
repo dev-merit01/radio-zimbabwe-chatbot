@@ -116,6 +116,68 @@ class PresenterEligibleEditionsTests(TestCase):
             ai_status="approved", submitted_code=show.code,
         )
 
+    def test_suggested_broadcast_date_is_future_and_skips_existing_editions(self):
+        today = timezone.localdate()
+        response = self.client.get("/api/workspace/eligibility", {
+            "show_id": self.saturday.pk,
+        })
+        self.assertEqual(response.status_code, 200, response.content)
+        data = response.json()
+        self.assertTrue(data["can_create"])
+        self.assertEqual(data["broadcast_weekday"], 5)
+        from datetime import date
+        suggested = date.fromisoformat(data["suggested_chart_date"])
+        expected = today + timedelta(days=(5 - today.weekday()) % 7 or 7)
+        self.assertEqual(suggested, expected)
+        self.assertGreater(suggested, today)
+        self.assertEqual(suggested.weekday(), 5)
+        existing = self.post("eligibility/create", {
+            "chart_show_id": self.saturday.pk,
+            "chart_date": str(suggested),
+        })
+        self.assertEqual(existing.status_code, 200, existing.content)
+        next_date = self.client.get("/api/workspace/eligibility", {
+            "show_id": self.saturday.pk,
+        }).json()["suggested_chart_date"]
+        self.assertEqual(next_date, str(suggested + timedelta(days=7)))
+
+    def test_presenter_gets_own_suggested_date_and_verified_catalogue_search(self):
+        presenter = self.create_presenter()
+        client = Client()
+        client.force_login(presenter)
+        overview = client.get("/api/workspace/eligibility")
+        self.assertEqual(overview.status_code, 200, overview.content)
+        data = overview.json()
+        self.assertEqual(data["chart_show_id"], self.saturday.pk)
+        self.assertTrue(data["can_create"])
+        self.assertTrue(data["suggested_chart_date"])
+        results = client.get("/api/workspace/songs", {
+            "status": "verified", "q": "Known",
+        })
+        self.assertEqual(results.status_code, 200, results.content)
+        self.assertEqual(
+            [row["id"] for row in results.json()["items"]],
+            [self.song.pk],
+        )
+        other_show = client.get("/api/workspace/eligibility", {
+            "show_id": self.gospel.pk,
+        })
+        self.assertEqual(other_show.status_code, 400)
+
+    def test_unconfigured_annual_show_cannot_create_edition(self):
+        annual = ChartShow.objects.create(
+            station="national_fm", name="Year-end Show",
+            code="YRS", kind="year_end", chart_size=50,
+            schedule_mode="campaign", is_enabled=False,
+        )
+        response = self.client.get("/api/workspace/eligibility", {
+            "show_id": annual.pk,
+        })
+        self.assertEqual(response.status_code, 200, response.content)
+        data = response.json()
+        self.assertFalse(data["can_create"])
+        self.assertIsNone(data["suggested_chart_date"])
+
     def test_presenter_login_is_locked_to_its_station_and_show(self):
         presenter = self.create_presenter()
         self.assertEqual(presenter.profile.station, "national_fm")
