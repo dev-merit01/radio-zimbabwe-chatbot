@@ -178,6 +178,11 @@ const assert = require('node:assert/strict');
   await page.getByRole('button',{name:'Save changes',exact:true}).click();
   await page.locator('#modal').waitFor({state:'hidden'});
   await page.getByText('Test New Broadcast Song',{exact:true}).waitFor();
+  await page.getByRole('button',{name:'Link verified song',exact:true}).click();
+  await page.locator('#eligible-proposal-query').fill('nonexistent-proposal-test-999');
+  await page.getByRole('button',{name:'Search verified songs',exact:true}).click();
+  await page.getByText('No verified catalogue match.',{exact:false}).waitFor();
+  await page.getByRole('button',{name:'Cancel',exact:true}).click();
   await page.setViewportSize({width:390,height:740});
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false,
     'Eligible songs must not overflow on a narrow presenter screen.');
