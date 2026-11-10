@@ -27,7 +27,7 @@ def counts_for_show(show, start, end):
         )
     eligible_song_ids = None
     if show.eligibility_enforced:
-        # Only an administrator-locked shortlist for this exact programme
+        # Only a presenter-published shortlist for this exact programme
         # period can contribute to public rankings. Unlisted requests remain
         # in raw records as nomination interest, never as chart votes.
         edition = EligibleEdition.objects.filter(
