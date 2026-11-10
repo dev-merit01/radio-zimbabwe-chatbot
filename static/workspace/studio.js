@@ -87,15 +87,72 @@
   function panel(title, body, actions = "") {
     return `<section class="panel"><div class="panel-head"><h2>${esc(title)}</h2>${actions}</div>${body}</section>`;
   }
-  function chart(rows) {
+  function chartMovement(row) {
+    const type = row.movement_status || "no_previous";
+    const previous = row.previous_rank;
+    const delta = row.movement_delta;
+    const number = Number.isInteger(delta) ? Math.abs(delta) : 0;
+    const label = type === "up" ? "Up " + number + " position" + (number === 1 ? "" : "s")
+      : type === "down" ? "Down " + number + " position" + (number === 1 ? "" : "s")
+      : type === "same" ? "No change"
+      : type === "new" ? "New entry"
+      : type === "re_entry" ? "Re-entry"
+      : "No previous official chart";
+    const symbol = type === "up" ? "↑" : type === "down" ? "↓"
+      : type === "same" ? "→" : "";
+    const content = type === "up" || type === "down"
+      ? symbol + " " + number
+      : type === "same" ? symbol + " SAME"
+      : type === "new" ? "NEW"
+      : type === "re_entry" ? "RE-ENTRY"
+      : "—";
+    const description = previous != null
+      ? label + "; previously position " + previous
+      : label;
+    return '<span class="chart-movement chart-movement--' +
+      esc(type) + '" aria-label="' + esc(description) +
+      '" title="' + esc(description) + '">' + esc(content) + '</span>';
+  }
+  function chartMovementSummary(rows, comparison) {
+    const comparisonAvailable = Boolean(comparison?.available);
+    const heading = comparisonAvailable
+      ? "Compared with " + esc(comparison.label.toLowerCase()) +
+        " · " + esc(comparison.chart_date)
+      : "No directly preceding published chart available";
+    if (!rows.length) return "";
+    const counts = {};
+    rows.forEach((row) => {
+      counts[row.movement_status] = (counts[row.movement_status] || 0) + 1;
+    });
+    const figures = [
+      ["up", "Moving up"], ["down", "Moving down"],
+      ["same", "Unchanged"], ["new", "New entries"],
+      ["re_entry", "Re-entries"],
+    ];
+    return '<div class="chart-movement-summary" aria-label="Chart position changes">' +
+      '<p class="chart-comparison-caption">' + heading + '</p>' +
+      (comparisonAvailable
+        ? '<div class="chart-movement-totals">' +
+          figures.filter(([status]) => counts[status]).map(([status, label]) =>
+            '<span><strong>' + num(counts[status]) + '</strong> ' + esc(label) +
+            '</span>'
+          ).join("") + '</div>'
+        : "") + '</div>';
+  }
+  function chart(rows, comparison = {}) {
     if (!rows.length) return empty;
     const showScore = rows.some((r) => r.score !== undefined && r.score !== r.count);
+    const previousLabel = comparison.label === "Previous annual chart"
+      ? "Last year" : "Last chart";
     return table(
-      ["Rank", "Song", "Votes", ...(showScore ? ["Weighted points"] : []), "Movement"],
+      ["Position", "Song", "Votes", ...(showScore ? ["Weighted points"] : []),
+        previousLabel, "Movement"],
       rows.map((r) =>
-        `<tr><td>${r.rank}</td><td><strong>${esc(r.title)}</strong><br><small>${esc(r.artists)}</small></td><td class="vote-count">${num(r.count)}</td>` +
+        `<tr><td class="chart-rank">#${num(r.rank)}</td><td><strong>${esc(r.title)}</strong><br><small>${esc(r.artists)}</small></td><td class="vote-count">${num(r.count)}</td>` +
         (showScore ? `<td class="vote-count">${num(r.score ?? r.count)}</td>` : "") +
-        `<td>${esc(r.movement)}</td></tr>`
+        '<td class="chart-previous-rank">' +
+          (r.previous_rank == null ? '—' : '#' + num(r.previous_rank)) +
+          '</td><td>' + chartMovement(r) + '</td></tr>'
       ),
     );
   }
@@ -159,7 +216,9 @@
           '<div class="content-grid"><div>' +
           panel(
             chartPeriod === "year_end" ? "Year-to-date Top " + chartSize : "Live weekly Top " + chartSize,
-            `<form id="chart-options" class="toolbar"><label>Period <select name="period"><option value="weekly" ${chartPeriod === "weekly" ? "selected" : ""} ${selectedShow?.kind === "year_end" ? "disabled" : ""}>Weekly chart</option><option value="year_end" ${chartPeriod === "year_end" || selectedShow?.kind === "year_end" ? "selected" : ""}>Annual countdown</option></select></label><label>Chart size <select name="size">${(selectedShow?.kind === "legacy" ? [20, 50] : [selectedShow?.chart_size || 20]).map(size => `<option value="${size}" ${chartSize === size ? "selected" : ""}>Top ${size}</option>`).join("")}</select></label><button class="button secondary">Show chart</button></form><p class="hint chart-period-meta">${esc(data.week_start)} to ${esc(data.week_end)} · Verified votes only · ${data.vote_multiplier > 1 ? "Weighted scoring ×" + data.vote_multiplier + " (votes remain unchanged)" : "1 vote = 1 point"}</p>` + chart(data.top100),
+            `<form id="chart-options" class="toolbar"><label>Period <select name="period"><option value="weekly" ${chartPeriod === "weekly" ? "selected" : ""} ${selectedShow?.kind === "year_end" ? "disabled" : ""}>Weekly chart</option><option value="year_end" ${chartPeriod === "year_end" || selectedShow?.kind === "year_end" ? "selected" : ""}>Annual countdown</option></select></label><label>Chart size <select name="size">${(selectedShow?.kind === "legacy" ? [20, 50] : [selectedShow?.chart_size || 20]).map(size => `<option value="${size}" ${chartSize === size ? "selected" : ""}>Top ${size}</option>`).join("")}</select></label><button class="button secondary">Show chart</button></form><p class="hint chart-period-meta">${esc(data.week_start)} to ${esc(data.week_end)} · Verified votes only · ${data.vote_multiplier > 1 ? "Weighted scoring ×" + data.vote_multiplier + " (votes remain unchanged)" : "1 vote = 1 point"}</p>` +
+              chartMovementSummary(data.top100, data.comparison) +
+              chart(data.top100, data.comparison),
             `<a class="button secondary" href="/api/workspace/export?limit=${chartSize}&period=${chartPeriod}&show_id=${selectedShowId}">Export CSV</a>`,
           ) +
           '</div><aside class="side-stack"><section class="panel activity-card"><h2>Votes this week</h2><p>Received votes by day, including songs awaiting review.</p><canvas id="timeline" width="520" height="250" aria-label="Daily vote counts" role="img"></canvas><p id="timeline-summary" class="sr-only"></p></section><section class="review-callout"><h3>' +
@@ -1100,7 +1159,9 @@
         const d = await api("chart/" + id);
         modal(
           (d.chart.is_year_end ? "Year-end Top 50" : "Top " + d.chart.chart_size) + " · " + (d.chart.chart_date || d.chart.week_end),
-          `<p class="hint">Voting period: ${esc(d.chart.week_start)} to ${esc(d.chart.week_end)}. Saved ${esc(new Date(d.chart.finalized_at).toLocaleString())}.</p>` + chart(d.entries) +
+          `<p class="hint">Voting period: ${esc(d.chart.week_start)} to ${esc(d.chart.week_end)}. Saved ${esc(new Date(d.chart.finalized_at).toLocaleString())}.</p>` +
+            chartMovementSummary(d.entries, d.chart.comparison) +
+            chart(d.entries, d.chart.comparison) +
             `<a class="button secondary" href="/api/workspace/export?archive=${id}">Export CSV</a>`,
           null,
         );
