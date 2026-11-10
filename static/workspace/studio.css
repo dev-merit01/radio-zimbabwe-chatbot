@@ -2701,3 +2701,46 @@ dialog:has(.show-form) {
   .eligible-list-stats > p { margin-left:0; }
   .eligible-search-controls button { flex-basis:100%; }
 }
+
+/* Admin confirmation of a proposed recording should be catalogue-assisted,
+   never require manually copying internal database IDs. */
+.eligible-proposal-matches {
+  margin-top: 12px;
+  max-height: 290px;
+  overflow-y: auto;
+  border: 1px solid #dbe5f3;
+  border-radius: 8px;
+  background: #f9fbff;
+}
+.eligible-proposal-matches > p {
+  margin: 0;
+  padding: 13px;
+  font-size: 12px;
+  color: #59718e;
+}
+.eligible-proposal-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 13px;
+  border-bottom: 1px solid #e6edf6;
+}
+.eligible-proposal-option:last-child { border-bottom: 0; }
+.eligible-proposal-option > span { min-width: 0; display: grid; gap: 3px; }
+.eligible-proposal-option strong {
+  color: #183c67;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.eligible-proposal-option small { color: #6581a0; font-size: 11px; }
+.eligible-proposal-selected {
+  margin-top: 11px; padding: 10px 12px;
+  border-radius: 7px; background: #f1f5fa;
+  border: 1px solid #d9e4f1;
+  color: #5a728e; font-size: 12px; line-height: 1.5;
+}
+.eligible-proposal-selected.is-selected {
+  background: #e8f7ee; border-color: #addbbf; color: #1c693e;
+  font-weight: 700;
+}
