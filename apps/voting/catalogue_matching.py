@@ -7,13 +7,15 @@ recording variants require review. No catalogue mutation or external I/O here.
 import heapq
 import re
 import unicodedata
+from collections import defaultdict
 from difflib import SequenceMatcher
 
-from .models import CleanedSong
+from .models import CleanedSong, SongAlias
 
 
 def normalise(value):
-    value = unicodedata.normalize("NFKC", value).casefold()
+    value = unicodedata.normalize("NFKD", str(value or "")).casefold()
+    value = "".join(character for character in value if not unicodedata.combining(character))
     return " ".join(re.findall(r"\w+", value, flags=re.UNICODE))
 
 
@@ -67,7 +69,39 @@ def strip_vote_prefix(value):
     ) or value
 
 
-def artist_similarity(submitted, canonical):
+def artist_credits(artist):
+    """Return the lead artist and featured names, without dropping either."""
+    pieces = re.split(
+        r"\s+(?:feat(?:uring)?|ft)\.?\s*:?\s*",
+        normalise(artist), maxsplit=1,
+    )
+    return pieces[0], (pieces[1] if len(pieces) > 1 else "")
+
+
+def title_similarity(submitted, canonical, aliases=()):
+    """Use word-boundary title prefixes for shortened radio votes.
+
+    'Bhura' is a candidate for 'Bhura Dhanzi', NOT an automatic identity.
+    A competing 'Bhura ...' by the same artist will survive retrieval and
+    block automatic matching through the score-gap check.
+    """
+    submitted, canonical = normalise(submitted), normalise(canonical)
+    score = text_similarity(submitted, canonical)
+    if submitted and submitted in aliases:
+        return 1.0
+    query_words, title_words = submitted.split(), canonical.split()
+    if (
+        query_words and len(query_words) < len(title_words)
+        and all(
+            len(word) >= 3 and target.startswith(word)
+            for word, target in zip(query_words, title_words)
+        )
+    ):
+        return max(score, 0.95)
+    return score
+
+
+def artist_similarity(submitted, canonical, aliases=()):
     """Compare artist spellings with optional stage prefixes/suffixes.
 
     Listeners often drop an abbreviation from a performer's stage name
@@ -79,7 +113,8 @@ def artist_similarity(submitted, canonical):
         return 0.0
 
     words = canonical.split()
-    alternatives = {canonical}
+    primary, _featured = artist_credits(canonical)
+    alternatives = {canonical, primary, *aliases}
     if len(words) >= 2 and words[0] in {"jnr", "jr", "junior", "dj", "mc"}:
         alternatives.add(" ".join(words[1:]))
     # These are branding suffixes/initialisms, not musical title words.
@@ -99,12 +134,21 @@ def artist_similarity(submitted, canonical):
     )
 
 
-def ranked_candidates(station, artist, title, limit=8):
+def ranked_candidates(station, artist, title, limit=16):
     artist, title = normalise(artist), normalise(title)
     if artist == "unknown artist":
         title = strip_vote_prefix(title)
     else:
         artist = strip_vote_prefix(artist)
+
+    # Approved aliases are explicitly curated. Unapproved AI suggestions must
+    # never become catalogue evidence. Colliding aliases stay competing entries.
+    aliases_by_song = defaultdict(lambda: defaultdict(set))
+    for row in SongAlias.objects.filter(
+        station=station, is_approved=True, song__station=station,
+        song__status="verified",
+    ).values("song_id", "kind", "normalised").iterator(chunk_size=500):
+        aliases_by_song[row["song_id"]][row["kind"]].add(row["normalised"])
 
     def scored():
         songs = (
@@ -114,6 +158,13 @@ def ranked_candidates(station, artist, title, limit=8):
         )
         for song in songs:
             t = normalise(song.title)
+            aliases = aliases_by_song[song.pk]
+            # A full-expression alias represents an explicitly confirmed
+            # listener phrase, not a fuzzy guess.
+            phrase = title if artist == "unknown artist" else f"{artist} {title}"
+            if phrase in aliases["full"]:
+                yield (1.0, 1.0, 1.0, song)
+                continue
             if artist == "unknown artist":
                 if variants(title) != variants(t):
                     continue
@@ -127,8 +178,8 @@ def ranked_candidates(station, artist, title, limit=8):
                 pairs += [(right, left) for left, right in pairs]
                 scores = [
                     (
-                        artist_similarity(left, song.artist),
-                        text_similarity(right, t),
+                        artist_similarity(left, song.artist, aliases["artist"]),
+                        title_similarity(right, t, aliases["title"]),
                     )
                     for left, right in pairs
                 ]
@@ -140,17 +191,17 @@ def ranked_candidates(station, artist, title, limit=8):
                     ((aa + tt) / 2, aa, tt)
                     for aa, tt in scores if aa >= 0.68 and tt >= 0.66
                 ]
-                title_similarity = text_similarity(title, t)
-                title_only = title == t or (
+                only_title_score = title_similarity(title, t, aliases["title"])
+                title_only = title == t or title in aliases["title"] or (
                     min(len(title), len(t)) >= 10
                     and len(title.split()) == len(t.split())
                     and len(t.split()) >= 2
-                    and title_similarity >= 0.88
+                    and only_title_score >= 0.88
                 )
                 if title_only:
                     # Artist score 0 denotes a title-only candidate; do not
                     # misrepresent the absent artist as a perfect artist match.
-                    candidates.append((title_similarity, 0.0, title_similarity))
+                    candidates.append((only_title_score, 0.0, only_title_score))
                 if not candidates:
                     continue
                 score, artist_score, title_score = max(
@@ -164,13 +215,13 @@ def ranked_candidates(station, artist, title, limit=8):
             interpretations = []
             if variants(title) == variants(t):
                 interpretations.append((
-                    artist_similarity(artist, song.artist),
-                    text_similarity(title, t),
+                    artist_similarity(artist, song.artist, aliases["artist"]),
+                    title_similarity(title, t, aliases["title"]),
                 ))
             if variants(artist) == variants(t):
                 interpretations.append((
-                    artist_similarity(title, song.artist),
-                    text_similarity(artist, t),
+                    artist_similarity(title, song.artist, aliases["artist"]),
+                    title_similarity(artist, t, aliases["title"]),
                 ))
             plausible = [
                 (a, title_score) for a, title_score in interpretations
