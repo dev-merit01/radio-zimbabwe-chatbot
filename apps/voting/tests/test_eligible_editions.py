@@ -1,4 +1,4 @@
-"""Presenter permissions and immutable station-approved candidate lists."""
+"""Presenter permissions, direct publication and immutable candidate lists."""
 import json
 from datetime import timedelta
 
@@ -80,15 +80,10 @@ class PresenterEligibleEditionsTests(TestCase):
             "action": "add",
         }, client)
 
-    def approved_edition(self):
+    def published_edition(self):
         eid = self.create_edition()
         self.assertEqual(self.add_candidate(eid).status_code, 200)
-        self.assertEqual(self.post(
-            "eligibility/submit", {"edition_id": eid}
-        ).status_code, 200)
-        response = self.post(
-            "eligibility/review", {"edition_id": eid, "action": "approve"},
-        )
+        response = self.post("eligibility/submit", {"edition_id": eid})
         self.assertEqual(response.status_code, 200, response.content)
         self.saturday.refresh_from_db()
         return EligibleEdition.objects.get(pk=eid)
@@ -242,7 +237,7 @@ class PresenterEligibleEditionsTests(TestCase):
             self.client.get("/api/workspace/shows").json()["station"], "power_fm"
         )
 
-    def test_presenter_can_prepare_but_only_admin_locks_shortlist(self):
+    def test_presenter_creates_edits_and_publishes_without_admin(self):
         presenter = self.create_presenter()
         client = Client()
         client.force_login(presenter)
@@ -258,39 +253,38 @@ class PresenterEligibleEditionsTests(TestCase):
                 "edition_id": eid, "song_id": self.outsider.pk, "action": "remove",
             }, client,
         ).status_code, 200)
-        self.assertEqual(self.post(
-            "eligibility/submit", {"edition_id": eid}, client
-        ).status_code, 200)
-        self.assertEqual(self.post(
-            "eligibility/review", {"edition_id": eid, "action": "approve"}, client
-        ).status_code, 403)
-        self.assertEqual(self.post(
-            "eligibility/candidate", {
-                "edition_id": eid, "song_id": self.outsider.pk, "action": "add",
-            }, client,
-        ).status_code, 400)
-        self.assertEqual(self.post(
-            "eligibility/review", {"edition_id": eid, "action": "approve"}
-        ).status_code, 200)
+        publish = self.post("eligibility/submit", {"edition_id": eid}, client)
+        self.assertEqual(publish.status_code, 200, publish.content)
+        self.assertEqual(publish.json()["status"], "locked")
         edition = EligibleEdition.objects.get(pk=eid)
         self.assertEqual(edition.status, "locked")
-        self.assertEqual(edition.approved_by, self.admin)
+        self.assertEqual(edition.approved_by, presenter)  # Legacy publisher column.
+        self.assertIsNotNone(edition.approved_at)
         self.saturday.refresh_from_db()
         self.assertTrue(self.saturday.eligibility_enforced)
-        self.assertEqual(self.add_candidate(eid, song_id=self.outsider.pk).status_code, 400)
-        self.assertEqual(
-            self.post("eligibility/review", {
-                "edition_id": eid, "action": "approve",
-            }).status_code, 400,
-        )
-        self.assertTrue(
-            ReviewAudit.objects.filter(
-                station="national_fm", action="edition_approved",
-            ).exists()
-        )
+        overview = client.get("/api/workspace/eligibility", {
+            "show_id": self.saturday.pk, "edition_id": eid,
+        })
+        self.assertEqual(overview.status_code, 200, overview.content)
+        self.assertEqual(overview.json()["selected"]["published_by"], presenter.username)
+        self.assertEqual(self.add_candidate(
+            eid, song_id=self.outsider.pk, client=client,
+        ).status_code, 400)
+        self.assertEqual(self.post(
+            "eligibility/submit", {"edition_id": eid}, client,
+        ).status_code, 400)
+        self.assertEqual(self.post(
+            "eligibility/review", {"edition_id": eid, "action": "approve"}, client,
+        ).status_code, 403)
+        self.assertEqual(self.post(
+            "eligibility/review", {"edition_id": eid, "action": "approve"},
+        ).status_code, 410)
+        self.assertTrue(ReviewAudit.objects.filter(
+            station="national_fm", actor=presenter, action="edition_published",
+        ).exists())
 
     def test_unapproved_songs_receive_interest_but_no_official_rank(self):
-        edition = self.approved_edition()
+        edition = self.published_edition()
         self.raw_vote(self.song, "listener-1")
         for i in range(6):
             self.raw_vote(self.outsider, f"supporter-{i}")
@@ -345,7 +339,7 @@ class PresenterEligibleEditionsTests(TestCase):
             self.add_candidate(eid, power_song.pk, client).status_code, 400,
         )
 
-    def test_pending_suggestion_requires_review_and_verified_song(self):
+    def test_pending_suggestion_does_not_delay_verified_list_publication(self):
         presenter = self.create_presenter()
         client = Client()
         client.force_login(presenter)
@@ -358,34 +352,36 @@ class PresenterEligibleEditionsTests(TestCase):
         self.assertEqual(response.status_code, 200)
         suggestion_id = response.json()["suggestion_id"]
         self.assertEqual(self.post(
-            "eligibility/submit", {"edition_id": eid}, client
+            "eligibility/submit", {"edition_id": eid}, client,
         ).status_code, 200)
-        self.assertEqual(self.post(
-            "eligibility/review", {
-                "edition_id": eid, "action": "approve",
-            }).status_code, 400,
-        )
         new_song = CleanedSong.objects.create(
             station="national_fm", artist="Fresh Artist",
             title="Upcoming Song", canonical_name="Fresh Artist - Upcoming Song",
             status="verified",
         )
-        self.assertEqual(self.post(
-            "eligibility/suggestion/review", {
-                "suggestion_id": suggestion_id, "action": "accept",
-                "song_id": new_song.pk,
-            }
-        ).status_code, 200)
+        response = self.post("eligibility/suggestion/review", {
+            "suggestion_id": suggestion_id, "action": "accept",
+            "song_id": new_song.pk,
+        })
+        self.assertEqual(response.status_code, 200, response.content)
         self.assertEqual(
-            self.post("eligibility/review", {
-                "edition_id": eid, "action": "approve",
-            }).status_code, 200,
+            list(EditionCandidate.objects.filter(edition_id=eid)
+                 .values_list("song_id", flat=True)),
+            [self.song.pk],
         )
+
+    def test_publishing_requires_verified_candidates(self):
+        eid = self.create_edition()
         self.assertEqual(
-            set(EditionCandidate.objects.filter(
-                edition_id=eid
-            ).values_list("song_id", flat=True)), {self.song.pk, new_song.pk}
+            self.post("eligibility/submit", {"edition_id": eid}).status_code, 400,
         )
+        self.assertEqual(self.add_candidate(eid).status_code, 200)
+        self.song.status = "pending"
+        self.song.save(update_fields=["status"])
+        self.assertEqual(
+            self.post("eligibility/submit", {"edition_id": eid}).status_code, 400,
+        )
+        self.assertEqual(EligibleEdition.objects.get(pk=eid).status, "draft")
 
     def test_existing_staff_account_can_be_assigned_without_changing_password(self):
         existing = get_user_model().objects.create_user(
@@ -411,15 +407,13 @@ class PresenterEligibleEditionsTests(TestCase):
             self.saturday.pk,
         )
 
-    def test_locked_edition_cannot_be_reapproved_after_votes_start(self):
+    def test_cannot_publish_edition_after_receiving_votes(self):
         eid = self.create_edition()
         self.assertEqual(self.add_candidate(eid).status_code, 200)
-        self.assertEqual(self.post(
-            "eligibility/submit", {"edition_id": eid}
-        ).status_code, 200)
         self.raw_vote(self.song, "already-voted")
-        self.assertEqual(self.post(
-            "eligibility/review", {"edition_id": eid, "action": "approve"}
-        ).status_code, 400)
+        self.assertEqual(
+            self.post("eligibility/submit", {"edition_id": eid}).status_code, 400,
+        )
+        self.assertEqual(EligibleEdition.objects.get(pk=eid).status, "draft")
         self.saturday.refresh_from_db()
         self.assertFalse(self.saturday.eligibility_enforced)
