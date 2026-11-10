@@ -250,7 +250,10 @@ def ranked_candidates(station, artist, title, limit=16, *, exhaustive=False):
     # Preserve recall for severely misspelt votes when the indexed pass
     # found nothing. Final fuzzy approval also uses an exhaustive ambiguity
     # check in pipeline.py, so a missing indexed competitor cannot count.
-    if filtered and not ranked:
+    if filtered and (not ranked or ranked[0][0] < 0.84):
+        # A weak indexed shortlist may omit the true song when every word
+        # contains errors. Recover full-catalogue recall in those rare cases;
+        # never pretend weak indexed matches are decisive.
         ranked = heapq.nlargest(
             limit, scored(all_songs), key=lambda row: (row[0], -row[3].pk)
         )
