@@ -1121,15 +1121,66 @@
     }
     if (action === "eligible-proposal-accept" || action === "eligible-proposal-reject") {
       const accept = action === "eligible-proposal-accept";
-      modal(accept ? "Link to verified catalogue song" : "Reject suggested song",
+      modal(accept ? "Link to a verified catalogue song" : "Reject proposed song",
         accept
-          ? '<p class="hint">First verify the proposed song in Song catalogue, then enter its verified song ID. The match must belong to this station.</p>' +
-            field("Verified catalogue song ID", "song_id", "", "number")
-          : "<p>Rejecting a suggestion does not delete it from the audit history.</p>",
-        (fields) => api("workspace/eligibility/suggestion/review", {
-          suggestion_id: Number(id), action: accept ? "accept" : "reject",
-          ...(accept ? {song_id: Number(fields.get("song_id"))} : {}),
-        }));
+          ? '<p class="eligible-modal-guide">Search for the artist or title, ' +
+            'then choose the matching verified recording. If it is missing, ' +
+            'verify it in Song catalogue first. Never link an unrelated recording.</p>' +
+            '<label class="field">Search verified catalogue' +
+            '<input type="search" id="eligible-proposal-query" autocomplete="off"' +
+            ' maxlength="100" placeholder="Artist or song title"></label>' +
+            '<button class="button secondary" type="button"' +
+            ' data-action="eligible-proposal-find">Search verified songs</button>' +
+            '<div class="eligible-proposal-matches" id="eligible-proposal-results">' +
+            '<p>Search to choose a verified song.</p></div>' +
+            '<p class="eligible-proposal-selected" id="eligible-proposal-selection">No song selected</p>' +
+            '<input type="hidden" name="song_id" id="eligible-proposal-song-id">'
+          : '<p class="eligible-modal-guide">The proposal will be marked rejected ' +
+            'and retained in the review history.</p>',
+        (fields) => {
+          const songId = Number(fields.get("song_id"));
+          if (accept && (!Number.isSafeInteger(songId) || songId <= 0))
+            throw new Error("Search for and select a verified song before linking.");
+          return api("workspace/eligibility/suggestion/review", {
+            suggestion_id: Number(id), action: accept ? "accept" : "reject",
+            ...(accept ? {song_id: songId} : {}),
+          });
+        });
+      return;
+    }
+    if (action === "eligible-proposal-find") {
+      const q = document.getElementById("eligible-proposal-query")?.value?.trim();
+      if (!q) { toast("Enter an artist or title to search."); return; }
+      const results = document.getElementById("eligible-proposal-results");
+      if (!results) return;
+      results.innerHTML = '<p>Searching verified songs…</p>';
+      try {
+        const d = await api("workspace/songs?status=verified&q=" +
+          encodeURIComponent(q) + "&page=1");
+        const songs = d.items || [];
+        results.innerHTML = songs.length
+          ? songs.map((item) =>
+              '<div class="eligible-proposal-option"><span><strong>' +
+              esc(item.title) + '</strong><small>' + esc(item.artist) +
+              '</small></span><button class="button secondary" type="button"' +
+              ' data-action="eligible-proposal-select" data-id="' +
+              Number(item.id) + '">Choose</button></div>').join("")
+          : '<p>No verified catalogue match. Verify the song in Song catalogue first.</p>';
+        window.eligibleProposalMatches = songs;
+      } catch (error) {
+        results.textContent = error.message;
+      }
+      return;
+    }
+    if (action === "eligible-proposal-select") {
+      const match = (window.eligibleProposalMatches || []).find(
+        (item) => String(item.id) === String(id)
+      );
+      if (!match) return;
+      document.getElementById("eligible-proposal-song-id").value = String(match.id);
+      const selected = document.getElementById("eligible-proposal-selection");
+      selected.textContent = "Selected: " + match.artist + " – " + match.title;
+      selected.classList.add("is-selected");
       return;
     }
     if (action === "presenter-create") {
