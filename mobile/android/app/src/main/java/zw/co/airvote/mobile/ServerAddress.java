@@ -12,6 +12,9 @@ public final class ServerAddress {
         if (input == null || input.isBlank()) {
             throw new IllegalArgumentException("Enter your station's HTTPS server address.");
         }
+        if (input.chars().anyMatch(ch -> Character.isISOControl((char) ch))) {
+            throw new IllegalArgumentException("The server address contains invalid characters.");
+        }
         String raw = input.trim();
         if (raw.chars().anyMatch(ch -> Character.isISOControl((char) ch))) {
             throw new IllegalArgumentException("The server address contains invalid characters.");

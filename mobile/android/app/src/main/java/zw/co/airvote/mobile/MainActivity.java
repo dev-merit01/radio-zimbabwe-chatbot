@@ -238,7 +238,7 @@ public final class MainActivity extends Activity {
                 ConnectionVerifier.verify(nextOrigin);
                 runOnUiThread(() -> {
                     if (sequence != connectionSequence || isFinishing() || isDestroyed()) return;
-                    boolean changed = !nextOrigin.equals(trustedOrigin);
+                    boolean changed = trustedOrigin != null && !nextOrigin.equals(trustedOrigin);
                     trustedOrigin = nextOrigin;
                     getPreferences(MODE_PRIVATE).edit().putString(KEY_SERVER, trustedOrigin).apply();
                     connecting = false;
