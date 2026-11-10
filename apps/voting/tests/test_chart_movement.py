@@ -10,8 +10,8 @@ from django.utils import timezone
 from apps.charts.movement import movement_for_rank, previous_published_chart
 from apps.charts.publishing import publish_edition
 from apps.voting.models import (
-    ChartShow, CleanedSong, MatchKeyMapping, RawVote, User,
-    WeeklyChart, WeeklyChartEntry,
+    ChartShow, CleanedSong, EditionCandidate, EligibleEdition,
+    MatchKeyMapping, RawVote, User, WeeklyChart, WeeklyChartEntry,
 )
 
 
@@ -281,6 +281,36 @@ class BroadcastChartMovementTests(TestCase):
             self.client.get(f"/api/chart/{chart.pk}").json()["entries"][0]["movement_status"],
             "no_previous",
         )
+
+
+    def test_presenter_candidate_list_includes_previous_official_position(self):
+        prior = self.saved_chart(self.show, self.previous_saturday, [
+            (1, self.songs["Bravo"]), (2, self.songs["Alpha"]),
+        ])
+        edition = EligibleEdition.objects.create(
+            station="national_fm", chart_show=self.show,
+            chart_date=self.next_saturday,
+            voting_start=self.period_start, voting_end=self.next_saturday,
+            prepared_by=self.admin, status="draft",
+        )
+        EditionCandidate.objects.create(
+            edition=edition, song=self.songs["Alpha"]
+        )
+        EditionCandidate.objects.create(
+            edition=edition, song=self.songs["Charlie"]
+        )
+        response = self.client.get("/api/workspace/eligibility", {
+            "show_id": self.show.pk, "edition_id": edition.pk,
+        })
+        self.assertEqual(response.status_code, 200, response.content)
+        data = response.json()["selected"]
+        self.assertEqual(data["previous_chart"]["chart_id"], prior.pk)
+        candidates = {r["title"]: r for r in data["candidates"]}
+        self.assertEqual(candidates["Alpha"]["previous_rank"], 2)
+        self.assertEqual(candidates["Alpha"]["previous_votes"], 1)
+        self.assertIsNone(candidates["Charlie"]["previous_rank"])
+        self.assertIsNone(candidates["Charlie"]["previous_votes"])
+        self.assertEqual(edition.status, "draft")
 
     def test_year_end_compares_only_same_annual_chart_previous_year(self):
         show = ChartShow.objects.create(
