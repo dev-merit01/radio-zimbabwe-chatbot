@@ -119,10 +119,7 @@ class DistinctiveTitleOnlyTests(TestCase):
         vote.refresh_from_db()
         self.assertEqual(vote.ai_status, "review")
         self.assertTrue(CleanedSong.objects.filter(status="pending").exists())
-        with patch("apps.voting.management.commands.retry_catalogue_votes.timezone.now") as now:
-            from django.utils import timezone
-            now.return_value = timezone.now()
-            call_command("retry_catalogue_votes", stdout=StringIO())
+        call_command("retry_catalogue_votes", stdout=StringIO())
         vote.refresh_from_db()
         self.assertEqual(vote.ai_status, "awaiting")
         self.run_ai(vote)
