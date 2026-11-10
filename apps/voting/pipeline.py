@@ -12,6 +12,7 @@ from .models import (
     CleanedSongTally,
     LLMDecisionLog,
     MatchKeyMapping,
+    SongAlias,
     RawSongTally,
     RawVote,
     ReviewAudit,
@@ -322,6 +323,7 @@ def process_vote_with_ai(vote):
     from .ai import match_vote_with_llm
     from .catalogue_matching import (
         automatic_candidate,
+        artist_credits,
         normalise,
         ranked_candidates,
         variants,
@@ -341,11 +343,23 @@ def process_vote_with_ai(vote):
     if (mapping and mapping.cleaned_song.status == "verified"
             and mapping.cleaned_song_id not in {song.pk for song in shortlist}):
         shortlist = [mapping.cleaned_song] + shortlist[:7]
-    result = match_vote_with_llm(
-        vote.artist_raw, vote.song_raw,
-        [{"id": song.pk, "canonical_name": song.canonical_name}
-         for song in shortlist],
-    )
+    # Give OpenAI actual musical identities, not only opaque full strings.
+    # Store approved station-scoped aliases separately from model guesses.
+    approved_aliases = {}
+    for row in SongAlias.objects.filter(
+        station=station, is_approved=True, song__id__in=[song.pk for song in shortlist],
+        song__station=station, song__status="verified",
+    ).values("song_id", "value").order_by("id"):
+        approved_aliases.setdefault(row["song_id"], []).append(row["value"])
+    candidates = []
+    for song in shortlist:
+        lead, featured = artist_credits(song.artist)
+        candidates.append({
+            "id": song.pk, "canonical_name": song.canonical_name,
+            "primary_artist": lead, "featured_artists": featured,
+            "title": song.title, "aliases": approved_aliases.get(song.pk, [])[:6],
+        })
+    result = match_vote_with_llm(vote.artist_raw, vote.song_raw, candidates)
     reason = str(result.get("reasoning", ""))
     if reason.startswith(("LLM error:", "LLM response parsing error:")):
         raise RuntimeError("AI verification unavailable")
@@ -506,6 +520,25 @@ def review_song(
                 cleaned_song=target
             )
             affected.append(target.id)
+            # An administrator-confirmed merge is labelled evidence: future
+            # identical listener spellings can resolve without repeating the
+            # same manual work. AI decisions alone never approve new aliases.
+            from .catalogue_matching import normalise
+
+            for raw in RawVote.objects.filter(
+                station=station, match_key__in=review_keys,
+            ).order_by().values_list("raw_input", flat=True).distinct()[:100]:
+                key = normalise(raw)
+                if not key or len(key) > 512:
+                    continue
+                alias, created = SongAlias.objects.get_or_create(
+                    station=station, song=target, kind="full", normalised=key,
+                    defaults={"value": raw, "is_approved": True, "source": "reviewer"},
+                )
+                if not created and not alias.is_approved:
+                    alias.is_approved = True
+                    alias.source = "reviewer"
+                    alias.save(update_fields=["is_approved", "source"])
             # Preserve original record and immutable archive snapshots.
             song.status = "rejected"
         elif action in {"verified", "pending", "rejected"}:
