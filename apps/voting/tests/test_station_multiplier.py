@@ -6,7 +6,7 @@ from django.contrib.auth import get_user_model
 from django.test import Client, TestCase, override_settings
 from django.utils import timezone
 
-from apps.accounts.models import AccountProfile
+from apps.accounts.models import AccountProfile, PresenterAssignment
 from apps.charts.publishing import publish_edition
 from apps.voting.models import ChartShow, RawVote, ReviewAudit, StationVotingConfig, VoteJob
 from apps.voting.pipeline import review_song
@@ -105,6 +105,88 @@ class StationMultiplierTests(TestCase):
                 station="national_fm", action="vote_multiplier"
             ).count(), 1
         )
+
+
+    def test_presenter_sees_real_votes_and_movement_but_not_scoring_details(self):
+        """Station scoring is admin-only in every endpoint and CSV export."""
+        self.assertEqual(self.save_multiplier(4).status_code, 200)
+        last_saturday = timezone.localdate() - timedelta(
+            days=(timezone.localdate().weekday() - 5) % 7
+        )
+        self.approve_vote(vote_date=last_saturday)
+        chart, created = publish_edition(
+            "national_fm", last_saturday, self.admin,
+            20, chart_show=self.show,
+        )
+        self.assertTrue(created)
+
+        presenter = get_user_model().objects.create_user(
+            username="movement-presenter", password="Test-Presenter-8173!"
+        )
+        AccountProfile.objects.update_or_create(
+            user=presenter, defaults={"station": "national_fm"}
+        )
+        PresenterAssignment.objects.create(user=presenter, chart_show=self.show)
+        client = Client()
+        client.force_login(presenter)
+
+        for endpoint in (
+            "/api/workspace/shows",
+            f"/api/workspace/overview?show_id={self.show.pk}",
+        ):
+            with self.subTest(endpoint=endpoint):
+                response = client.get(endpoint)
+                self.assertEqual(response.status_code, 200, response.content)
+                data = response.json()
+                self.assertNotIn("vote_multiplier", data)
+                self.assertNotIn("verified_score", data)
+                self.assertIn("station", data)
+        live = client.get("/api/chart/today", {"show_id": self.show.pk})
+        self.assertEqual(live.status_code, 200, live.content)
+        live_data = live.json()
+        self.assertNotIn("vote_multiplier", live_data)
+        self.assertNotIn("total_score", live_data)
+        self.assertTrue(all("score" not in row for row in live_data["top100"]))
+        self.assertIn("comparison", live_data)
+
+        listings = client.get("/api/chart/archives", {
+            "show_id": self.show.pk, "year": chart.year,
+        })
+        self.assertEqual(listings.status_code, 200, listings.content)
+        matches = [item for item in listings.json()["charts"]
+                   if item["id"] == chart.pk]
+        self.assertEqual(len(matches), 1)
+        self.assertEqual(matches[0]["total_votes"], 1)
+        self.assertNotIn("total_score", matches[0])
+        self.assertNotIn("vote_multiplier", matches[0])
+
+        archived = client.get(f"/api/chart/{chart.pk}")
+        self.assertEqual(archived.status_code, 200, archived.content)
+        archive = archived.json()
+        self.assertEqual(archive["chart"]["total_votes"], 1)
+        self.assertNotIn("vote_multiplier", archive["chart"])
+        self.assertNotIn("total_score", archive["chart"])
+        self.assertEqual(archive["entries"][0]["count"], 1)
+        self.assertNotIn("score", archive["entries"][0])
+        self.assertIn("movement_status", archive["entries"][0])
+
+        exported = client.get("/api/workspace/export", {"archive": chart.pk})
+        self.assertEqual(exported.status_code, 200, exported.content)
+        text = exported.content.decode("utf-8-sig")
+        self.assertIn("Verified votes", text)
+        self.assertIn("Previous position", text)
+        self.assertNotIn("Weighted score", text)
+        self.assertNotIn("x4", text)
+
+        self.assertIn("vote_multiplier", self.client.get(
+            "/api/workspace/shows"
+        ).json())
+        admin_archive = self.client.get(f"/api/chart/{chart.pk}").json()
+        self.assertEqual(admin_archive["chart"]["vote_multiplier"], 4)
+        self.assertEqual(admin_archive["entries"][0]["score"], 4)
+        self.assertIn("Weighted score (x4)", self.client.get(
+            "/api/workspace/export", {"archive": chart.pk}
+        ).content.decode("utf-8-sig"))
 
     def test_reject_invalid_multiplier_without_changing_settings(self):
         for invalid in (0, 11, -1, 1.5, True, "5", None):
