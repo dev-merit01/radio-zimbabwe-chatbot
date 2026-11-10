@@ -10,6 +10,8 @@ import unicodedata
 from collections import defaultdict
 from difflib import SequenceMatcher
 
+from django.conf import settings
+
 from .models import CleanedSong, SongAlias
 
 
@@ -134,7 +136,7 @@ def artist_similarity(submitted, canonical, aliases=()):
     )
 
 
-def ranked_candidates(station, artist, title, limit=16):
+def ranked_candidates(station, artist, title, limit=16, *, exhaustive=False):
     artist, title = normalise(artist), normalise(title)
     if artist == "unknown artist":
         title = strip_vote_prefix(title)
@@ -150,13 +152,8 @@ def ranked_candidates(station, artist, title, limit=16):
     ).values("song_id", "kind", "normalised").iterator(chunk_size=500):
         aliases_by_song[row["song_id"]][row["kind"]].add(row["normalised"])
 
-    def scored():
-        songs = (
-            CleanedSong.objects.filter(station=station, status="verified")
-            .only("id", "artist", "title", "canonical_name")
-            .iterator(chunk_size=500)
-        )
-        for song in songs:
+    def scored(songs):
+        for song in songs.iterator(chunk_size=500):
             t = normalise(song.title)
             aliases = aliases_by_song[song.pk]
             # A full-expression alias represents an explicitly confirmed
@@ -237,7 +234,43 @@ def ranked_candidates(station, artist, title, limit=16):
                 artist_score, title_score, song,
             )
 
-    return heapq.nlargest(limit, scored(), key=lambda row: (row[0], -row[3].pk))
+    all_songs = CleanedSong.objects.filter(
+        station=station, status="verified",
+    ).only("id", "artist", "title", "canonical_name")
+    filtered = False
+    if exhaustive:
+        searched = all_songs
+    else:
+        from .indexed_retrieval import narrowed_catalogue
+
+        searched, filtered = narrowed_catalogue(station, artist, title)
+    ranked = heapq.nlargest(
+        limit, scored(searched), key=lambda row: (row[0], -row[3].pk)
+    )
+    # Preserve recall for severely misspelt votes when the indexed pass
+    # found nothing. Final fuzzy approval also uses an exhaustive ambiguity
+    # check in pipeline.py, so a missing indexed competitor cannot count.
+    if filtered and not ranked:
+        ranked = heapq.nlargest(
+            limit, scored(all_songs), key=lambda row: (row[0], -row[3].pk)
+        )
+
+    if not exhaustive and getattr(settings, "AI_VECTOR_ENABLED", False) and (
+        not ranked or ranked[0][0] < 0.90
+    ):
+        from .semantic_matching import semantic_candidates
+
+        extra = semantic_candidates(
+            station, artist, title, limit=min(6, limit),
+            exclude_ids={row[3].pk for row in ranked},
+        )
+        # Vector-only rows are retrieval hints, never proof of identity:
+        # zero lexical scores make auto-matching fail until an alias or
+        # independent lexical evidence justifies the selection.
+        ranked += [(min(sim * 0.8, 0.72), 0.0, 0.0, song) for sim, song in extra]
+        ranked.sort(key=lambda row: (row[0], -row[3].pk), reverse=True)
+        ranked = ranked[:limit]
+    return ranked
 
 
 def automatic_candidate(ranked, artist, title):
