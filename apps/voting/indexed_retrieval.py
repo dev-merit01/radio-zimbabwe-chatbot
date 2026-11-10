@@ -5,6 +5,7 @@ GIN pg_trgm indexes support ILIKE substring and trigram searches; SQLite
 tests use the original full-catalogue fallback for identical behaviour.
 """
 import logging
+import re
 from functools import lru_cache
 
 from django.conf import settings
@@ -50,7 +51,20 @@ def narrowed_catalogue(station, artist, title):
     if not tokens:
         return songs, False
 
+    # PostgreSQL's built-in GIN full-text index is available without any
+    # extension. Prefix search retrieves abbreviated artist/title words.
+    fts_words = [re.sub(r"[^a-z0-9]", "", token) for token in tokens]
+    fts_query = " | ".join(word + ":*" for word in fts_words if word)
     predicate = Q()
+    if fts_query:
+        fts_songs = songs.extra(
+            where=[
+                "to_tsvector('simple', coalesce(artist, '') || ' ' || coalesce(title, '')) "
+                "@@ to_tsquery('simple', %s)"
+            ],
+            params=[fts_query],
+        ).values("pk")
+        predicate |= Q(pk__in=fts_songs)
     for token in tokens:
         predicate |= (
             Q(artist__icontains=token) | Q(title__icontains=token)
@@ -74,9 +88,19 @@ def narrowed_catalogue(station, artist, title):
         alias_predicate |= Q(normalised__icontains=token)
         if trigrams:
             alias_predicate |= Q(normalised__trigram_similar=token)
-    alias_ids = SongAlias.objects.filter(
+    alias_rows = SongAlias.objects.filter(
         station=station, is_approved=True, song__station=station,
         song__status="verified",
-    ).filter(alias_predicate).values("song_id")
+    )
+    if fts_query:
+        fts_alias = alias_rows.extra(
+            where=[
+                "to_tsvector('simple', coalesce(normalised, '')) "
+                "@@ to_tsquery('simple', %s)"
+            ],
+            params=[fts_query],
+        ).values("pk")
+        alias_predicate |= Q(pk__in=fts_alias)
+    alias_ids = alias_rows.filter(alias_predicate).values("song_id")
     predicate |= Q(pk__in=alias_ids)
     return songs.filter(predicate).distinct(), True
