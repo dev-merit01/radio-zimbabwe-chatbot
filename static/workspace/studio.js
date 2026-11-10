@@ -143,7 +143,7 @@
     if (!rows.length) return empty;
     const showScore = rows.some((r) => r.score !== undefined && r.score !== r.count);
     const previousLabel = comparison.label === "Previous annual chart"
-      ? "Last year" : "Last chart";
+      ? "Last year" : "Last week";
     return table(
       ["Position", "Song", "Votes", ...(showScore ? ["Weighted points"] : []),
         previousLabel, "Movement"],
