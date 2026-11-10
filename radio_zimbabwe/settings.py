@@ -210,6 +210,11 @@ ALLOW_REPEAT_SONG = env.bool("ALLOW_REPEAT_SONG", default=False)
 AUTO_AI_MATCH = env.bool("AUTO_AI_MATCH", default=False)
 # Opt-in production mode: every new valid vote must be AI checked before counting.
 AI_ALL_VOTES = env.bool("AI_ALL_VOTES", default=False)
+# Explicit opt-in: reuse a recently OpenAI-confirmed listener spelling only
+# after station/canonical song/exhaustive-ambiguity checks. No listener IDs
+# are cached and all actual votes still flow through anti-spam/limit rules.
+AI_MATCH_CACHE_ENABLED = env.bool("AI_MATCH_CACHE_ENABLED", default=False)
+AI_MATCH_CACHE_SECONDS = env.int("AI_MATCH_CACHE_SECONDS", default=600)
 OPENAI_MODEL = env.str("OPENAI_MODEL", default="gpt-6-luna")
 OPENAI_REASONING_EFFORT = env.str("OPENAI_REASONING_EFFORT", default="none")
 
