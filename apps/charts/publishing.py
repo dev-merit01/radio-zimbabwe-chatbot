@@ -8,6 +8,9 @@ from django.utils import timezone
 from apps.charts.routing import legacy_show
 from apps.charts.periods import campaign_local_dates
 from apps.charts.multiplier import station_multiplier
+from apps.charts.movement import (
+    previous_published_chart, published_history_ids, movement_for_rank,
+)
 from apps.charts.show_rankings import counts_for_show, ranked_songs
 from apps.voting.models import (
     CleanedSong, InboundEvent, ReviewAudit, VoteJob, SuspectedSpamVote,
@@ -149,19 +152,21 @@ def _publish(station, start, end, actor, size, chart_date=None, year_end=False, 
         if not totals:
             raise ValueError("No verified votes exist for that chart show and period.")
 
-        previous = (
-            WeeklyChart.objects.filter(
-                chart_show=show, station=station,
-                week_end=end - timedelta(days=7),
-                is_finalized=True, is_year_end=False,
-            ).first() if not year_end else None
+        previous = previous_published_chart(
+            show, start, end, annual=year_end,
         )
         previous_entries = (
-            {entry.cleaned_song_id: entry for entry in previous.entries.all()}
+            {entry.cleaned_song_id: entry for entry in previous.entries.all()
+             if entry.cleaned_song_id is not None}
             if previous else {}
+        )
+        historical_ids = published_history_ids(
+            show, start, annual=year_end,
+            song_ids=[song.pk for song, _ in totals],
         )
         chart = WeeklyChart.objects.create(
             station=station, chart_show=show,
+            comparison_chart=previous,
             vote_multiplier=station_multiplier(station),
             week_start=start, week_end=end,
             chart_date=chart_date, is_year_end=year_end,
@@ -185,6 +190,11 @@ def _publish(station, start, end, actor, size, chart_date=None, year_end=False, 
         for rank, (song, count) in enumerate(totals, 1):
             old = previous_entries.get(song.id)
             peak = historical_peaks.get(song.id)
+            movement = movement_for_rank(
+                rank, old.rank if old else None,
+                has_comparison=bool(previous),
+                charted_before=song.id in historical_ids,
+            )
             entries.append(
                 WeeklyChartEntry(
                     chart=chart, rank=rank, cleaned_song=song,
@@ -192,6 +202,7 @@ def _publish(station, start, end, actor, size, chart_date=None, year_end=False, 
                     canonical_name=song.canonical_name,
                     vote_count=count,
                     previous_rank=old.rank if old else None,
+                    movement_status=movement["movement_status"],
                     weeks_on_chart=old.weeks_on_chart + 1 if old else 1,
                     peak_rank=min(rank, peak or rank),
                     spotify_track_id=song.spotify_track_id or "",
@@ -205,6 +216,11 @@ def _publish(station, start, end, actor, size, chart_date=None, year_end=False, 
                 "chart_id": chart.id, "chart_show_id": show.pk,
                 "week_start": str(start), "end": str(end),
                 "size": size, "kind": "year_end" if year_end else "weekly",
+                "comparison_chart_id": previous.pk if previous else None,
+                "movement_counts": {
+                    status: sum(entry.movement_status == status for entry in entries)
+                    for status in ("up", "down", "same", "new", "re_entry", "no_previous")
+                },
             },
         )
         return chart, True
