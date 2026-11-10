@@ -41,6 +41,32 @@ def phonetic_spelling(value):
     return value
 
 
+def text_similarity(submitted, canonical):
+    """Score literal and mild phonetic spelling; never interpret as probability."""
+    submitted, canonical = normalise(submitted), normalise(canonical)
+    return max(
+        SequenceMatcher(None, submitted, canonical, autojunk=False).ratio(),
+        SequenceMatcher(
+            None, phonetic_spelling(submitted),
+            phonetic_spelling(canonical), autojunk=False,
+        ).ratio(),
+    )
+
+
+def strip_vote_prefix(value):
+    """Ignore only familiar, explicitly marked voting instructions.
+
+    Keep the raw vote for audit/AI. Stripping arbitrary leading words would
+    silently turn unrelated song requests into votes for catalogue entries.
+    """
+    value = normalise(value)
+    return re.sub(
+        r"^(?:(?:please )?(?:i (?:want to )?vote for|vote for|"
+        r"my vote is|i choose|ndovhotera)) +",
+        "", value,
+    ) or value
+
+
 def artist_similarity(submitted, canonical):
     """Compare artist spellings with optional stage prefixes/suffixes.
 
@@ -75,6 +101,10 @@ def artist_similarity(submitted, canonical):
 
 def ranked_candidates(station, artist, title, limit=8):
     artist, title = normalise(artist), normalise(title)
+    if artist == "unknown artist":
+        title = strip_vote_prefix(title)
+    else:
+        artist = strip_vote_prefix(artist)
 
     def scored():
         songs = (
@@ -84,9 +114,9 @@ def ranked_candidates(station, artist, title, limit=8):
         )
         for song in songs:
             t = normalise(song.title)
-            if variants(title) != variants(t):
-                continue
             if artist == "unknown artist":
+                if variants(title) != variants(t):
+                    continue
                 # No separator: compare complete artist/title partitions in either
                 # order. Never use substring matches that discard extra words.
                 words = title.split()
@@ -98,7 +128,7 @@ def ranked_candidates(station, artist, title, limit=8):
                 scores = [
                     (
                         artist_similarity(left, song.artist),
-                        SequenceMatcher(None, right, t, autojunk=False).ratio(),
+                        text_similarity(right, t),
                     )
                     for left, right in pairs
                 ]
@@ -108,16 +138,14 @@ def ranked_candidates(station, artist, title, limit=8):
                 # discard extra words or guess from a short fuzzy title.
                 candidates = [
                     ((aa + tt) / 2, aa, tt)
-                    for aa, tt in scores if aa >= 0.75 and tt >= 0.70
+                    for aa, tt in scores if aa >= 0.68 and tt >= 0.66
                 ]
-                title_similarity = SequenceMatcher(
-                    None, title, t, autojunk=False
-                ).ratio()
+                title_similarity = text_similarity(title, t)
                 title_only = title == t or (
                     min(len(title), len(t)) >= 10
                     and len(title.split()) == len(t.split())
                     and len(t.split()) >= 2
-                    and title_similarity >= 0.94
+                    and title_similarity >= 0.88
                 )
                 if title_only:
                     # Artist score 0 denotes a title-only candidate; do not
@@ -130,20 +158,43 @@ def ranked_candidates(station, artist, title, limit=8):
                 )
                 yield (score, artist_score, title_score, song)
                 continue
-            artist_score = artist_similarity(artist, song.artist)
-            if artist_score < 0.75:
+            # An explicit separator may still be backwards: "Gitare - Freeman
+            # HKD". Offer both interpretations to OpenAI, keeping title/version
+            # checks and the same conservative acceptance gate afterwards.
+            interpretations = []
+            if variants(title) == variants(t):
+                interpretations.append((
+                    artist_similarity(artist, song.artist),
+                    text_similarity(title, t),
+                ))
+            if variants(artist) == variants(t):
+                interpretations.append((
+                    artist_similarity(title, song.artist),
+                    text_similarity(artist, t),
+                ))
+            plausible = [
+                (a, title_score) for a, title_score in interpretations
+                if a >= 0.68 and title_score >= 0.66
+            ]
+            if not plausible:
                 continue
-            title_score = SequenceMatcher(None, title, t, autojunk=False).ratio()
-            # Keep nearby short-title alternatives in the shortlist so a
-            # "Dak" vote cannot silently pick between "Daka" and "Dakar".
-            if title_score < 0.70:
-                continue
-            yield ((artist_score + title_score) / 2, artist_score, title_score, song)
+            artist_score, title_score = max(
+                plausible, key=lambda pair: (sum(pair), pair[1])
+            )
+            yield (
+                (artist_score + title_score) / 2,
+                artist_score, title_score, song,
+            )
 
     return heapq.nlargest(limit, scored(), key=lambda row: (row[0], -row[3].pk))
 
 
 def automatic_candidate(ranked, artist, title):
+    artist, title = normalise(artist), normalise(title)
+    if artist == "unknown artist":
+        title = strip_vote_prefix(title)
+    else:
+        artist = strip_vote_prefix(artist)
     if not ranked:
         return None
     score, a, t, song = ranked[0]
@@ -165,7 +216,7 @@ def automatic_candidate(ranked, artist, title):
         if t == 1.0:
             return song
         return song if (
-            t >= 0.94 and min(len(normalise(title)), len(normalise(song.title))) >= 10
+            t >= 0.88 and min(len(normalise(title)), len(normalise(song.title))) >= 10
             and len(normalise(title).split()) >= 2
         ) else None
     if normalise(artist) == "unknown artist":
@@ -185,7 +236,6 @@ def automatic_candidate(ranked, artist, title):
     # uniquely strong artist match. Competing songs fail the runner-up gap.
     if (
         a >= 0.90 and t >= 0.84
-        and len(normalise(title).split()) == len(normalise(song.title).split()) == 1
         and min(len(normalise(title)), len(normalise(song.title))) >= 3
         and max(len(normalise(title)), len(normalise(song.title))) <= 8
     ):

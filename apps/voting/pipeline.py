@@ -369,8 +369,21 @@ def process_vote_with_ai(vote):
                 gap = ranked[0][0] - ranked[1][0] if len(ranked) > 1 else 1
                 safe = automatic_candidate(ranked, vote.artist_normalized,
                                            vote.song_normalized) == selected
-                fuzzy = (gap >= 0.08 and min(len(normalise(vote.song_normalized)),
-                                             len(normalise(selected.title))) >= 6)
+                # OpenAI confirmation is necessary, not sufficient. Both
+                # artist and title must independently support an unambiguous
+                # candidate; the former length-only fallback could approve a
+                # wrong song if there were no close runner-up.
+                _score, artist_score, title_score, _song = ranked[0]
+                fuzzy = (
+                    gap >= 0.08
+                    and _score >= 0.88
+                    and artist_score >= 0.83
+                    and title_score >= 0.83
+                    and min(
+                        len(normalise(vote.song_normalized)),
+                        len(normalise(selected.title)),
+                    ) >= 6
+                )
                 if variants(vote.song_normalized) == variants(selected.title) and (
                     exact or safe or fuzzy
                 ):
