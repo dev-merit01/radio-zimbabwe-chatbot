@@ -380,24 +380,24 @@ def process_vote_with_ai(vote):
                     normalise(vote.artist_normalized) == normalise(selected.artist)
                     and normalise(vote.song_normalized) == normalise(selected.title)
                 )
-                gap = ranked[0][0] - ranked[1][0] if len(ranked) > 1 else 1
-                safe = automatic_candidate(ranked, vote.artist_normalized,
-                                           vote.song_normalized) == selected
-                # OpenAI confirmation is necessary, not sufficient. Both
-                # artist and title must independently support an unambiguous
-                # candidate; the former length-only fallback could approve a
-                # wrong song if there were no close runner-up.
-                _score, artist_score, title_score, _song = ranked[0]
-                fuzzy = (
-                    gap >= 0.08
-                    and _score >= 0.88
-                    and artist_score >= 0.83
-                    and title_score >= 0.83
-                    and min(
-                        len(normalise(vote.song_normalized)),
-                        len(normalise(selected.title)),
-                    ) >= 6
+                # Indexed and semantic retrieval maximise recall but can
+                # miss a competing song. Before ANY non-exact approval,
+                # independently scan the complete verified station catalogue.
+                # This prevents a missing indexed runner-up falsely making
+                # a song appear unique. The OpenAI decision is still required.
+                checked = ranked if exact else ranked_candidates(
+                    station, vote.artist_normalized,
+                    vote.song_normalized, exhaustive=True,
                 )
+                from .calibration import active_thresholds, secondary_fuzzy_candidate
+
+                safe = automatic_candidate(
+                    checked, vote.artist_normalized, vote.song_normalized
+                ) == selected
+                fuzzy = secondary_fuzzy_candidate(
+                    checked, vote.artist_normalized, vote.song_normalized,
+                    active_thresholds(station),
+                ) == selected
                 if variants(vote.song_normalized) == variants(selected.title) and (
                     exact or safe or fuzzy
                 ):

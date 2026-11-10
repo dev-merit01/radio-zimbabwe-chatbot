@@ -607,6 +607,45 @@ class CleanedSong(models.Model):
         super().save(*args, **kwargs)
 
 
+
+class SongEmbedding(models.Model):
+    """Precomputed catalogue representation; no listener details are stored."""
+    station = models.CharField(max_length=32, choices=Station.choices, db_index=True)
+    song = models.OneToOneField(
+        "CleanedSong", on_delete=models.CASCADE, related_name="semantic_embedding"
+    )
+    model = models.CharField(max_length=80, default="text-embedding-3-small")
+    text_fingerprint = models.CharField(max_length=64)
+    vector = models.JSONField(default=list)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def clean(self):
+        from django.core.exceptions import ValidationError
+        if self.song_id and self.station != self.song.station:
+            raise ValidationError("Song embeddings must have the same station as their song.")
+
+
+class MatchCalibration(models.Model):
+    """An independently validated, explicitly activated per-station gate.
+
+    Numbers are similarity thresholds rather than probabilities. Fallback
+    defaults match the existing lexical gate until a labelled evaluation
+    has been reviewed and the profile is activated.
+    """
+    station = models.CharField(max_length=32, choices=Station.choices, unique=True)
+    min_score = models.FloatField(default=0.88)
+    min_gap = models.FloatField(default=0.08)
+    min_artist = models.FloatField(default=0.83)
+    min_title = models.FloatField(default=0.83)
+    is_active = models.BooleanField(default=False)
+    labelled_count = models.PositiveIntegerField(default=0)
+    evaluated_precision = models.FloatField(default=0.0)
+    evaluated_recall = models.FloatField(default=0.0)
+    dataset_sha256 = models.CharField(max_length=64, blank=True)
+    evaluated_at = models.DateTimeField(null=True, blank=True)
+
+
+
 class SongAlias(models.Model):
     """Curated, station-scoped catalogue aliases; never created by an LLM alone.
 

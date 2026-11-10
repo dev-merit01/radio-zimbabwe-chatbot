@@ -27,6 +27,25 @@ class Command(BaseCommand):
                 "Production workers require PostgreSQL. Use --allow-sqlite for local single-worker development."
             )
         call_command("retry_catalogue_votes", stdout=self.stdout)
+        # Optional bounded startup backfill, only for matching workers.
+        # An embedding outage must never interrupt intake or vote counting.
+        from django.conf import settings
+        if (
+            options["queue"] in ("all", "matching")
+            and settings.AI_VECTOR_ENABLED
+            and settings.AI_VECTOR_AUTO_REFRESH
+        ):
+            from apps.accounts.models import station_choices
+            for station, _label in station_choices(active_only=True):
+                try:
+                    call_command(
+                        "refresh_song_embeddings", station=station, limit=1000,
+                        batch_size=32, stdout=self.stdout,
+                    )
+                except Exception as exc:
+                    self.stderr.write(
+                        f"Embedding backfill skipped for {station}: {type(exc).__name__}"
+                    )
         name = f"{socket.gethostname()}:{os.getpid()}"
         queues = {
             "intake": InboundEvent,

@@ -48,6 +48,7 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "django.contrib.postgres",
     "rest_framework",
     "apps.bot",
     "apps.voting",
@@ -211,6 +212,21 @@ AUTO_AI_MATCH = env.bool("AUTO_AI_MATCH", default=False)
 AI_ALL_VOTES = env.bool("AI_ALL_VOTES", default=False)
 OPENAI_MODEL = env.str("OPENAI_MODEL", default="gpt-6-luna")
 OPENAI_REASONING_EFFORT = env.str("OPENAI_REASONING_EFFORT", default="none")
+
+# Layered retrieval: indexed lexical search is cheap and on by default.
+# Semantic embedding API calls are explicitly opt-in because they incur cost.
+AI_INDEXED_SEARCH_ENABLED = env.bool("AI_INDEXED_SEARCH_ENABLED", default=True)
+AI_VECTOR_ENABLED = env.bool("AI_VECTOR_ENABLED", default=False)
+AI_VECTOR_AUTO_REFRESH = env.bool("AI_VECTOR_AUTO_REFRESH", default=False)
+AI_VECTOR_RETRIEVAL_MIN_SIMILARITY = env.float(
+    "AI_VECTOR_RETRIEVAL_MIN_SIMILARITY", default=0.64
+)
+OPENAI_EMBEDDING_MODEL = env.str(
+    "OPENAI_EMBEDDING_MODEL", default="text-embedding-3-small"
+)
+AI_CALIBRATED_MATCHING_ENABLED = env.bool(
+    "AI_CALIBRATED_MATCHING_ENABLED", default=True
+)
 # Each provider account is bound to one station; never trust an inbound station value.
 TELEGRAM_STATION = env.str("TELEGRAM_STATION", default="radio_zimbabwe")
 BIRD_STATION = env.str("BIRD_STATION", default="radio_zimbabwe")
