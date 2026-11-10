@@ -14,7 +14,7 @@ from apps.voting.pipeline import lock_station, unresolved_mapping
 
 # New matching logic requires a fresh one-time recovery pass for previously
 # reviewed votes, including title typos submitted without an artist.
-BATCH = "layered-short-title-alias-retry-2026-11-10"
+BATCH = "distinctive-title-prefix-retry-2026-11-10"
 
 
 class Command(BaseCommand):
