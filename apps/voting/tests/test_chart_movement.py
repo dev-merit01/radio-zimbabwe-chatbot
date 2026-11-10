@@ -7,9 +7,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 from django.utils import timezone
 
-from apps.charts.movement import (
-    movement_for_rank, previous_published_chart, archived_movement,
-)
+from apps.charts.movement import movement_for_rank, previous_published_chart
 from apps.charts.publishing import publish_edition
 from apps.voting.models import (
     ChartShow, CleanedSong, MatchKeyMapping, RawVote, User,
@@ -203,10 +201,6 @@ class BroadcastChartMovementTests(TestCase):
         self.assertIsNone(previous_published_chart(
             self.power, self.period_start, self.next_saturday,
         ))
-        self.assertFalse(self.client.get(
-            "/api/chart/archives",
-            {"show_id": self.power.pk},
-        ).status_code == 200 and False)
 
     def test_publish_freezes_last_week_and_archive_exports(self):
         last_saturday = self.previous_saturday
