@@ -119,8 +119,17 @@ def validate_vote_content(text: str) -> tuple[bool, str | None]:
             "Example: Winky D - Ijipita"
         )
 
+    # Allow a clearly stated song vote beginning with polite wording; it
+    # still goes through the same artist/title/AI validation as any other vote.
+    polite_vote = bool(re.match(
+        r"^please\s+(?:i\s+(?:want\s+to\s+)?vote\s+for|vote\s+for|"
+        r"my\s+vote\s+is|i\s+choose)\s+",
+        text_lower,
+    ))
     # Check for rejected words/phrases (greetings, spam, etc.)
     for word in REJECTED_WORDS:
+        if word == "please" and polite_vote:
+            continue
         # Check if the message IS just the word, or starts/ends with it
         if (
             text_lower == word
