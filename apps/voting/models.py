@@ -980,8 +980,7 @@ class WeeklyChartEntry(models.Model):
 
     # Movement tracking
     previous_rank = models.IntegerField(
-        null=True, blank=True,
-        help_text="Position in the directly preceding published edition",
+        null=True, blank=True, help_text="Rank from previous week"
     )
     movement_status = models.CharField(
         max_length=16, blank=True, default="",
