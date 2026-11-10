@@ -28,6 +28,7 @@ const assert = require('node:assert/strict');
   await page.getByLabel('Password', {exact: true}).fill('local-browser-test-only');
   await page.getByRole('button', {name: 'Sign in', exact: true}).click();
   await page.locator('#chart-options').waitFor();
+  assert.ok((await page.locator('.chart-period-meta').innerText()).includes('1 vote = 1 point'));
   // Isolated browser rendering test: API fixture affects this page only,
   // never database votes, published charts or the running backend.
   const movementRoute = '**/api/chart/today?*';
@@ -188,6 +189,9 @@ const assert = require('node:assert/strict');
   await page.screenshot({path:'/tmp/airvote-profile.png',fullPage:true});
   await page.getByRole('link', {name:'Back to workspace',exact:true}).click();
   await page.locator('#chart-options').waitFor();
+  assert.ok((await page.locator('.chart-period-meta').innerText()).includes('Verified votes only'));
+  assert.ok(!(await page.locator('.chart-period-meta').innerText()).includes('1 vote = 1 point'));
+  assert.ok(!(await page.locator('.chart-period-meta').innerText()).includes('Weighted scoring'));
   assert.equal(await page.locator('#refresh').count(),0);
   assert.deepEqual(errors,[]);
   await browser.close();
