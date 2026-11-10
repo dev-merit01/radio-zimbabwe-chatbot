@@ -520,6 +520,25 @@ def review_song(
                 cleaned_song=target
             )
             affected.append(target.id)
+            # An administrator-confirmed merge is labelled evidence: future
+            # identical listener spellings can resolve without repeating the
+            # same manual work. AI decisions alone never approve new aliases.
+            from .catalogue_matching import normalise
+
+            for raw in RawVote.objects.filter(
+                station=station, match_key__in=review_keys,
+            ).order_by().values_list("raw_input", flat=True).distinct()[:100]:
+                key = normalise(raw)
+                if not key or len(key) > 512:
+                    continue
+                alias, created = SongAlias.objects.get_or_create(
+                    station=station, song=target, kind="full", normalised=key,
+                    defaults={"value": raw, "is_approved": True, "source": "reviewer"},
+                )
+                if not created and not alias.is_approved:
+                    alias.is_approved = True
+                    alias.source = "reviewer"
+                    alias.save(update_fields=["is_approved", "source"])
             # Preserve original record and immutable archive snapshots.
             song.status = "rejected"
         elif action in {"verified", "pending", "rejected"}:
