@@ -18,6 +18,29 @@ from apps.charts.movement import (
 )
 
 
+def limit_scoring_details(payload, user):
+    """Keep internal scoring configuration private to the central admin.
+
+    The presenter still receives authentic vote counts and chart movements.
+    Filtering at the API boundary also protects chart exports and clients
+    that call the endpoints directly instead of using the AirVote workspace.
+    """
+    if user.is_superuser:
+        return payload
+    payload.pop("vote_multiplier", None)
+    payload.pop("total_score", None)
+    chart = payload.get("chart")
+    if isinstance(chart, dict):
+        chart.pop("vote_multiplier", None)
+        chart.pop("total_score", None)
+    for key in ("top100", "entries", "charts"):
+        for row in payload.get(key, []):
+            row.pop("score", None)
+            row.pop("total_score", None)
+            row.pop("vote_multiplier", None)
+    return payload
+
+
 def get_current_week_dates():
     from apps.charts.periods import week_dates
     return week_dates(timezone.localdate())
@@ -28,7 +51,7 @@ def get_week_dates_for_date(target_date):
     return week_dates(target_date)
 
 
-def chart_today_for_show(show, limit):
+def chart_today_for_show(show, limit, user=None):
     """Live Top 20/50 from this show only, with previous programme-specific ranks."""
     today = timezone.localdate()
     multiplier = station_multiplier(show.station)
@@ -73,7 +96,7 @@ def chart_today_for_show(show, limit):
             **movement, "is_verified": True,
         })
     totals = counts_for_show(show, start, end)
-    return JsonResponse({
+    return JsonResponse(limit_scoring_details({
         "date": str(today), "week_start": str(start), "week_end": str(end),
         "week_number": end.isocalendar()[1], "year": end.year,
         "updated_at": timezone.now().isoformat(),
@@ -83,7 +106,7 @@ def chart_today_for_show(show, limit):
         "chart_type": kind, "chart_show": show.name, "chart_show_id": show.pk,
         "comparison": comparison_metadata(previous, annual=(kind == "year_end")),
         "limit": limit, "top100": data,
-    })
+    }, user))
 
 
 @login_required
@@ -110,7 +133,7 @@ def chart_today(request):
         return JsonResponse({"error": "Invalid limit"}, status=400)
 
     if show.kind != "legacy":
-        return chart_today_for_show(show, limit)
+        return chart_today_for_show(show, limit, user=request.user)
 
     # Compare only the preceding official edition of this exact station
     # and permanent chart-show identity. Never mix weekly/year-end results.
@@ -183,7 +206,7 @@ def chart_today(request):
         or 0
     )
 
-    return JsonResponse(
+    return JsonResponse(limit_scoring_details(
         {
             "date": str(today),
             "week_start": str(week_start),
@@ -201,7 +224,7 @@ def chart_today(request):
             ),
             "limit": limit,
             "top100": data,  # Keep key for backward compatibility
-        }
+        }, request.user
     )
 
 
@@ -256,12 +279,12 @@ def chart_archives(request):
         .order_by("-year")
     )
 
-    return JsonResponse(
+    return JsonResponse(limit_scoring_details(
         {
             "year": int(year),
             "available_years": list(available_years),
             "charts": data,
-        }
+        }, request.user
     )
 
 
@@ -321,7 +344,7 @@ def chart_detail(request, chart_id):
             }
         )
 
-    return JsonResponse(
+    return JsonResponse(limit_scoring_details(
         {
             "chart": {
                 "id": chart.id,
@@ -342,7 +365,7 @@ def chart_detail(request, chart_id):
                 else None,
             },
             "entries": data,
-        }
+        }, request.user
     )
 
 
