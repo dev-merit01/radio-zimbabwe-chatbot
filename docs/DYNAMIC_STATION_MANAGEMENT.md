@@ -19,8 +19,8 @@ Django station enum or rebuilding the Windows desktop app.
 4. In **Presenter accounts**, create or assign presenter logins to their
    correct station and individual chart show. The central administrator
    remains unrestricted.
-5. In **Eligible songs**, have the presenter submit a verified shortlist and
-   the administrator approve and lock it before voting begins.
+5. In **Eligible songs**, the presenter selects verified songs and publishes
+   the edition directly before voting begins; no administrator approval is required.
 6. Connect the receiving WhatsApp number **in Bird's portal** and ensure the
    signed webhook points to AirVote. The phone number added in AirVote
    configures incoming routing only — it cannot buy numbers or connect
