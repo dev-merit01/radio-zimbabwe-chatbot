@@ -319,3 +319,106 @@ class FreeformCatalogueTests(TestCase):
         self.assertEqual(old.ai_status, "review")
         self.assertEqual(new.ai_status, "approved")
         self.assertEqual(CleanedSongTally.objects.get().count, 1)
+
+
+@override_settings(AI_ALL_VOTES=True, AUTO_AI_MATCH=True, ALLOW_REPEAT_SONG=True)
+class PhoneticArtistMatchingTests(TestCase):
+    """Real listener input must reach AI despite omitted stage suffixes."""
+
+    def setUp(self):
+        self.song = CleanedSong.objects.create(
+            station="radio_zimbabwe", artist="Freeman HKD", title="Gitare",
+            canonical_name="Freeman HKD - Gitare", status="verified",
+        )
+
+    def vote(self, text, listener="listener"):
+        result = VotingService("whatsapp", listener).handle_incoming_text(text)
+        self.assertIn("Submission received", result)
+        return RawVote.objects.filter(user__user_ref=listener).latest("pk")
+
+    def ai_approve(self, vote):
+        with patch(
+            "apps.voting.ai.match_vote_with_llm",
+            return_value={
+                "matched": True, "matched_song_id": self.song.pk,
+                "confidence": "high", "reasoning": "Unique artist and song spelling",
+            },
+        ) as ai:
+            process_vote(vote)
+        self.assertEqual(ai.call_count, 1)
+        return [entry["id"] for entry in ai.call_args.args[2]]
+
+    def test_phonetic_votes_all_reach_verified_catalogue_and_increment(self):
+        texts = (
+            "Friman Gitar", "Friman - Gitar", "Freeman Gitar",
+            "Gitare Friman", "Gitar Friman",
+        )
+        for index, text in enumerate(texts):
+            with self.subTest(text=text):
+                vote = self.vote(text, listener=f"phone-{index}")
+                candidates = self.ai_approve(vote)
+                self.assertIn(self.song.pk, candidates)
+                vote.refresh_from_db()
+                self.assertEqual(vote.ai_status, "approved")
+        self.assertEqual(
+            CleanedSongTally.objects.get(cleaned_song=self.song).count, len(texts)
+        )
+        self.assertFalse(CleanedSong.objects.filter(status="pending").exists())
+
+    def test_similar_competing_artist_song_remains_in_review(self):
+        CleanedSong.objects.create(
+            station="radio_zimbabwe", artist="Freeman HKD", title="Gitara",
+            canonical_name="Freeman HKD - Gitara", status="verified",
+        )
+        vote = self.vote("Friman Gitar")
+        self.ai_approve(vote)
+        vote.refresh_from_db()
+        self.assertEqual(vote.ai_status, "review")
+        self.assertFalse(CleanedSongTally.objects.exists())
+
+    def test_spurious_words_and_unrelated_artists_are_not_approved(self):
+        for index, text in enumerate(("Winky D Gitar", "Friman Gitar Banana")):
+            vote = self.vote(text, str(index))
+            candidates = self.ai_approve(vote)
+            self.assertNotIn(self.song.pk, candidates)
+            vote.refresh_from_db()
+            self.assertEqual(vote.ai_status, "review")
+        self.assertFalse(CleanedSongTally.objects.exists())
+
+    def test_reviewed_friman_gitar_vote_is_recovered_by_worker_restart(self):
+        vote = self.vote("Friman Gitar")
+        with patch(
+            "apps.voting.ai.match_vote_with_llm",
+            return_value={"matched": False, "confidence": "none",
+                          "reasoning": "Earlier missing shortlist"},
+        ):
+            process_vote(vote)
+        vote.refresh_from_db()
+        self.assertEqual(vote.ai_status, "review")
+        pending = MatchKeyMapping.objects.get(station="radio_zimbabwe").cleaned_song
+        self.assertEqual(pending.status, "pending")
+
+        call_command("retry_catalogue_votes", stdout=StringIO())
+        vote.refresh_from_db()
+        self.assertEqual(vote.ai_status, "awaiting")
+        self.assertIn(self.song.pk, self.ai_approve(vote))
+        vote.refresh_from_db()
+        pending.refresh_from_db()
+        self.assertEqual(vote.ai_status, "approved")
+        self.assertEqual(pending.status, "rejected")
+        self.assertEqual(
+            MatchKeyMapping.objects.get(station="radio_zimbabwe").cleaned_song,
+            self.song,
+        )
+        self.assertEqual(CleanedSongTally.objects.get(cleaned_song=self.song).count, 1)
+        # The same worker job cannot count the same listener message twice.
+        process_vote(vote)
+        self.assertEqual(CleanedSongTally.objects.get(cleaned_song=self.song).count, 1)
+
+    @override_settings(ALLOW_REPEAT_SONG=False)
+    def test_variants_from_same_listener_are_deduplicated(self):
+        first = self.vote("Friman Gitar", listener="same")
+        second = self.vote("Freeman HKD - Gitare", listener="same")
+        self.ai_approve(first)
+        self.ai_approve(second)
+        self.assertEqual(CleanedSongTally.objects.get(cleaned_song=self.song).count, 1)
