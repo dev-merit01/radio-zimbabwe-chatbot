@@ -275,11 +275,18 @@ def incoming(request):
     if q:
         qs = qs.filter(raw_input__icontains=q)
     p, meta = page(request, qs)
+    # The recent-submissions panel must follow the same live search as votes,
+    # otherwise unrelated messages remain visible beneath filtered results.
+    submissions = InboundEvent.objects.filter(
+        station=station, chart_show=show, provider="manual",
+    )
+    if q:
+        submissions = submissions.filter(text__icontains=q)
     return JsonResponse(
         {
             **meta,
-            "submissions": list(InboundEvent.objects.filter(station=station, chart_show=show, provider="manual")
-                .order_by("-received_at", "-id").values("id", "state", "reply", "text")[:10]),
+            "submissions": list(submissions.order_by("-received_at", "-id")
+                .values("id", "state", "reply", "text")[:10]),
             "items": [
                 {
                     "id": v.id,

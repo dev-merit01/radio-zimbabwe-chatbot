@@ -169,9 +169,12 @@ const assert = require('node:assert/strict');
   await page.locator('#modal').waitFor({state:'hidden'});
   await page.locator('.eligible-status--draft').waitFor();
   await page.locator('.eligible-search-controls input').waitFor();
+  // Presenter catalogue search resolves while typing; Enter/Search is optional.
+  await page.locator('#eligible-search-input').fill('Morning Light');
+  await page.locator('.eligible-search tbody tr').filter({hasText:'Morning Light'}).first().waitFor();
   await page.locator('#eligible-search-input').fill('no-such-record-eligible-999');
-  await page.getByRole('button',{name:'Search catalogue',exact:true}).click();
   await page.getByText('No matching verified songs',{exact:true}).first().waitFor();
+  assert.equal(await page.locator('#eligible-search-input').inputValue(), 'no-such-record-eligible-999');
   await page.getByRole('button',{name:'Propose a new song',exact:true}).click();
   await page.locator('#modal-content input[name="artist"]').fill('Test Studio Artist');
   await page.locator('#modal-content input[name="title"]').fill('Test New Broadcast Song');
@@ -179,8 +182,9 @@ const assert = require('node:assert/strict');
   await page.locator('#modal').waitFor({state:'hidden'});
   await page.getByText('Test New Broadcast Song',{exact:true}).waitFor();
   await page.getByRole('button',{name:'Link verified song',exact:true}).click();
+  await page.locator('#eligible-proposal-query').fill('Morning Light');
+  await page.locator('.eligible-proposal-option').filter({hasText:'Morning Light'}).first().waitFor();
   await page.locator('#eligible-proposal-query').fill('nonexistent-proposal-test-999');
-  await page.getByRole('button',{name:'Search verified songs',exact:true}).click();
   await page.getByText('No verified catalogue match.',{exact:false}).waitFor();
   await page.getByRole('button',{name:'Cancel',exact:true}).click();
   await page.setViewportSize({width:390,height:740});
@@ -194,6 +198,19 @@ const assert = require('node:assert/strict');
   await page.locator('#modal-content [name="chart_show_id"]').waitFor();
   await page.getByRole('button', {name:'Cancel', exact:true}).click();
   await page.locator('nav [data-page="archives"]').click();
+  // Archive year searches update when a valid 4-digit year is entered.
+  const archiveYear = page.locator('#archive-year-search');
+  await archiveYear.fill('2025');
+  await page.waitForFunction(() =>
+    document.querySelector('#archive-year-search')?.value === '2025' &&
+    document.querySelector("#page-content[aria-busy='false']") &&
+    document.querySelector('#page-content .panel')
+  );
+  await archiveYear.fill('');
+  await page.waitForFunction(() =>
+    document.querySelector("#page-content[aria-busy='false']") &&
+    document.querySelector('#archive-year-search')?.value.length === 4
+  );
   // Eligible songs keeps the selected programme, so explicitly return to the
   // historical chart when testing the original legacy publication controls.
   await page.locator('#chart-show-select').selectOption({label:'Historical station chart'});

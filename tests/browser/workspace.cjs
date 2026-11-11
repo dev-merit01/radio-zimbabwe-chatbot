@@ -119,14 +119,26 @@ const assert = require("node:assert/strict");
     .fill("Browser Test Song " + Date.now());
   await page.getByRole("button", { name: "Save changes" }).click();
   await page.locator("#modal").waitFor({ state: "hidden" });
-  await page
-    .getByRole("textbox", { name: "Search records" })
-    .fill("Browser Test Artist");
-  await page
-    .locator("#search-form")
-    .getByRole("button", { name: "Search", exact: true })
-    .click();
-  await page.locator('#page-content[aria-busy="false"]').waitFor();
+  // Main catalogue search must update without submitting the form, preserve
+  // focus and restore the full catalogue when the query is cleared.
+  const liveSearch = page.getByRole("textbox", { name: "Search records" });
+  await liveSearch.fill("no-such-record-in-the-catalogue-999");
+  await page.locator("#page-content .panel .empty").waitFor({state:"visible"});
+  assert.equal(await liveSearch.inputValue(), "no-such-record-in-the-catalogue-999");
+  await liveSearch.fill("Browser Test Artist");
+  await page.locator("tbody tr").filter({hasText:"Browser Test Artist"}).first().waitFor();
+  await page.waitForFunction(() => document.querySelector("#page-content .table-footer")?.textContent.includes("1 records"));
+  assert.equal(await liveSearch.evaluate(el=>document.activeElement===el), true);
+  await liveSearch.fill("");
+  await page.waitForFunction(() => {
+    const rows = document.querySelectorAll("#page-content tbody tr");
+    return rows.length >= 3 && document.querySelector("#page-content[aria-busy='false']");
+  });
+  await liveSearch.fill("Browser Test Artist");
+  await page.waitForFunction(() =>
+    document.querySelector("#page-content .table-footer")?.textContent.includes("1 records") &&
+    document.querySelector("#page-content[aria-busy='false']")
+  );
   const row = page.locator("tbody tr").first();
   await row.getByRole("button", { name: "Verify", exact: true }).click();
   await page.getByRole("button", { name: "Save changes" }).click();
@@ -139,6 +151,8 @@ const assert = require("node:assert/strict");
     .locator("#merge-target option")
     .filter({ hasText: "Morning Light" })
     .waitFor({ state: "attached" });
+  await page.getByLabel("Search artist or title").fill("");
+  assert.equal(await page.locator("#merge-target option").count(), 1);
   await page.getByRole("button", { name: "Cancel", exact: true }).click();
   await page.locator('nav [data-page="overview"]').click();
   await page.locator('#page-content[aria-busy="false"]').waitFor();
@@ -148,6 +162,12 @@ const assert = require("node:assert/strict");
   assert.ok(download.suggestedFilename().endsWith(".csv"));
   await page.locator('nav [data-page="incoming"]').click();
   await page.locator('#page-content[aria-busy="false"]').waitFor();
+  const voteSearch = page.getByRole("textbox", {name:"Search records"});
+  await voteSearch.fill("unmatched-vote-search-999");
+  await page.locator("#page-content .panel .empty").waitFor({state:"visible"});
+  await voteSearch.fill("Example Artist");
+  await page.locator("tbody tr").filter({hasText:"Example Artist"}).first().waitFor();
+  assert.equal(await voteSearch.inputValue(),"Example Artist");
   await page.context().setOffline(true);
   await page.locator("#offline-banner").waitFor({ state: "visible" });
   await page.context().setOffline(false);
