@@ -14,7 +14,7 @@ from apps.voting.catalogue_matching import (
     ranked_candidates, shortened_artist_suffix,
 )
 from apps.voting.models import (
-    CleanedSong, CleanedSongTally, MatchKeyMapping, RawVote, SongAlias,
+    CleanedSong, CleanedSongTally, MatchKeyMapping, RawVote,
 )
 from apps.voting.pipeline import process_vote
 from apps.voting.services import VotingService
