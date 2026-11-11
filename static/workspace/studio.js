@@ -1166,27 +1166,8 @@
       return;
     }
     if (action === "eligible-proposal-find") {
-      const q = document.getElementById("eligible-proposal-query")?.value?.trim();
-      if (!q) { toast("Enter an artist or title to search."); return; }
-      const results = document.getElementById("eligible-proposal-results");
-      if (!results) return;
-      results.innerHTML = '<p>Searching verified songs…</p>';
-      try {
-        const d = await api("workspace/songs?status=verified&q=" +
-          encodeURIComponent(q) + "&page=1");
-        const songs = d.items || [];
-        results.innerHTML = songs.length
-          ? songs.map((item) =>
-              '<div class="eligible-proposal-option"><span><strong>' +
-              esc(item.title) + '</strong><small>' + esc(item.artist) +
-              '</small></span><button class="button secondary" type="button"' +
-              ' data-action="eligible-proposal-select" data-id="' +
-              Number(item.id) + '">Choose</button></div>').join("")
-          : '<p>No verified catalogue match. Verify the song in Song catalogue first.</p>';
-        window.eligibleProposalMatches = songs;
-      } catch (error) {
-        results.textContent = error.message;
-      }
+      clearTimeout(proposalSearchTimer);
+      await findProposalMatches(++proposalSearchSequence);
       return;
     }
     if (action === "eligible-proposal-select") {
@@ -1530,24 +1511,63 @@
       render();
     }
   });
-  async function findEligibleSongs() {
+  async function findEligibleSongs(searchSequence = ++eligibleSearchSequence) {
     const input = document.getElementById("eligible-search-input");
-    eligibilityQuery = input?.value?.trim() || "";
-    if (!eligibilityQuery) {
-      toast("Enter an artist or song title to search.");
-      input?.focus();
+    if (!input || page !== "eligibility") return;
+    const text = input.value;
+    const q = text.trim();
+    eligibilityQuery = text;
+    if (!q) {
+      eligibilityResults = [];
+      eligibilitySearched = false;
+      await render();
       return;
     }
     try {
       const result = await api("workspace/songs?status=verified&q=" +
-        encodeURIComponent(eligibilityQuery) + "&page=1");
+        encodeURIComponent(q) + "&page=1");
+      // An older request must never overwrite more recently typed text.
+      if (searchSequence !== eligibleSearchSequence || !input.isConnected ||
+          page !== "eligibility" || input.value !== text) return;
       eligibilityResults = result.items || [];
       eligibilitySearched = true;
       await render();
-      const nextInput = document.getElementById("eligible-search-input");
-      nextInput?.focus({preventScroll: true});
     } catch (error) {
-      toast(error.message);
+      if (searchSequence === eligibleSearchSequence && input.isConnected)
+        toast(error.message);
+    }
+  }
+
+  async function findProposalMatches(searchSequence = ++proposalSearchSequence) {
+    const input = document.getElementById("eligible-proposal-query");
+    const results = document.getElementById("eligible-proposal-results");
+    if (!input || !results || !$("modal").open) return;
+    const text = input.value.trim();
+    window.eligibleProposalMatches = [];
+    if (!text) {
+      results.innerHTML = "<p>Start typing to find a verified song.</p>";
+      return;
+    }
+    results.innerHTML = "<p>Searching verified songs…</p>";
+    try {
+      const d = await api("workspace/songs?status=verified&q=" +
+        encodeURIComponent(text) + "&page=1");
+      if (searchSequence !== proposalSearchSequence || !input.isConnected ||
+          !$("modal").open || input.value.trim() !== text) return;
+      const songs = d.items || [];
+      window.eligibleProposalMatches = songs;
+      results.innerHTML = songs.length
+        ? songs.map((item) =>
+            '<div class="eligible-proposal-option"><span><strong>' +
+            esc(item.title) + '</strong><small>' + esc(item.artist) +
+            '</small></span><button class="button secondary" type="button"' +
+            ' data-action="eligible-proposal-select" data-id="' +
+            Number(item.id) + '">Choose</button></div>').join("")
+        : "<p>No verified catalogue match. Verify the song in Song catalogue first.</p>";
+    } catch (error) {
+      if (searchSequence === proposalSearchSequence && input.isConnected &&
+          $("modal").open)
+        results.textContent = error.message;
     }
   }
   document.addEventListener("submit", (e) => {
