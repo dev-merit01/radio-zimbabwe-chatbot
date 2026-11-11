@@ -15,6 +15,8 @@
     );
   const num = (v) => Number(v || 0).toLocaleString();
   let reader, toastTimer;
+  let liveSearchTimer, eligibleSearchTimer, proposalSearchTimer;
+  let eligibleSearchSequence = 0, proposalSearchSequence = 0;
   let chartSize = 20, chartPeriod = "weekly";
   let selectedShowId = null, showsCache = [], showPolicyEnabled = false, activeVoteMultiplier = 1;
   let lastChartShowId = null;
@@ -160,7 +162,7 @@
   const pager = (d) =>
     `<div class="table-footer"><span>${num(d.total)} records</span><div class="pagination">${d.page > 1 ? btn("Previous", "previous") : ""}<span>${d.page} / ${d.pages}</span>${d.page < d.pages ? btn("Next", "next") : ""}</div></div>`;
   const search = () =>
-    `<form id="search-form" class="toolbar"><label class="searchbox"><input name="q" aria-label="Search records" placeholder="Search…" value="${esc(query)}"></label><button class="button secondary">Search</button></form>`;
+    `<form id="search-form" class="toolbar" role="search"><label class="searchbox"><input id="live-record-search" name="q" aria-label="Search records" placeholder="Search as you type…" autocomplete="off" maxlength="100" value="${esc(query)}"></label><button class="button secondary" type="submit">Search</button></form>`;
   function status(ok) {
     online = ok;
     $("connection").classList.toggle("offline", !ok);
@@ -168,6 +170,14 @@
     $("offline-banner").classList.toggle("hidden", ok);
   }
   async function render() {
+    // Focus and caret survive the server-filtered list refreshing.
+    const active = document.activeElement;
+    const focusState = active && ["live-record-search", "eligible-search-input", "archive-year-search"].includes(active.id)
+      ? { id: active.id, start: null, end: null } : null;
+    if (focusState) {
+      try { focusState.start = active.selectionStart; focusState.end = active.selectionEnd; }
+      catch { /* Number inputs have no selection range. */ }
+    }
     const current = ++generation;
     reader?.abort();
     reader = new AbortController();
@@ -686,7 +696,7 @@
         );
         html = panel(
           "Chart archives",
-          `<form id="search-form" class="toolbar"><label>Year <input name="q" type="number" min="1900" max="9999" value="${esc(d.year)}"></label><button class="button secondary">Load</button></form>` +
+          `<form id="search-form" class="toolbar" role="search"><label>Year <input id="archive-year-search" name="q" type="number" min="1900" max="9999" aria-label="Filter archive year" value="${esc(query || d.year)}"></label><button class="button secondary" type="submit">Load</button></form>` +
             (d.charts.length
               ? table(
                   ["Edition", "Voting period", "Votes", ...(permissions.is_admin ? ["Weighted points"] : []), "Open"],
@@ -762,6 +772,16 @@
           '</select></label></div>' + html;
       }
       $("page-content").innerHTML = html;
+      if (focusState) {
+        const nextField = document.getElementById(focusState.id);
+        if (nextField) {
+          nextField.focus({ preventScroll: true });
+          if (focusState.start !== null) {
+            try { nextField.setSelectionRange(focusState.start, focusState.end); }
+            catch { /* Only text inputs expose selection. */ }
+          }
+        }
+      }
       status(true);
       if (page === "overview") drawTimeline(overview.timeline);
       $("last-updated").textContent =
@@ -846,6 +866,11 @@
     }
   }
   function navigate(next) {
+    clearTimeout(liveSearchTimer);
+    clearTimeout(eligibleSearchTimer);
+    clearTimeout(proposalSearchTimer);
+    eligibleSearchSequence++;
+    proposalSearchSequence++;
     page = next;
     pagination = 1;
     query = "";
@@ -1434,7 +1459,7 @@
     if (action === "merge") {
       modal(
         "Merge into a verified song",
-        '<p class="hint">Search for the correct song. Its votes will be combined with this entry.</p><label class="field">Search artist or title<input id="merge-search" autocomplete="off"></label><label class="field">Verified song<select required name="target_id" id="merge-target"><option value="">Search to choose a song</option></select></label>',
+        '<p class="hint">Search for the correct song. Its votes will be combined with this entry.</p><label class="field">Search artist or title<input id="merge-search" autocomplete="off" placeholder="Start typing an artist or song"></label><label class="field">Verified song<select required name="target_id" id="merge-target"><option value="">Search to choose a song</option></select></label>',
         (f) =>
           api(`workspace/songs/${id}/review`, {
             action,
@@ -1446,14 +1471,20 @@
       $("merge-search").oninput = () => {
         clearTimeout(debounce);
         const seq = ++sequence;
+        const typed = $("merge-search").value.trim();
+        if (!typed) {
+          $("merge-target").innerHTML = '<option value="">Start typing to find a song</option>';
+          return;
+        }
         $("merge-target").innerHTML = '<option value="">Searching…</option>';
         debounce = setTimeout(async () => {
           try {
             const d = await api(
               "workspace/songs?status=verified&q=" +
-                encodeURIComponent($("merge-search").value),
+                encodeURIComponent(typed),
             );
-            if (seq !== sequence || !$("modal").open) return;
+            if (seq !== sequence || !$("modal").open || !$("merge-search") ||
+                $("merge-search").value.trim() !== typed) return;
             const options = d.items.filter((r) => r.id !== Number(id));
             $("merge-target").innerHTML =
               '<option value="">' +
