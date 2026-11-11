@@ -1570,10 +1570,71 @@
         results.textContent = error.message;
     }
   }
+  // Debounce requests to protect Railway during radio show peaks. All of
+  // these inputs work automatically; the forms remain for keyboard fallback.
+  document.addEventListener("input", (event) => {
+    const input = event.target;
+    if (input.id === "live-record-search" &&
+        ["incoming", "catalogue", "review"].includes(page)) {
+      query = input.value;
+      pagination = 1;
+      generation++;
+      reader?.abort();
+      clearTimeout(liveSearchTimer);
+      liveSearchTimer = setTimeout(() => {
+        if (input.isConnected && $("live-record-search") === input)
+          render();
+      }, 260);
+      return;
+    }
+    if (input.id === "archive-year-search" && page === "archives") {
+      query = input.value;
+      generation++;
+      reader?.abort();
+      clearTimeout(liveSearchTimer);
+      // An incomplete year is not a meaningful chart filter; wait for 4 digits.
+      if (!query || /^\\d{4}$/.test(query)) {
+        liveSearchTimer = setTimeout(() => {
+          if (input.isConnected && $("archive-year-search") === input)
+            render();
+        }, 260);
+      }
+      return;
+    }
+    if (input.id === "eligible-search-input" && page === "eligibility") {
+      eligibilityQuery = input.value;
+      generation++;
+      reader?.abort();
+      const seq = ++eligibleSearchSequence;
+      clearTimeout(eligibleSearchTimer);
+      eligibleSearchTimer = setTimeout(() => {
+        if (input.isConnected && $("eligible-search-input") === input)
+          findEligibleSongs(seq);
+      }, 260);
+      return;
+    }
+    if (input.id === "eligible-proposal-query") {
+      const seq = ++proposalSearchSequence;
+      clearTimeout(proposalSearchTimer);
+      const chosen = $("eligible-proposal-song-id");
+      if (chosen) chosen.value = "";
+      const description = $("eligible-proposal-selection");
+      if (description) {
+        description.textContent = "No song selected";
+        description.classList.remove("is-selected");
+      }
+      proposalSearchTimer = setTimeout(() => {
+        if (input.isConnected && $("eligible-proposal-query") === input)
+          findProposalMatches(seq);
+      }, 260);
+    }
+  });
+
   document.addEventListener("submit", (e) => {
     if (e.target.id === "eligible-search-form") {
       e.preventDefault();
-      findEligibleSongs();
+      clearTimeout(eligibleSearchTimer);
+      findEligibleSongs(++eligibleSearchSequence);
       return;
     }
     if (e.target.id === "chart-options") {
@@ -1585,7 +1646,12 @@
     }
     if (e.target.id === "search-form") {
       e.preventDefault();
+      clearTimeout(liveSearchTimer);
       query = new FormData(e.target).get("q");
+      if (page === "archives" && query && !/^\\d{4}$/.test(query)) {
+        toast("Enter a complete four-digit year.");
+        return;
+      }
       pagination = 1;
       render();
     }
@@ -1614,6 +1680,17 @@
   $("close-modal").onclick = $("cancel-modal").onclick = () =>
     $("modal").close();
   document.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && e.target.id === "eligible-proposal-query") {
+      e.preventDefault();
+      clearTimeout(proposalSearchTimer);
+      findProposalMatches(++proposalSearchSequence);
+      return;
+    }
+    if (e.key === "Enter" && e.target.id === "merge-search") {
+      // Enter must never submit an unselected song-merging decision.
+      e.preventDefault();
+      return;
+    }
     if (e.key === "Escape" && $("sidebar").classList.contains("open")) {
       setMobileNavigation(false, true);
     }
