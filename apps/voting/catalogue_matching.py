@@ -173,8 +173,7 @@ def artist_similarity(submitted, canonical, aliases=()):
     if len(words) >= 2 and words[-1] in {"hkd", "official", "music"}:
         alternatives.add(" ".join(words[:-1]))
 
-    return max(
-        (0.93 if shortened_artist_suffix(submitted, canonical) else 0.0),
+    scores = [
         max(
             SequenceMatcher(None, submitted, alternative, autojunk=False).ratio(),
             SequenceMatcher(
@@ -183,7 +182,10 @@ def artist_similarity(submitted, canonical, aliases=()):
             ).ratio(),
         )
         for alternative in alternatives
-    )
+    ]
+    if shortened_artist_suffix(submitted, canonical):
+        scores.append(0.93)
+    return max(scores)
 
 
 def ranked_candidates(station, artist, title, limit=16, *, exhaustive=False):
