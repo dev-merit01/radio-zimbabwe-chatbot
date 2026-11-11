@@ -98,6 +98,40 @@ def distinctive_title_prefix(submitted, canonical):
     )
 
 
+def distinctive_single_word_typo(submitted, canonical):
+    """Retrieve long one-word title typos with at most two character edits.
+
+    A distinctive single-word title can survive phonetic transcriptions such
+    as "Kwadabuka" for "Kukwadabuka". Both must be long one-word titles.
+    This is strictly candidate evidence, never an approval without OpenAI,
+    a UNIQUE station catalogue match and version checks.
+    """
+    submitted, canonical = normalise(submitted), normalise(canonical)
+    if (
+        len(submitted.split()) != 1 or len(canonical.split()) != 1
+        or min(len(submitted), len(canonical)) < 9
+        or abs(len(submitted) - len(canonical)) > 2
+        or text_similarity(submitted, canonical) < 0.89
+    ):
+        return False
+
+    # Early-terminated Levenshtein with a tiny edit budget; no dependency
+    # and no unbounded work even for maliciously long messages.
+    prior = list(range(len(canonical) + 1))
+    for i, source in enumerate(submitted, 1):
+        current = [i]
+        for j, target in enumerate(canonical, 1):
+            current.append(min(
+                prior[j] + 1,
+                current[j - 1] + 1,
+                prior[j - 1] + (source != target),
+            ))
+        if min(current) > 2:
+            return False
+        prior = current
+    return prior[-1] <= 2
+
+
 def title_similarity(submitted, canonical, aliases=()):
     """Use word-boundary title prefixes for shortened radio votes.
 
@@ -244,6 +278,7 @@ def ranked_candidates(station, artist, title, limit=16, *, exhaustive=False):
                 title_only = (
                     title == t or title in aliases["title"]
                     or distinctive_title_prefix(title, t)
+                    or distinctive_single_word_typo(title, t)
                     or (
                     min(len(title), len(t)) >= 10
                     and len(title.split()) == len(t.split())
@@ -363,6 +398,8 @@ def automatic_candidate(ranked, artist, title):
         # without an artist. The candidate shortlist includes *all* songs
         # sharing that prefix and the runner-up gap is checked above.
         if t >= 0.95 and distinctive_title_prefix(title, song.title):
+            return song
+        if t >= 0.89 and distinctive_single_word_typo(title, song.title):
             return song
         return song if (
             t >= 0.88 and min(len(normalise(title)), len(normalise(song.title))) >= 10
