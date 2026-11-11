@@ -1,0 +1,454 @@
+/* AirVote appearance: Light keeps existing studio.css unchanged.
+   Dark is an opt-in set of surface and contrast tokens, not a separate layout.
+   Loaded AFTER studio.css; never changes chart, voting or form behaviour. */
+
+.theme-quick-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  flex: 0 0 auto;
+  padding: 7px 10px;
+  min-height: 36px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 12px;
+  font-weight: 650;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.theme-quick-toggle:hover { background: var(--mint); }
+.theme-icon { font-size: 19px; line-height: 1; }
+.theme-quick-toggle:focus-visible,
+.theme-option:focus-within,
+#appearance-close:focus-visible {
+  outline: 3px solid #65a3f0;
+  outline-offset: 3px;
+}
+.appearance-dialog {
+  width: min(480px, 94vw);
+  max-height: min(650px, 85dvh);
+  overflow: auto;
+  background: var(--paper);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  padding: 24px;
+}
+.appearance-dialog .modal-top { margin-bottom: 14px; }
+.appearance-intro { color: var(--muted); margin: 0 0 19px; font-size: 13px; }
+.theme-options { display: grid; gap: 11px; }
+.theme-option {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  cursor: pointer;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: var(--paper);
+}
+.theme-option:hover { background: var(--mint); }
+.theme-option:has(input:checked) {
+  border-color: var(--green);
+  box-shadow: 0 0 0 1px var(--green);
+}
+.theme-option input { accent-color: #286ebc; width: 18px; height: 18px; flex: none; }
+.theme-option-label { display: grid; gap: 4px; }
+.theme-option-label strong { font-size: 14px; color: var(--ink); }
+.theme-option-label small { font-size: 12px; line-height: 1.4; color: var(--muted); }
+.theme-swatch {
+  width: 39px; height: 31px; flex: none;
+  border-radius: 7px;
+  border: 1px solid #b7c9dd;
+  background: linear-gradient(90deg, #eef3fa 28%, #fff 28%);
+}
+.theme-swatch--dark {
+  border-color: #526b8b;
+  background: linear-gradient(90deg, #14263d 28%, #223650 28%);
+}
+.appearance-actions { display: flex; justify-content: flex-end; margin-top: 19px; }
+.auth-theme-row { display: flex; justify-content: flex-end; margin-bottom: 14px; }
+.profile-theme-row { display: flex; justify-content: flex-end; }
+
+@media (max-width: 480px) {
+  .topbar-right .theme-toggle-label { display: none; }
+  .topbar-right .theme-quick-toggle { width: 40px; min-width: 40px; padding: 6px; }
+  .topbar-right { gap: 8px; }
+  .appearance-dialog { padding: 17px; }
+}
+
+/* Dark palette scoped to AirVote pages. Switching back leaves the exact
+   existing light stylesheet in force, including all mobile breakpoints. */
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --ink: #e9f2fd;
+  --muted: #b0c2d8;
+  --green: #85b8ff;
+  --green-dark: #5e9ff5;
+  --mint: #223c59;
+  --line: #354e69;
+  --paper: #1a2b40;
+  --bg: #0e1a2b;
+  --orange: #f4bd72;
+  --shadow: 0 7px 23px #050c18a3;
+  color: var(--ink);
+}
+html[data-theme="dark"] body {
+  background: var(--bg);
+  color: var(--ink);
+}
+html[data-theme="dark"] a { color: var(--green); }
+html[data-theme="dark"] .sidebar {
+  background: #142337;
+  border-right-color: var(--line);
+}
+html[data-theme="dark"] .topbar {
+  background: #16273c;
+  border-bottom-color: var(--line);
+}
+html[data-theme="dark"] .brand,
+html[data-theme="dark"] .brand strong,
+html[data-theme="dark"] .profile strong,
+html[data-theme="dark"] .breadcrumb strong,
+html[data-theme="dark"] .modal-top h2,
+html[data-theme="dark"] h1,
+html[data-theme="dark"] h2,
+html[data-theme="dark"] h3 { color: var(--ink); }
+html[data-theme="dark"] .brand small,
+html[data-theme="dark"] .breadcrumb,
+html[data-theme="dark"] .topbar-right,
+html[data-theme="dark"] .nav-label,
+html[data-theme="dark"] .workspace-footer,
+html[data-theme="dark"] .workspace-footer b,
+html[data-theme="dark"] .eyebrow,
+html[data-theme="dark"] .panel-head p,
+html[data-theme="dark"] .metric-label,
+html[data-theme="dark"] .metric-note,
+html[data-theme="dark"] .station span:not(.station-logo):not(.tiny-dot),
+html[data-theme="dark"] .profile div span,
+html[data-theme="dark"] .hint { color: var(--muted); }
+html[data-theme="dark"] .nav-item { color: #cbdaeb; }
+html[data-theme="dark"] .nav-item:hover,
+html[data-theme="dark"] .nav-item.active {
+  color: #cce5ff;
+  background: #24415f;
+}
+html[data-theme="dark"] .nav-count {
+  color: #d9eafa;
+  background: #385474;
+}
+html[data-theme="dark"] .station,
+html[data-theme="dark"] .panel,
+html[data-theme="dark"] .metric:not(:first-child),
+html[data-theme="dark"] .admin-metric,
+html[data-theme="dark"] .show-card,
+html[data-theme="dark"] .station-tile,
+html[data-theme="dark"] .show-form-section,
+html[data-theme="dark"] .appearance-dialog {
+  background: var(--paper);
+  border-color: var(--line);
+  color: var(--ink);
+}
+html[data-theme="dark"] .station-logo { background: #fff; border-color: #52657b; }
+html[data-theme="dark"] .station-logo img { background: #fff; }
+html[data-theme="dark"] .metric:first-child { background: #2058a0; border-color: #3473c5; color: #fff; }
+html[data-theme="dark"] .metric:first-child .metric-label,
+html[data-theme="dark"] .metric:first-child .metric-note { color: #e0edff; }
+html[data-theme="dark"] .metric-icon {
+  color: #a8d1ff;
+  background: #284361;
+}
+html[data-theme="dark"] .connection { color: #83d4ab; }
+html[data-theme="dark"] .connection.offline { color: #f0b27d; }
+html[data-theme="dark"] .avatar { background: #2b4767; color: #d8eaff; }
+html[data-theme="dark"] .signout,
+html[data-theme="dark"] .icon-button { color: var(--muted); }
+html[data-theme="dark"] .cloud-note,
+html[data-theme="dark"] .sidebar-bottom,
+html[data-theme="dark"] .panel-head,
+html[data-theme="dark"] .toolbar,
+html[data-theme="dark"] .settings-row,
+html[data-theme="dark"] .audit-item { border-color: var(--line); }
+html[data-theme="dark"] .button.secondary,
+html[data-theme="dark"] .button:not(.primary):not(.ghost):not(.danger),
+html[data-theme="dark"] .theme-quick-toggle,
+html[data-theme="dark"] .sidebar-close {
+  color: #d7e8fb;
+  border-color: #48617d;
+  background: #273d57;
+  box-shadow: none;
+}
+html[data-theme="dark"] .button.secondary:hover,
+html[data-theme="dark"] .button:not(.primary):not(.ghost):not(.danger):hover,
+html[data-theme="dark"] .theme-quick-toggle:hover,
+html[data-theme="dark"] .sidebar-close:hover { background: #325174; }
+html[data-theme="dark"] .button.primary,
+html[data-theme="dark"] .show-directory-head [data-action="show-new"],
+html[data-theme="dark"] .eligible-page .button.primary {
+  background: #2468bd;
+  color: #fff;
+  border-color: #3b81d1;
+}
+html[data-theme="dark"] .button.primary:hover { background: #347bd1; }
+html[data-theme="dark"] .button.ghost { color: #9bc8ff; }
+html[data-theme="dark"] .button.danger { background: #55313d; color: #ffd4cf; }
+html[data-theme="dark"] .nav-item:focus-visible { outline-color: #89bfff; }
+html[data-theme="dark"] select,
+html[data-theme="dark"] input,
+html[data-theme="dark"] textarea,
+html[data-theme="dark"] .field input,
+html[data-theme="dark"] .field select,
+html[data-theme="dark"] .show-form .field input,
+html[data-theme="dark"] .show-form .field select,
+html[data-theme="dark"] .eligible-search-controls input {
+  color: var(--ink);
+  border-color: #4b6480;
+  background: #142338;
+}
+html[data-theme="dark"] input::placeholder,
+html[data-theme="dark"] textarea::placeholder { color: #9db2ca; opacity: 1; }
+html[data-theme="dark"] select option { color: var(--ink); background: #142338; }
+html[data-theme="dark"] .searchbox,
+html[data-theme="dark"] .searchbox input { color: var(--ink); }
+html[data-theme="dark"] .searchbox:focus-within { outline-color: #89bfff; }
+html[data-theme="dark"] .segmented,
+html[data-theme="dark"] .table-footer,
+html[data-theme="dark"] th {
+  background: #20334a;
+  color: #c0d2e7;
+  border-color: var(--line);
+}
+html[data-theme="dark"] .segmented button { color: #adc2da; }
+html[data-theme="dark"] .segmented button.active { color: #d6eaff; background: #34577f; }
+html[data-theme="dark"] td,
+html[data-theme="dark"] .table-wrap,
+html[data-theme="dark"] .table-footer,
+html[data-theme="dark"] .show-queue-table { border-color: var(--line); }
+html[data-theme="dark"] tbody tr:hover { background: #263d55; }
+html[data-theme="dark"] .song-cell small,
+html[data-theme="dark"] .chart-bar small,
+html[data-theme="dark"] .chart-previous-rank,
+html[data-theme="dark"] .table-footer,
+html[data-theme="dark"] .audit-item time,
+html[data-theme="dark"] .archive-card p { color: #a8bdd3; }
+html[data-theme="dark"] .vote-count { color: #b5e9c2; }
+html[data-theme="dark"] .rank,
+html[data-theme="dark"] .rank.top { color: #f4dba0; background: #443b30; }
+html[data-theme="dark"] .cover,
+html[data-theme="dark"] .metric-icon { background: #2b4865; color: #b6d2ec; }
+html[data-theme="dark"] .trend { color: #8de0ad; }
+html[data-theme="dark"] .trend.down { color: #f0ba82; }
+html[data-theme="dark"] .trend.new { color: #b5ddff; background: #2b4567; }
+html[data-theme="dark"] .pill,
+html[data-theme="dark"] .show-status--live,
+html[data-theme="dark"] .eligible-status--approved {
+  background: #244c3d;
+  color: #acf5c1;
+}
+html[data-theme="dark"] .pill.pending,
+html[data-theme="dark"] .pill.orange,
+html[data-theme="dark"] .show-status--scheduled,
+html[data-theme="dark"] .show-status--disabled {
+  background: #4b3828;
+  color: #f6d19a;
+}
+html[data-theme="dark"] .pill.rejected { background: #513342; color: #ffc2bd; }
+html[data-theme="dark"] .show-status--archived,
+html[data-theme="dark"] .show-status--historical {
+  background: #2b4565;
+  color: #c5d8f0;
+}
+html[data-theme="dark"] .activity-card p,
+html[data-theme="dark"] .activity-total span,
+html[data-theme="dark"] .review-callout p,
+html[data-theme="dark"] .mini-status,
+html[data-theme="dark"] .empty,
+html[data-theme="dark"] .empty p { color: var(--muted); }
+html[data-theme="dark"] .bar { background: #3e6388; }
+html[data-theme="dark"] .bar.current { background: #76b5ff; }
+html[data-theme="dark"] .review-callout,
+html[data-theme="dark"] .notice,
+html[data-theme="dark"] .eligible-setup-notice {
+  color: #ffe6b9;
+  border-color: #80613b;
+  background: #392f28;
+}
+html[data-theme="dark"] .review-callout .callout-icon { background: #4c422f; color: #ffdb93; }
+html[data-theme="dark"] .review-callout button { color: #dceaff; background: #263c57; border-color: var(--line); }
+html[data-theme="dark"] .empty h3 { color: #e0efff; }
+html[data-theme="dark"] .toast { background: #244660; color: #fff; }
+html[data-theme="dark"] .toast.error { background: #783b42; }
+html[data-theme="dark"] dialog { background: #1a2b40; color: var(--ink); border-color: #48637f; }
+html[data-theme="dark"] dialog::backdrop { background: #030b16a9; }
+html[data-theme="dark"] .form-error,
+html[data-theme="dark"] .errorlist { color: #ffc0b5; }
+html[data-theme="dark"] .settings-row strong,
+html[data-theme="dark"] .settings-section strong,
+html[data-theme="dark"] .admin-metric > strong { color: var(--ink); }
+html[data-theme="dark"] .settings-row small,
+html[data-theme="dark"] .admin-metric > span,
+html[data-theme="dark"] .admin-metric small,
+html[data-theme="dark"] .audit-item p { color: var(--muted); }
+
+/* Administration and chart-show management. */
+html[data-theme="dark"] .show-directory-head,
+html[data-theme="dark"] .show-card,
+html[data-theme="dark"] .show-settings-panel,
+html[data-theme="dark"] .show-form-section,
+html[data-theme="dark"] .station-tile,
+html[data-theme="dark"] .station-directory,
+html[data-theme="dark"] .admin-metric { border-color: var(--line); }
+html[data-theme="dark"] .show-directory-head h2,
+html[data-theme="dark"] .show-card-title,
+html[data-theme="dark"] .show-settings-head h2,
+html[data-theme="dark"] .station-tile-stats strong,
+html[data-theme="dark"] .admin-action-list button,
+html[data-theme="dark"] .show-form-section legend { color: var(--ink); }
+html[data-theme="dark"] .show-directory-head p,
+html[data-theme="dark"] .show-card-description,
+html[data-theme="dark"] .show-type,
+html[data-theme="dark"] .show-settings-panel > p,
+html[data-theme="dark"] .show-code-label,
+html[data-theme="dark"] .show-settings-panel .hint,
+html[data-theme="dark"] .station-tile small,
+html[data-theme="dark"] .station-tile-stats,
+html[data-theme="dark"] .admin-action-list small { color: var(--muted); }
+html[data-theme="dark"] .show-code-block,
+html[data-theme="dark"] .show-queue-empty,
+html[data-theme="dark"] .show-form-help,
+html[data-theme="dark"] .show-multiplier-current,
+html[data-theme="dark"] .station-tile.selected,
+html[data-theme="dark"] .station-monogram,
+html[data-theme="dark"] .show-card.is-archived,
+html[data-theme="dark"] .admin-action-list button:hover {
+  background: #243a54;
+  border-color: #405978;
+}
+html[data-theme="dark"] .show-code,
+html[data-theme="dark"] .show-code.legacy-code,
+html[data-theme="dark"] .show-queue-count,
+html[data-theme="dark"] .station-monogram { color: #acd0ff; }
+html[data-theme="dark"] .show-queue-count { background: #2a4566; }
+html[data-theme="dark"] .show-card-actions .button:not(.primary) {
+  color: #e0eeff;
+  background: #283d55;
+  border-color: #49617e;
+}
+html[data-theme="dark"] .show-card-actions [data-action="show-select"] {
+  background: #2468bd;
+  color: white;
+}
+html[data-theme="dark"] .show-card-actions [data-action="show-archive"] { color: #ffc1b6; }
+html[data-theme="dark"] .show-summary-item { background: #132b46; }
+html[data-theme="dark"] .show-form-caption,
+html[data-theme="dark"] .show-broadcast,
+html[data-theme="dark"] .show-presenter { color: #c0d2e6; }
+html[data-theme="dark"] .channel { border-color: #476381; color: #c5d8ec; }
+
+/* Presenter eligibility workflow: selection cards, panels, legends, tables and
+   nested insets must use the same dark surfaces as the rest of the studio. */
+html[data-theme="dark"] .eligible-page .panel,
+html[data-theme="dark"] .eligible-intro,
+html[data-theme="dark"] .eligible-start,
+html[data-theme="dark"] .eligible-search,
+html[data-theme="dark"] .eligible-list-stats,
+html[data-theme="dark"] .eligible-proposal-matches,
+html[data-theme="dark"] .eligible-candidate-empty,
+html[data-theme="dark"] .eligible-search-footer,
+html[data-theme="dark"] .eligible-edition-option,
+html[data-theme="dark"] .eligible-proposal-option,
+html[data-theme="dark"] .eligible-proposal-selected,
+html[data-theme="dark"] .eligible-submit-bar,
+html[data-theme="dark"] .eligible-search .table-wrap,
+html[data-theme="dark"] .eligible-search-controls {
+  background: #20334b;
+  color: var(--ink);
+  border-color: #3c5572;
+}
+html[data-theme="dark"] .eligible-edition-option.is-selected,
+html[data-theme="dark"] .eligible-edition-option:hover,
+html[data-theme="dark"] .eligible-proposal-selected.is-selected {
+  background: #275079;
+  border-color: #80b7f4;
+}
+html[data-theme="dark"] .eligible-assigned,
+html[data-theme="dark"] .eligible-review-note,
+html[data-theme="dark"] .eligible-previous-note,
+html[data-theme="dark"] .eligible-status--draft,
+html[data-theme="dark"] .eligible-status--submitted,
+html[data-theme="dark"] .eligible-start-symbol,
+html[data-theme="dark"] .eligible-locked {
+  background: #294563;
+  color: #cfe5ff;
+  border-color: #436485;
+}
+html[data-theme="dark"] .eligible-setup-notice { background: #4d3b28; border-color: #80613b; color: #ffe0aa; }
+html[data-theme="dark"] .eligible-status--returned { background: #58402f; color: #ffd6a6; }
+html[data-theme="dark"] .eligible-status--approved,
+html[data-theme="dark"] .eligible-added { background: #254c3d; color: #b5f8c8; }
+html[data-theme="dark"] .eligible-page .table-wrap th { color: #bbd1ea; background: #223a54; }
+html[data-theme="dark"] .eligible-page .table-wrap td,
+html[data-theme="dark"] .eligible-page .table-wrap td strong,
+html[data-theme="dark"] .eligible-page .table-wrap th,
+html[data-theme="dark"] .eligible-overview strong,
+html[data-theme="dark"] .eligible-details strong,
+html[data-theme="dark"] .eligible-statusline strong,
+html[data-theme="dark"] .eligible-suggestions h3,
+html[data-theme="dark"] .eligible-editions-title strong,
+html[data-theme="dark"] .eligible-start h3,
+html[data-theme="dark"] .eligible-search-heading h3,
+html[data-theme="dark"] .eligible-results-head,
+html[data-theme="dark"] .eligible-proposal-option strong,
+html[data-theme="dark"] .eligible-list-stats strong,
+html[data-theme="dark"] .eligible-submit-bar strong { color: #e2efff; }
+html[data-theme="dark"] .eligible-page p,
+html[data-theme="dark"] .eligible-page small,
+html[data-theme="dark"] .eligible-page .hint,
+html[data-theme="dark"] .eligible-start p,
+html[data-theme="dark"] .eligible-edition-option small,
+html[data-theme="dark"] .eligible-search-heading p,
+html[data-theme="dark"] .eligible-proposal-option small,
+html[data-theme="dark"] .eligible-proposal-matches > p,
+html[data-theme="dark"] .eligible-proposal-selected,
+html[data-theme="dark"] .eligible-search-tip,
+html[data-theme="dark"] .eligible-no-results,
+html[data-theme="dark"] .eligible-note-inset,
+html[data-theme="dark"] .eligible-search-footer,
+html[data-theme="dark"] .eligible-list-stats > p,
+html[data-theme="dark"] .eligible-previous-note,
+html[data-theme="dark"] .eligible-statusline,
+html[data-theme="dark"] .eligible-editions-title span { color: #b9cce1; }
+html[data-theme="dark"] .eligible-search-controls input { background: #132a42; color: #f2f7ff; }
+html[data-theme="dark"] .eligible-search-controls button,
+html[data-theme="dark"] .eligible-submit-bar .button.primary { background: #2468bd; color: #fff; }
+html[data-theme="dark"] .eligible-intro,
+html[data-theme="dark"] .eligible-editions-title,
+html[data-theme="dark"] .eligible-search-footer,
+html[data-theme="dark"] .eligible-suggestions { border-color: var(--line); }
+
+/* Sign-in and profile inherit the same saved choice without altering the
+   branded welcome artwork. */
+html[data-theme="dark"] .studio-auth,
+html[data-theme="dark"] .welcome-entry,
+html[data-theme="dark"] .profile-page { background: var(--bg); color: var(--ink); }
+html[data-theme="dark"] .studio-auth .entry-heading h1 { color: var(--ink); }
+html[data-theme="dark"] .studio-kicker { color: #99c5ed; }
+html[data-theme="dark"] .entry-tabs,
+html[data-theme="dark"] .entry-assistance { border-color: var(--line); }
+html[data-theme="dark"] .entry-tabs a { color: var(--muted); }
+html[data-theme="dark"] .entry-tabs a.selected { color: #a6d1ff; border-bottom-color: #6aa8f6; }
+html[data-theme="dark"] .entry-heading > p,
+html[data-theme="dark"] .entry-assistance p,
+html[data-theme="dark"] .entry-footer,
+html[data-theme="dark"] .entry-password-note { color: var(--muted); }
+html[data-theme="dark"] .entry-form label { color: #d7e8fb; }
+html[data-theme="dark"] .entry-form input,
+html[data-theme="dark"] .entry-form select { color: var(--ink); background: #16273b; border-color: #4b6583; }
+html[data-theme="dark"] .profile-page .panel { background: var(--paper); border-color: var(--line); }
+
+/* Motion and focus visibility remain accessible on mobile and desktop. */
+@media (prefers-reduced-motion: reduce) {
+  html[data-theme="dark"] .theme-quick-toggle { transition: none; }
+}
