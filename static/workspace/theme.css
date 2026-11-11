@@ -428,6 +428,33 @@ html[data-theme="dark"] .eligible-editions-title,
 html[data-theme="dark"] .eligible-search-footer,
 html[data-theme="dark"] .eligible-suggestions { border-color: var(--line); }
 
+/* Chart movement stays legible in both modes: text and direction arrows
+   remain the primary signal, not colour alone. */
+html[data-theme="dark"] .chart-rank { color: #d9eaff; }
+html[data-theme="dark"] .chart-previous-rank,
+html[data-theme="dark"] .chart-comparison-caption { color: #bed1e6; }
+html[data-theme="dark"] .chart-movement-summary { border-color: var(--line); }
+html[data-theme="dark"] .chart-movement-totals span {
+  color: #cbddf1; background: #29415d; border-color: #425d7a;
+}
+html[data-theme="dark"] .chart-movement-totals strong { color: #f0f7ff; }
+html[data-theme="dark"] .chart-movement--up {
+  color: #a5f1c0; background: #264f3e; border-color: #3a7a59;
+}
+html[data-theme="dark"] .chart-movement--down {
+  color: #ffc0bf; background: #512e3b; border-color: #835163;
+}
+html[data-theme="dark"] .chart-movement--same,
+html[data-theme="dark"] .chart-movement--no_previous {
+  color: #d0e0ef; background: #2e415a; border-color: #4b627c;
+}
+html[data-theme="dark"] .chart-movement--new {
+  color: #b2daff; background: #27476c; border-color: #466f9b;
+}
+html[data-theme="dark"] .chart-movement--re_entry {
+  color: #e3c8ff; background: #423555; border-color: #66527e;
+}
+
 /* Sign-in and profile inherit the same saved choice without altering the
    branded welcome artwork. */
 html[data-theme="dark"] .studio-auth,
