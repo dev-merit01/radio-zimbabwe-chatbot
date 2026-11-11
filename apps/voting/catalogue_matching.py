@@ -121,6 +121,28 @@ def title_similarity(submitted, canonical, aliases=()):
     return score
 
 
+def shortened_artist_suffix(submitted, canonical):
+    """Return a conservative similarity hint for clipped lead stage names.
+
+    Radio listeners often omit the first syllables of a performer, e.g.
+    "Ngende" for "Hulengende". A *single*, distinctive final substring
+    is only evidence for shortlist retrieval, never proof on its own.
+    The title and competing verified songs must still pass independently.
+    """
+    submitted = normalise(submitted)
+    lead, _featured = artist_credits(canonical)
+    # Do not trim multiword names, short generic syllables or the beginning
+    # of a long artist string; separate leading-word aliases already exist.
+    return (
+        len(submitted.split()) == 1
+        and len(lead.split()) == 1
+        and len(submitted) >= 5
+        and len(lead) - len(submitted) >= 2
+        and len(submitted) / max(len(lead), 1) >= 0.55
+        and lead.endswith(submitted)
+    )
+
+
 def artist_similarity(submitted, canonical, aliases=()):
     """Compare artist spellings with optional stage prefixes/suffixes.
 
@@ -152,6 +174,7 @@ def artist_similarity(submitted, canonical, aliases=()):
         alternatives.add(" ".join(words[:-1]))
 
     return max(
+        (0.93 if shortened_artist_suffix(submitted, canonical) else 0.0),
         max(
             SequenceMatcher(None, submitted, alternative, autojunk=False).ratio(),
             SequenceMatcher(
