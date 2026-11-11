@@ -1593,7 +1593,7 @@
       reader?.abort();
       clearTimeout(liveSearchTimer);
       // An incomplete year is not a meaningful chart filter; wait for 4 digits.
-      if (!query || /^\\d{4}$/.test(query)) {
+      if (!query || /^\d{4}$/.test(query)) {
         liveSearchTimer = setTimeout(() => {
           if (input.isConnected && $("archive-year-search") === input)
             render();
@@ -1648,7 +1648,7 @@
       e.preventDefault();
       clearTimeout(liveSearchTimer);
       query = new FormData(e.target).get("q");
-      if (page === "archives" && query && !/^\\d{4}$/.test(query)) {
+      if (page === "archives" && query && !/^\d{4}$/.test(query)) {
         toast("Enter a complete four-digit year.");
         return;
       }
