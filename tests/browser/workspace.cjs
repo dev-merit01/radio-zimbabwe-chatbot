@@ -16,6 +16,10 @@ const assert = require("node:assert/strict");
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto(process.env.TEST_BASE_URL || "http://127.0.0.1:8765");
+  assert.equal(await page.locator("html").getAttribute("data-theme"), "light");
+  await page.getByRole("button", { name: "Switch to dark mode" }).click();
+  assert.equal(await page.locator("html").getAttribute("data-theme"), "dark");
+  await page.getByRole("button", { name: "Switch to light mode" }).click();
   await page.getByLabel("Username").fill("ui-operator");
   await page
     .getByLabel("Password", { exact: true })
@@ -43,6 +47,15 @@ const assert = require("node:assert/strict");
     "dark",
   );
   await page.screenshot({ path: "/tmp/airvote-dark-overview.png", fullPage: true });
+  // The same appearance preference follows staff onto the profile screen.
+  await page.goto(new URL("/accounts/profile/", page.url()).href);
+  assert.equal(await page.locator("html").getAttribute("data-theme"), "dark");
+  assert.equal(
+    await page.locator(".profile-page .panel").first().evaluate(el => getComputedStyle(el).backgroundColor),
+    "rgb(26, 43, 64)",
+  );
+  await page.getByRole("link", { name: "Back to workspace" }).click();
+  await page.locator("#connection").getByText("Connected", { exact: true }).waitFor();
   for (const section of ["review", "catalogue", "shows", "eligibility"]) {
     await page.locator('nav [data-page="' + section + '"]').click();
     await page.locator('#page-content[aria-busy="false"]').waitFor();
