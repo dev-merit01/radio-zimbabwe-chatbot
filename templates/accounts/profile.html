@@ -1,6 +1,6 @@
 {% load static %}<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Your profile · AirVote</title><link rel="stylesheet" href="{% static 'workspace/studio.css' %}"></head>
-<body><main class="profile-page"><a class="button secondary" href="/">Back to workspace</a><h1>Your profile</h1>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Your profile · AirVote</title><script src="{% static 'workspace/theme.js' %}?v=theme-20261111"></script><link rel="stylesheet" href="{% static 'workspace/studio.css' %}"><link rel="stylesheet" href="{% static 'workspace/theme.css' %}?v=theme-20261111"></head>
+<body><main class="profile-page"><div class="profile-theme-row"><button class="theme-quick-toggle" id="theme-quick-toggle" type="button" aria-label="Switch to dark mode" aria-pressed="false"><span class="theme-icon" aria-hidden="true">☾</span><span class="theme-toggle-label">Dark</span></button></div><a class="button secondary" href="/">Back to workspace</a><h1>Your profile</h1>
 {% if messages %}<div class="notice" role="status">{% for message in messages %}<p>{{ message }}</p>{% endfor %}</div>{% endif %}
 <section class="panel settings-section"><h2>Account</h2><p>Username: <strong>{{ request.user.username }}</strong></p><p>Role: {% if request.user.is_superuser %}Administrator{% else %}Station team{% endif %}</p><p>Assigned station: {{ assigned_station }}</p><p>Current station: {{ current_station }}</p><p class="hint">Contact your administrator to change station access.</p>
 <form method="post">{% csrf_token %}<input type="hidden" name="action" value="profile">{{ profile_form.non_field_errors }}
