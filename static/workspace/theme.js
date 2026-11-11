@@ -58,9 +58,11 @@
       syncControls();
       if (dialog && !dialog.open) dialog.showModal();
     });
-    document.getElementById("appearance-close")?.addEventListener("click", () => {
-      dialog?.close();
-    });
+    for (const id of ["appearance-close", "appearance-close-alt"]) {
+      document.getElementById(id)?.addEventListener("click", () => {
+        dialog?.close();
+      });
+    }
     document.querySelectorAll('input[name="appearance-theme"]').forEach((input) => {
       input.addEventListener("change", () => {
         if (input.checked) applyTheme(input.value);
