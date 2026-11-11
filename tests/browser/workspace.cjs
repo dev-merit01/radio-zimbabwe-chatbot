@@ -16,6 +16,10 @@ const assert = require("node:assert/strict");
   const errors = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto(process.env.TEST_BASE_URL || "http://127.0.0.1:8765");
+  assert.equal(await page.locator("html").getAttribute("data-theme"), "light");
+  await page.getByRole("button", { name: "Switch to dark mode" }).click();
+  assert.equal(await page.locator("html").getAttribute("data-theme"), "dark");
+  await page.getByRole("button", { name: "Switch to light mode" }).click();
   await page.getByLabel("Username").fill("ui-operator");
   await page
     .getByLabel("Password", { exact: true })
@@ -26,6 +30,59 @@ const assert = require("node:assert/strict");
     .getByText("Connected", { exact: true })
     .waitFor();
   assert.equal(await page.locator(".metric").count(), 4);
+  // Both themes must work without changing navigation or voting state.
+  assert.equal(await page.locator("html").getAttribute("data-theme"), "light");
+  assert.equal(
+    await page.locator(".panel").first().evaluate(el => getComputedStyle(el).backgroundColor),
+    "rgb(255, 255, 255)",
+  );
+  await page.getByRole("button", { name: "Switch to dark mode" }).click();
+  assert.equal(await page.locator("html").getAttribute("data-theme"), "dark");
+  assert.equal(
+    await page.locator(".panel").first().evaluate(el => getComputedStyle(el).backgroundColor),
+    "rgb(26, 43, 64)",
+  );
+  assert.equal(
+    await page.evaluate(() => localStorage.getItem("airvote.appearance.theme")),
+    "dark",
+  );
+  await page.screenshot({ path: "/tmp/airvote-dark-overview.png", fullPage: true });
+  // The same appearance preference follows staff onto the profile screen.
+  await page.goto(new URL("/accounts/profile/", page.url()).href);
+  assert.equal(await page.locator("html").getAttribute("data-theme"), "dark");
+  assert.equal(
+    await page.locator(".profile-page .panel").first().evaluate(el => getComputedStyle(el).backgroundColor),
+    "rgb(26, 43, 64)",
+  );
+  await page.getByRole("link", { name: "Back to workspace" }).click();
+  await page.locator("#connection").getByText("Connected", { exact: true }).waitFor();
+  for (const section of ["review", "catalogue", "shows", "eligibility"]) {
+    await page.locator('nav [data-page="' + section + '"]').click();
+    await page.locator('#page-content[aria-busy="false"]').waitFor();
+    assert.equal(await page.locator("html").getAttribute("data-theme"), "dark");
+    const surface = await page.locator(".panel").first()
+      .evaluate(el => getComputedStyle(el).backgroundColor);
+    assert.ok(
+      ["rgb(26, 43, 64)", "rgb(32, 51, 75)"].includes(surface),
+      "Dark panel in " + section + ": " + surface,
+    );
+  }
+  await page.reload();
+  await page.locator("#connection").getByText("Connected", { exact: true }).waitFor();
+  assert.equal(await page.locator("html").getAttribute("data-theme"), "dark");
+  await page.locator("#appearance-open").click();
+  await page.locator("#appearance-dialog").waitFor({ state: "visible" });
+  await page.locator('#appearance-dialog input[value="light"]').check();
+  assert.equal(await page.locator("html").getAttribute("data-theme"), "light");
+  await page.getByRole("button", { name: "Done" }).click();
+  await page.locator("#appearance-dialog").waitFor({ state: "hidden" });
+  await page.reload();
+  await page.locator("#connection").getByText("Connected", { exact: true }).waitFor();
+  assert.equal(await page.locator("html").getAttribute("data-theme"), "light");
+  assert.equal(
+    await page.locator(".panel").first().evaluate(el => getComputedStyle(el).backgroundColor),
+    "rgb(255, 255, 255)",
+  );
   await page.screenshot({ path: "/tmp/rz-overview.png", fullPage: true });
   for (const section of [
     "incoming",
@@ -136,6 +193,20 @@ const assert = require("node:assert/strict");
     false,
   );
   await page.screenshot({ path: "/tmp/rz-mobile.png", fullPage: true });
+  // Dark remains usable in a compact Android WebView. Appearance is reachable
+  // from the drawer and switching it closes the drawer before opening dialog.
+  await page.getByRole("button", { name: "Switch to dark mode" }).click();
+  assert.equal(await page.locator("html").getAttribute("data-theme"), "dark");
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+  await page.getByRole("button", { name: "Toggle navigation" }).click();
+  await page.locator("#appearance-open").click();
+  await page.locator("#appearance-dialog").waitFor({ state: "visible" });
+  assert.equal(await page.locator("#sidebar-backdrop").isVisible(), false);
+  assert.equal(await page.locator("#appearance-dialog input[value='dark']").isChecked(), true);
+  await page.locator("#appearance-close").click();
+  await page.screenshot({ path: "/tmp/airvote-dark-mobile.png", fullPage: true });
+  await page.getByRole("button", { name: "Switch to light mode" }).click();
+  assert.equal(await page.locator("html").getAttribute("data-theme"), "light");
   assert.deepEqual(errors, []);
   console.log(
     "Browser checks passed: login, seven sections, add/verify/merge search, CSV, offline/reconnect and mobile layout.",
