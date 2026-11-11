@@ -98,6 +98,40 @@ def distinctive_title_prefix(submitted, canonical):
     )
 
 
+def distinctive_single_word_typo(submitted, canonical):
+    """Retrieve long one-word title typos with at most two character edits.
+
+    A distinctive single-word title can survive phonetic transcriptions such
+    as "Kwadabuka" for "Kukwadabuka". Both must be long one-word titles.
+    This is strictly candidate evidence, never an approval without OpenAI,
+    a UNIQUE station catalogue match and version checks.
+    """
+    submitted, canonical = normalise(submitted), normalise(canonical)
+    if (
+        len(submitted.split()) != 1 or len(canonical.split()) != 1
+        or min(len(submitted), len(canonical)) < 9
+        or abs(len(submitted) - len(canonical)) > 2
+        or text_similarity(submitted, canonical) < 0.89
+    ):
+        return False
+
+    # Early-terminated Levenshtein with a tiny edit budget; no dependency
+    # and no unbounded work even for maliciously long messages.
+    prior = list(range(len(canonical) + 1))
+    for i, source in enumerate(submitted, 1):
+        current = [i]
+        for j, target in enumerate(canonical, 1):
+            current.append(min(
+                prior[j] + 1,
+                current[j - 1] + 1,
+                prior[j - 1] + (source != target),
+            ))
+        if min(current) > 2:
+            return False
+        prior = current
+    return prior[-1] <= 2
+
+
 def title_similarity(submitted, canonical, aliases=()):
     """Use word-boundary title prefixes for shortened radio votes.
 
@@ -119,6 +153,28 @@ def title_similarity(submitted, canonical, aliases=()):
     ):
         return max(score, 0.95)
     return score
+
+
+def shortened_artist_suffix(submitted, canonical):
+    """Return a conservative similarity hint for clipped lead stage names.
+
+    Radio listeners often omit the first syllables of a performer, e.g.
+    "Ngende" for "Hulengende". A *single*, distinctive final substring
+    is only evidence for shortlist retrieval, never proof on its own.
+    The title and competing verified songs must still pass independently.
+    """
+    submitted = normalise(submitted)
+    lead, _featured = artist_credits(canonical)
+    # Do not trim multiword names, short generic syllables or the beginning
+    # of a long artist string; separate leading-word aliases already exist.
+    return (
+        len(submitted.split()) == 1
+        and len(lead.split()) == 1
+        and len(submitted) >= 5
+        and len(lead) - len(submitted) >= 2
+        and len(submitted) / max(len(lead), 1) >= 0.55
+        and lead.endswith(submitted)
+    )
 
 
 def artist_similarity(submitted, canonical, aliases=()):
@@ -151,7 +207,7 @@ def artist_similarity(submitted, canonical, aliases=()):
     if len(words) >= 2 and words[-1] in {"hkd", "official", "music"}:
         alternatives.add(" ".join(words[:-1]))
 
-    return max(
+    scores = [
         max(
             SequenceMatcher(None, submitted, alternative, autojunk=False).ratio(),
             SequenceMatcher(
@@ -160,7 +216,10 @@ def artist_similarity(submitted, canonical, aliases=()):
             ).ratio(),
         )
         for alternative in alternatives
-    )
+    ]
+    if shortened_artist_suffix(submitted, canonical):
+        scores.append(0.93)
+    return max(scores)
 
 
 def ranked_candidates(station, artist, title, limit=16, *, exhaustive=False):
@@ -219,6 +278,7 @@ def ranked_candidates(station, artist, title, limit=16, *, exhaustive=False):
                 title_only = (
                     title == t or title in aliases["title"]
                     or distinctive_title_prefix(title, t)
+                    or distinctive_single_word_typo(title, t)
                     or (
                     min(len(title), len(t)) >= 10
                     and len(title.split()) == len(t.split())
@@ -338,6 +398,8 @@ def automatic_candidate(ranked, artist, title):
         # without an artist. The candidate shortlist includes *all* songs
         # sharing that prefix and the runner-up gap is checked above.
         if t >= 0.95 and distinctive_title_prefix(title, song.title):
+            return song
+        if t >= 0.89 and distinctive_single_word_typo(title, song.title):
             return song
         return song if (
             t >= 0.88 and min(len(normalise(title)), len(normalise(song.title))) >= 10

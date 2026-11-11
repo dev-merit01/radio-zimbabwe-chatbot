@@ -484,6 +484,22 @@ def process_vote_with_ai(vote):
                              "method":"verified_cache" if cached_song else "ai"},
                 )
         approved = chosen is not None and mapping.cleaned_song_id == chosen.pk
+        if not approved:
+            # Never log listener identities or full message contents.
+            # These diagnostics distinguish failed retrieval, an uncertain
+            # OpenAI answer and rejection by the independent safety gate.
+            top = ranked[0] if ranked else None
+            logger.info(
+                "AI match review diagnostics station=%s vote_id=%s "
+                "candidate_count=%s top_song_id=%s top_artist_score=%.3f "
+                "top_title_score=%.3f llm_match=%s llm_confidence=%s "
+                "llm_song_id=%s",
+                station, current.pk, len(ranked),
+                top[3].pk if top else None,
+                top[1] if top else 0.0, top[2] if top else 0.0,
+                result.get("matched"), result.get("confidence"),
+                result.get("matched_song_id"),
+            )
         if approved and not cached_song:
             remember_verified_spelling(current, chosen)
         current.ai_status = "approved" if approved else "review"

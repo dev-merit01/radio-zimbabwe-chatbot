@@ -131,6 +131,10 @@ RULES:
    - "ft", "feat", "featuring" variations
    - Reversed name order, e.g. "Gitare - Freeman HKD"
    - Spoken/phonetic spelling of titles and artists
+   - A clipped artist name plus a lightly misspelt song title in one
+     unformatted message: "Ngende Kwadabuka" can refer to
+     "Hulengende - Kukwadabuka" if the verified catalogue contains one
+     clear artist/title combination. The artist alone is never sufficient.
    - Explicit vote wording such as "vote for Freeman Gitare"
    - Featured-artist credits that are omitted by the listener
    - An abbreviated song title matching the beginning of a longer catalogue
