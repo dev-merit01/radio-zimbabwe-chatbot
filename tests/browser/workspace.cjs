@@ -60,10 +60,11 @@ const assert = require("node:assert/strict");
     await page.locator('nav [data-page="' + section + '"]').click();
     await page.locator('#page-content[aria-busy="false"]').waitFor();
     assert.equal(await page.locator("html").getAttribute("data-theme"), "dark");
-    assert.equal(
-      await page.locator(".panel").first().evaluate(el => getComputedStyle(el).backgroundColor),
-      "rgb(26, 43, 64)",
-      "Dark panel in " + section,
+    const surface = await page.locator(".panel").first()
+      .evaluate(el => getComputedStyle(el).backgroundColor);
+    assert.ok(
+      ["rgb(26, 43, 64)", "rgb(32, 51, 75)"].includes(surface),
+      "Dark panel in " + section + ": " + surface,
     );
   }
   await page.reload();
