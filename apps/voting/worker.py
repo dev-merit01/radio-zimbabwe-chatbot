@@ -68,8 +68,8 @@ def ingest(item):
                     channel,
                     event.sender,
                     event.station,
-                    # Online verification already bound this HMAC to a phone
-                    # before the queued receipt was created.
+                    # Preserve attribution for any older online receipts that
+                    # were already queued before the public portal was removed.
                     voter_fingerprint=event.sender if channel == "web" else "",
                 )
                 from apps.charts.routing import legacy_show
