@@ -354,6 +354,15 @@ def assign_unassigned(request):
             return JsonResponse({"error": "Vote or chart show not found."}, status=404)
         if row.intended_show_id is not None and row.intended_show_id != show.pk:
             raise ValueError("A coded vote cannot be reassigned to a different chart show.")
+        # Manual voting mode has no historical opening/closing timestamps:
+        # checking today's manual_open state against a past receipt is NOT
+        # sufficient proof that the show was open back then. The webhook
+        # already recorded that this message arrived while closed.
+        if row.reason == "show_closed":
+            raise ValueError(
+                "This vote was received while its chart show was closed. "
+                "Opening voting later cannot retroactively count it."
+            )
         if not show.accepts_at(row.received_at):
             raise ValueError("This show was not open when the vote was received.")
         event, created = InboundEvent.objects.get_or_create(
