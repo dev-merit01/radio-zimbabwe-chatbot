@@ -310,6 +310,8 @@ class User(models.Model):
     CHANNEL_CHOICES = (
         ("telegram", "Telegram"),
         ("whatsapp", "WhatsApp"),
+        ("web", "Online portal"),
+        ("sms", "SMS"),
         ("manual", "Manual entry"),
     )
     channel = models.CharField(max_length=16, choices=CHANNEL_CHOICES)
@@ -330,6 +332,20 @@ class RawVote(models.Model):
     """
 
     user = models.ForeignKey(User, on_delete=models.CASCADE)
+    # Immutable attribution independent of legacy provider/user channel.
+    source = models.CharField(
+        max_length=16, default="manual", db_index=True,
+        choices=[
+            ("web", "Online portal"), ("whatsapp", "WhatsApp"),
+            ("sms", "SMS"), ("telegram", "Telegram"),
+            ("manual", "Manual entry"),
+        ],
+    )
+    # HMAC, never the plaintext phone; lets web and messaging use one
+    # listener's daily vote limit without linking unrelated channels.
+    voter_fingerprint = models.CharField(
+        max_length=64, blank=True, default="", db_index=True,
+    )
     station = models.CharField(
         max_length=32,
         choices=Station.choices,
