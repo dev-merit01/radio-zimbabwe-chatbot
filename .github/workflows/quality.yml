@@ -38,6 +38,7 @@ jobs:
       - run: pytest -q
       - run: pip-audit -r requirements.txt
       - run: node --check static/workspace/studio.js
+      - run: node --check static/vote/portal.js
       - name: Build production server image
         run: docker build -t airvote-server:ci .
       - uses: actions/setup-node@v4
@@ -57,6 +58,7 @@ jobs:
           npm run test:browser
           npm run test:airvote
           npm run test:editions
+          node tests/browser/public_portal.cjs
   windows:
     runs-on: windows-latest
     env:
