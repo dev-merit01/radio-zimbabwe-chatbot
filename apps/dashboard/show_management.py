@@ -54,13 +54,17 @@ def list_shows(request):
     station = get_active_station(request)
     config, _ = StationVotingConfig.objects.get_or_create(station=station)
     from apps.accounts.permissions import presenter_show
+    from apps.charts.routing import station_requires_codes
     assigned = presenter_show(request.user)
     visible = ChartShow.objects.filter(station=station)
     if assigned:
         visible = visible.filter(pk=assigned.pk)
     return JsonResponse({
         "station": station, "is_admin": request.user.is_superuser,
-        "require_codes": config.require_codes,
+        "require_codes": station_requires_codes(station),
+        "codes_enforced_by_shows": ChartShow.objects.filter(
+            station=station, kind__in=("weekly", "year_end"),
+        ).exclude(code="").exists(),
         **({"vote_multiplier": config.vote_multiplier} if request.user.is_superuser else {}),
         "presenter_show_id": assigned.pk if assigned else None,
         "is_presenter": bool(assigned),
@@ -291,6 +295,13 @@ def set_routing_policy(request):
         # opening its voting windows. Invalid/uncoded messages are safely
         # held in UnassignedVote, rather than leaking into a legacy chart.
         config, _ = StationVotingConfig.objects.get_or_create(station=station)
+        if not enable and ChartShow.objects.filter(
+            station=station, kind__in=("weekly", "year_end"),
+        ).exclude(code="").exists():
+            raise ValueError(
+                "Programme codes are mandatory at a station with configured "
+                "chart shows. Uncoded votes must not enter historical charts."
+            )
         config.require_codes = enable
         config.save(update_fields=["require_codes", "updated_at"])
         ReviewAudit.objects.create(
@@ -306,10 +317,14 @@ def unassigned_list(request):
     station = get_active_station(request)
     rows = UnassignedVote.objects.filter(
         station=station, state="pending",
-    ).order_by("-received_at", "-id")[:100]
+    ).select_related("intended_show").order_by("-received_at", "-id")[:100]
     return JsonResponse({"items": [
         {"id": x.pk, "text": x.text, "reason": x.reason,
          "listener": "••••" + x.sender[-4:],
+         "code": x.submitted_code,
+         "intended_show_id": x.intended_show_id,
+         "intended_show": x.intended_show.name if x.intended_show_id else None,
+         "vote_text": x.vote_text,
          "received_at": x.received_at.isoformat()} for x in rows
     ]})
 
@@ -337,6 +352,17 @@ def assign_unassigned(request):
         show = ChartShow.objects.filter(station=station, pk=show_id).first()
         if not row or not show:
             return JsonResponse({"error": "Vote or chart show not found."}, status=404)
+        if row.intended_show_id is not None and row.intended_show_id != show.pk:
+            raise ValueError("A coded vote cannot be reassigned to a different chart show.")
+        # Manual voting mode has no historical opening/closing timestamps:
+        # checking today's manual_open state against a past receipt is NOT
+        # sufficient proof that the show was open back then. The webhook
+        # already recorded that this message arrived while closed.
+        if row.reason == "show_closed":
+            raise ValueError(
+                "This vote was received while its chart show was closed. "
+                "Opening voting later cannot retroactively count it."
+            )
         if not show.accepts_at(row.received_at):
             raise ValueError("This show was not open when the vote was received.")
         event, created = InboundEvent.objects.get_or_create(

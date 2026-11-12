@@ -225,6 +225,15 @@ class UnassignedVote(models.Model):
     sender = models.CharField(max_length=64)
     text = models.CharField(max_length=2048)
     reason = models.CharField(max_length=40)
+    # Preserve the programme implied by a valid code even when the voting
+    # window is closed. These held messages must NEVER become chart votes
+    # without a receipt-time eligibility check and independent review.
+    intended_show = models.ForeignKey(
+        ChartShow, null=True, blank=True, on_delete=models.PROTECT,
+        related_name="held_routing_votes",
+    )
+    submitted_code = models.CharField(max_length=16, blank=True)
+    vote_text = models.CharField(max_length=2048, blank=True)
     state = models.CharField(max_length=16, default="pending")
     received_at = models.DateTimeField()
     resolved_show = models.ForeignKey(

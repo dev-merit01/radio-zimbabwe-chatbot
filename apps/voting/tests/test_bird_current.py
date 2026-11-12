@@ -8,7 +8,7 @@ import time
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 
-from apps.voting.models import StationVotingConfig
+from apps.voting.models import ChartShow, StationVotingConfig
 from apps.voting.models import InboundEvent, OutboundMessage, RawVote, VoteJob, CleanedSong
 from apps.voting.pipeline import review_song
 from apps.voting.worker import run_one
@@ -27,6 +27,16 @@ class BirdCurrentTests(TestCase):
                         "classic_263", "central_radio", "khulumani_fm",
                         "luzibo_radio")
         ).update(require_codes=False)
+        # This test suite exercises the original single-chart/legacy intake.
+        # Remove seeded programme codes to model an installation that truly
+        # has no configured chart shows. Live multi-chart stations never
+        # receive this exception.
+        ChartShow.objects.filter(
+            station__in=("radio_zimbabwe", "national_fm", "power_fm",
+                        "classic_263", "central_radio", "khulumani_fm",
+                        "luzibo_radio"),
+            kind__in=("weekly", "year_end"),
+        ).delete()
 
     def post_event(self, data=None, event_type='whatsapp.received', signed=True, delivery='delivery-1'):
         data = data if data is not None else {
