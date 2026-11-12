@@ -28,6 +28,8 @@ def get_selected_show(request):
     station = get_active_station(request)
     raw = request.GET.get("show_id") or request.POST.get("show_id")
     assignment = presenter_show(request.user)
+    if not request.user.is_superuser and assignment is None:
+        raise ValueError("No chart show assigned to this account.")
     if raw is None or raw == "":
         return assignment if assignment else legacy_show(station)
     if not str(raw).isdecimal():
@@ -41,6 +43,8 @@ def get_selected_show(request):
 def station_show(station, raw, user=None):
     """Validate a programme ID against the authenticated user's station."""
     assigned = presenter_show(user) if user else None
+    if user is not None and not user.is_superuser and assigned is None:
+        raise ValueError("No chart show assigned to this account.")
     if raw is None or raw == "":
         return assigned if assigned and assigned.station == station else legacy_show(station)
     if type(raw) is not int or raw <= 0:
