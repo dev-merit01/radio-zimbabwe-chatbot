@@ -44,8 +44,29 @@
   }
   function updateVoteButton() {
     const open = enabled && Boolean(state.detail?.voting_open);
+    $("voting-controls").hidden = !open;
+    $("voting-action-notice").hidden = open;
     $("vote-button").disabled = !open || !state.selected || !state.verified;
     $("send-code").disabled = !open || !state.selected || state.verified;
+    if (!open) {
+      const detail = state.detail;
+      const reason = detail?.voting_blockers?.[0]?.message ||
+        "Choose a chart show to see whether online voting is available.";
+      $("voting-action-notice").textContent = reason;
+    }
+  }
+  function renderAvailability() {
+    const detail = state.detail;
+    const panel = $("vote-availability");
+    const blockers = detail?.voting_blockers || [];
+    panel.hidden = !detail || !blockers.length;
+    $("vote-availability-title").textContent = detail?.voting_status_label || "";
+    $("vote-availability-reasons").innerHTML = blockers.map(blocker =>
+      "<li>" + escapeHTML(blocker.message) + "</li>").join("");
+    $("vote-schedule").textContent = detail
+      ? (detail.show_scheduled_open ? "Configured voting hours: open. " :
+          "Configured voting hours: closed. ") +
+        (detail.schedule_label || "") : "";
   }
   function renderStations() {
     $("station-count").textContent = state.stations.length + " stations";
@@ -71,7 +92,7 @@
         '<button type="button" class="show-card' + (state.show?.id === show.id ? ' selected' : '') +
         '" data-show="' + show.id + '"><small>' + escapeHTML(show.code || "CHART") + '</small>' +
         '<strong>' + escapeHTML(show.name) + '</strong><span class="pill ' + (show.open ? 'open' : '') +
-        '">' + (show.open ? 'Scheduled voting open' : 'Voting closed') + '</span></button>'
+        '">' + (show.open ? 'Voting hours open' : 'Voting hours closed') + '</span></button>'
       ).join("")
       : '<div class="empty-state">Your favourite chart show will appear here.</div>';
   }
@@ -80,11 +101,13 @@
     const available = state.detail?.songs || [];
     const q = $("song-search").value.toLocaleLowerCase().trim();
     const songs = available.filter(s => (s.artist + " " + s.title).toLocaleLowerCase().includes(q));
-    $("song-search").disabled = !state.detail;
+    $("song-search").disabled = !available.length;
+    $("song-search").placeholder = available.length
+      ? "Search available songs…" : "Songs available after publication";
     list.innerHTML = !state.detail
       ? '<div class="empty-state">Select a chart show to see eligible songs.</div>'
       : !available.length
-        ? '<div class="empty-state">No published eligible songs for this voting period.</div>'
+        ? '<div class="empty-state"><strong>No eligible songs to choose yet.</strong><p>The presenter must publish the current voting period\'s verified song list before it appears here.</p></div>'
         : !songs.length
           ? '<div class="empty-state">No matching songs. Try another search.</div>'
           : songs.map((song) =>
@@ -95,9 +118,16 @@
               (state.selected?.id === song.id ? 'Selected ✓' : 'Choose →') + '</span></button>'
             ).join("");
     $("selected-song").textContent = state.selected
-      ? state.selected.title + " — " + state.selected.artist
-      : "Choose a song from the list.";
+      ? state.selected.title + " — " + state.selected.artist + " (change)"
+      : available.length ? "Browse eligible songs →"
+        : "Browse song list →";
+    $("selection-hint").textContent = state.selected
+      ? "Tap to choose a different song."
+      : available.length
+        ? "Tap to find and choose a verified song."
+        : "No published song list is available to select from yet.";
     updateVoteButton();
+    renderAvailability();
   }
   function resetShow() {
     state.detail = null;
@@ -130,11 +160,11 @@
       if (state.show?.id !== show.id) return;
       state.detail = detail;
       $("song-instruction").textContent = detail.voting_open
-        ? "Select a verified song to support."
+        ? "Choose a published song to support in this chart show."
         : detail.has_published_songs
-          ? "These are the published songs. Voting is currently closed."
-          : "Waiting for the presenter to publish the eligible-song list.";
-      showStatus(detail.voting_open ? "Voting open" : "Voting closed", detail.voting_open);
+          ? "You can browse the published list. See below why online voting is unavailable."
+          : "The presenter needs to publish this voting period's eligible-song list.";
+      showStatus(detail.voting_status_label || "Not available", detail.voting_open);
     } catch (err) {
       $("song-instruction").textContent = err.message;
     }
@@ -148,6 +178,19 @@
     renderSongs();message("");
   });
   $("song-search").addEventListener("input", renderSongs);
+  $("selected-song").addEventListener("click", () => {
+    const songs = state.detail?.songs || [];
+    if (!songs.length) {
+      message("No eligible songs have been published for this chart show and voting period.", "error");
+      const info = $("vote-availability");
+      (info.hidden ? $("song-list") : info).scrollIntoView({
+        behavior: "smooth", block: "center",
+      });
+      return;
+    }
+    $("song-search").scrollIntoView({behavior: "smooth", block: "center"});
+    $("song-search").focus({preventScroll: true});
+  });
 
   $("verify-start-form").addEventListener("submit", async (event) => {
     event.preventDefault();message("");
