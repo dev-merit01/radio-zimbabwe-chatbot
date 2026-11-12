@@ -446,7 +446,9 @@
             ? '<div class="eligible-suggestions"><h3>Proposed songs awaiting verification</h3>' +
               table(["Artist", "Song", "Review status", "Action"],
                 selected.suggestions.map((item) =>
-                  '<tr><td>' + esc(item.artist) + '</td><td>' +
+                  '<tr><td>' + esc(item.primary_artist || item.artist) +
+                  (item.featured_artists ? '<br><small>feat. ' +
+                    esc(item.featured_artists) + '</small>' : '') + '</td><td>' +
                   esc(item.title) + '</td><td>' + esc(item.status) +
                   '</td><td>' +
                   (d.is_admin && item.status === "pending"
@@ -950,6 +952,29 @@
   }
   const field = (label, name, value = "", type = "text") =>
     `<label class="field">${label}<input required maxlength="240" name="${name}" type="${type}" value="${esc(value)}"></label>`;
+
+  // Use separate, repeatable fields for collaborators while preserving the
+  // catalogue's backwards-compatible "Main Artist feat. Guest" representation.
+  const featuredArtistRow = (value = "") =>
+    '<div class="featured-artist-row">' +
+    '<input name="featured_artists" aria-label="Featured artist" type="text" ' +
+    'maxlength="240" autocomplete="off" placeholder="Featured artist name" value="' +
+    esc(value) + '">' +
+    '<button type="button" class="button secondary" data-action="featured-remove" ' +
+    'aria-label="Remove featured artist">Remove</button></div>';
+  const featuredArtistsFields = (value = "") => {
+    const names = String(value || "").split(",").map((name) => name.trim()).filter(Boolean);
+    return '<div class="field featured-artists-field"><span>Featured artists (optional)</span>' +
+      '<div id="featured-artist-list" class="featured-artist-list">' +
+      (names.length ? names.map(featuredArtistRow).join("") : featuredArtistRow()) +
+      '</div><button type="button" class="button secondary featured-artist-add" ' +
+      'data-action="featured-add">+ Add featured artist</button>' +
+      '<small class="hint">Add each featured artist separately. AirVote combines ' +
+      'the credits for display and AI vote matching.</small></div>';
+  };
+  const featuredArtistsPayload = (form) =>
+    form.getAll("featured_artists").flatMap((value) => String(value).split(","))
+      .map((value) => value.trim()).filter(Boolean).join(", ");
   function stationFormFields(station = {}) {
     const existing = Boolean(station.slug);
     const name = '<label class="field">Station name<input name="name" minlength="3" maxlength="100" required value="' +
@@ -1097,6 +1122,18 @@
     if (!b) return;
     const action = b.dataset.action,
       id = b.dataset.id;
+    if (action === "featured-add") {
+      const list = $("featured-artist-list");
+      if (list) {
+        list.insertAdjacentHTML("beforeend", featuredArtistRow());
+        list.lastElementChild.querySelector("input")?.focus();
+      }
+      return;
+    }
+    if (action === "featured-remove") {
+      b.closest(".featured-artist-row")?.remove();
+      return;
+    }
     if (action === "eligible-select") {
       selectedEditionId = Number(id);
       eligibilityResults = [];
@@ -1141,10 +1178,12 @@
     }
     if (action === "eligible-suggest") {
       modal("Propose a new song",
-        field("Artist name", "artist") + field("Song title", "title") +
+        field("Main artist", "artist") + featuredArtistsFields() +
+        field("Song title", "title") +
         '<label class="field">Release details (optional)<textarea name="notes" maxlength="500"></textarea></label>',
         (fields) => api("workspace/eligibility/suggest", {
           edition_id: selectedEditionId, artist: fields.get("artist"),
+          featured_artists: featuredArtistsPayload(fields),
           title: fields.get("title"), notes: fields.get("notes") || "",
         }));
       return;
@@ -1446,21 +1485,16 @@
     if (action === "edit" || action === "add") {
       modal(
         action === "add" ? "Add song" : "Edit song",
-        field("Artist", "artist", song?.primary_artist ?? song?.artist) +
-          field("Title", "title", song?.title) +
-          '<label class="field">Featured artists (optional)' +
-          '<input name="featured_artists" type="text" maxlength="240" ' +
-          'placeholder="e.g. Gemma Griffiths, Learn Zimbabwe" value="' +
-          esc(song?.featured_artists || "") + '">' +
-          '<small class="hint">Separate multiple featured artists with commas. ' +
-          'AirVote displays them as “Main Artist feat. Guest” and matches votes ' +
-          'using both main and featured artist credits.</small></label>',
+        field("Main artist", "artist", song?.primary_artist ?? song?.artist) +
+          featuredArtistsFields(song?.featured_artists) +
+          field("Song title", "title", song?.title),
         (f) =>
           api(
             action === "add"
               ? "workspace/songs/add"
               : `workspace/songs/${id}/review`,
-            { ...Object.fromEntries(f), action: "edit" },
+            { ...Object.fromEntries(f), featured_artists: featuredArtistsPayload(f),
+              action: "edit" },
           ),
       );
       return;
