@@ -567,7 +567,7 @@
             : show.is_enabled ? "scheduled" : "disabled";
           const typeLabel = historical ? "STATION ARCHIVE"
             : show.kind === "year_end" ? "ANNUAL COUNTDOWN" : "WEEKLY PROGRAMME";
-          const code = historical ? '<span class="show-code legacy-code">No code required</span>'
+          const code = historical ? '<span class="show-code legacy-code">Historical records only</span>'
             : '<span class="show-code">' + esc(show.code) + '</span>';
           const detail = historical ? "Existing station-wide votes and saved charts"
             : show.kind === "year_end" ? "Separate Top 50 campaign"
