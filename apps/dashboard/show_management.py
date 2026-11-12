@@ -287,11 +287,9 @@ def set_routing_policy(request):
     station = get_active_station(request)
     with transaction.atomic():
         lock_station(station)
-        if enable and not ChartShow.objects.filter(
-            station=station, kind__in=("weekly", "year_end"),
-            is_enabled=True, is_archived=False,
-        ).exists():
-            raise ValueError("Enable at least one chart show before requiring voting codes.")
+        # A station must be allowed to require valid chart codes BEFORE
+        # opening its voting windows. Invalid/uncoded messages are safely
+        # held in UnassignedVote, rather than leaking into a legacy chart.
         config, _ = StationVotingConfig.objects.get_or_create(station=station)
         config.require_codes = enable
         config.save(update_fields=["require_codes", "updated_at"])
