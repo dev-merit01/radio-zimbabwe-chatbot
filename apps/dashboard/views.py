@@ -9,7 +9,7 @@ from apps.voting.models import CleanedSongTally, CleanedSong, WeeklyChart
 from apps.accounts.context_processors import get_active_station
 from apps.charts.routing import get_selected_show
 from apps.charts.periods import campaign_local_dates
-from apps.accounts.permissions import presenter_show
+from apps.accounts.permissions import request_presenter_show
 from apps.charts.show_rankings import counts_for_show, ranked_songs
 from apps.charts.multiplier import station_multiplier, score_for_votes
 from apps.charts.movement import (
@@ -298,7 +298,7 @@ def chart_detail(request, chart_id):
     except WeeklyChart.DoesNotExist:
         return JsonResponse({"error": "Chart not found"}, status=404)
 
-    assigned = presenter_show(request.user)
+    assigned = request_presenter_show(request)
     if not request.user.is_superuser and (
         assigned is None or chart.chart_show_id != assigned.pk
     ):
