@@ -337,6 +337,7 @@
               true,
             ),
           );
+        }
       } else if (page === "eligibility") {
         const show = showsCache.find((item) => item.id === selectedShowId);
         if (show?.kind === "legacy")
