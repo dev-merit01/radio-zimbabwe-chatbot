@@ -23,6 +23,24 @@ class FeaturedArtistCreditsTests(TestCase):
             path, payload, content_type="application/json",
         )
 
+    def test_featured_names_starting_with_feat_are_not_truncated(self):
+        self.assertEqual(
+            combine_artist_credits(
+                "Test Studio Artist", "Feature One, Feature Two"
+            ),
+            "Test Studio Artist feat. Feature One, Feature Two",
+        )
+        self.assertEqual(
+            combine_artist_credits(
+                "Test Studio Artist", "feat. Feature One, Feature Two"
+            ),
+            "Test Studio Artist feat. Feature One, Feature Two",
+        )
+        self.assertEqual(
+            combine_artist_credits("Test Studio Artist", "Ftdesign, Feather"),
+            "Test Studio Artist feat. Ftdesign, Feather",
+        )
+
     def test_add_song_with_multiple_features_creates_one_canonical_record(self):
         response = self.post(self.url + "/add", {
             "artist": "  atenda chinx ",
