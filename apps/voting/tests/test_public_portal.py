@@ -7,12 +7,11 @@ from django.test import Client, TestCase, override_settings
 from django.utils import timezone
 
 from apps.accounts.models import BroadcastStation, AccountProfile, PresenterAssignment
-from apps.voting.channels import phone_fingerprint, normalized_phone
+from apps.voting.channels import normalized_email, email_fingerprint
 from apps.voting.models import (
     ChartShow, CleanedSong, EditionCandidate, EligibleEdition,
     InboundEvent, RawVote, VoteJob,
 )
-from apps.voting.services import VotingService
 from apps.voting.worker import run_one
 
 
@@ -22,8 +21,12 @@ SETTINGS = {
     "AI_ALL_VOTES": True,
     "AIRVOTE_TURNSTILE_SITE_KEY": "test-site-key",
     "AIRVOTE_TURNSTILE_SECRET_KEY": "test-secret-key",
-    "AIRVOTE_VERIFY_API_KEY": "test-bird-key",
-    "AIRVOTE_BIRD_VERIFY_REGION": "us1",
+    "EMAIL_HOST": "smtp.example.test",
+    "EMAIL_HOST_USER": "airvote@example.test",
+    "EMAIL_HOST_PASSWORD": "test-only",
+    "DEFAULT_FROM_EMAIL": "AirVote <vote@example.test>",
+    "EMAIL_USE_TLS": True,
+    "EMAIL_USE_SSL": False,
     "CACHES": {"default": {
         "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
     }},
@@ -70,33 +73,28 @@ class PublicVotePortalTests(TestCase):
         )
         EditionCandidate.objects.create(edition=self.edition, song=self.song)
         self.client = Client()
-        self.phone = "+263771234567"
+        self.email = "listener@example.com"
 
-    def _verify(self, client=None):
+    def _verify(self, client=None, email=None):
         client = client or self.client
+        email = email or self.email
         with patch("apps.voting.portal._turnstile", return_value=True), patch(
-            "apps.voting.portal._bird_verify"
-        ) as bird:
-            bird.return_value = {"status": "pending"}
+            "apps.voting.portal.send_mail", return_value=1,
+        ) as mail, patch("apps.voting.portal.secrets.randbelow", return_value=123456):
             response = client.post("/vote/api/verify/start/", {
-                "phone": self.phone,
-                "show_id": self.show.pk, "song_id": self.song.pk,
+                "email": email, "show_id": self.show.pk, "song_id": self.song.pk,
                 "cf-turnstile-response": "token-placeholder",
             })
             self.assertEqual(response.status_code, 200, response.content)
-            bird.assert_called_once_with(
-                {"to": {"phone_number": self.phone}}, "verifications",
-            )
-            bird.return_value = {"success": True}
-            response = client.post("/vote/api/verify/check/", {
-                "code": "123456",
-            })
+            mail.assert_called_once()
+            self.assertEqual(mail.call_args.kwargs["recipient_list"],
+                             [normalized_email(email)])
+            self.assertIn("123456", mail.call_args.kwargs["message"])
+            response = client.post("/vote/api/verify/check/", {"code": "123456"})
             self.assertEqual(response.status_code, 200, response.content)
-        self.assertEqual(
-            client.session["airvote_web_verified_voter"],
-            phone_fingerprint(self.phone),
-        )
-        self.assertNotIn("airvote_web_pending_phone", client.session)
+        self.assertEqual(client.session["airvote_web_email_verified_voter"],
+                         email_fingerprint(email))
+        self.assertNotIn("airvote_web_pending_email", client.session)
         return client
 
     def _cast(self, show=None, song=None, client=None):
@@ -120,10 +118,10 @@ class PublicVotePortalTests(TestCase):
         self.assertEqual(self.client.get("/api/workspace/incoming").status_code, 401)
 
     def test_missing_provider_credentials_fail_closed_without_changing_other_channels(self):
-        with override_settings(AIRVOTE_VERIFY_API_KEY=""):
+        with override_settings(EMAIL_HOST_PASSWORD=""):
             self.assertContains(self.client.get("/vote/"), "being prepared")
             self.assertEqual(self.client.post("/vote/api/verify/start/", {
-                "phone": self.phone,
+                "email": self.email,
             }).status_code, 503)
             self.assertFalse(self.client.get(
                 f"/vote/api/shows/{self.show.pk}/"
@@ -134,17 +132,17 @@ class PublicVotePortalTests(TestCase):
         client = Client(enforce_csrf_checks=True)
         client.get("/vote/")
         self.assertEqual(client.post("/vote/api/verify/start/", {
-            "phone": self.phone,
+            "email": self.email,
         }).status_code, 403)
         self.assertEqual(client.post("/vote/api/cast/", {
             "show_id": self.show.pk, "song_id": self.song.pk,
         }).status_code, 403)
 
-    def test_phone_verification_is_required_and_cannot_be_forged(self):
+    def test_email_verification_is_required_and_cannot_be_forged(self):
         self.assertEqual(self._cast().status_code, 403)
         session = self.client.session
-        session["airvote_web_verified_voter"] = "not-a-real-fingerprint"
-        session["airvote_web_verified_until"] = 99999999999
+        session["airvote_web_email_verified_voter"] = "not-a-real-fingerprint"
+        session["airvote_web_email_verified_until"] = 99999999999
         session.save()
         self.assertEqual(self._cast().status_code, 403)
         self.assertEqual(InboundEvent.objects.filter(provider="web").count(), 0)
@@ -158,8 +156,8 @@ class PublicVotePortalTests(TestCase):
         self.assertEqual(event.station, "radio_zimbabwe")
         self.assertEqual(event.vote_text, "Jnr Spragga - Daka")
         self.assertEqual(event.submitted_code, "AVTST")
-        self.assertEqual(event.sender, phone_fingerprint(self.phone))
-        self.assertNotIn(self.phone, event.text)
+        self.assertEqual(event.sender, email_fingerprint(self.email))
+        self.assertNotIn(self.email, event.text)
         self.assertEqual(RawVote.objects.count(), 0)
         self.assertTrue(run_one(InboundEvent))
         event.refresh_from_db()
@@ -186,20 +184,52 @@ class PublicVotePortalTests(TestCase):
         self.assertEqual(self._cast().status_code, 409)
         self.assertEqual(InboundEvent.objects.filter(provider="web").count(), 1)
 
-    def test_cross_channel_phone_deduplication(self):
+    def test_reverification_on_another_browser_does_not_reset_vote_limit(self):
         self._verify()
-        result = VotingService(
-            "whatsapp", self.phone, station="radio_zimbabwe"
-        ).handle_incoming_text("Jnr Spragga - Daka", chart_show=self.show)
-        self.assertIn("Submission received", result)
-        first = RawVote.objects.get()
-        self.assertEqual(first.source, "whatsapp")
-        self.assertEqual(first.voter_fingerprint, phone_fingerprint(self.phone))
         self.assertEqual(self._cast().status_code, 202)
-        self.assertTrue(run_one(InboundEvent))
-        event = InboundEvent.objects.get(provider="web")
-        self.assertIn("already voted", event.reply)
-        self.assertEqual(RawVote.objects.count(), 1)
+        second = Client()
+        self._verify(client=second)
+        self.assertEqual(self._cast(client=second).status_code, 409)
+        self.assertEqual(InboundEvent.objects.filter(provider="web").count(), 1)
+
+    def test_gmail_aliases_share_one_identity(self):
+        self._verify(email="Lis.tener+chart@gmail.com")
+        self.assertEqual(self._cast().status_code, 202)
+        second = Client()
+        self._verify(client=second, email="listener@googlemail.com")
+        self.assertEqual(self._cast(client=second).status_code, 409)
+
+    def test_email_code_rejects_errors_and_expiration(self):
+        with patch("apps.voting.portal._turnstile", return_value=True), patch(
+            "apps.voting.portal.send_mail", return_value=1,
+        ), patch("apps.voting.portal.secrets.randbelow", return_value=123456):
+            response = self.client.post("/vote/api/verify/start/", {
+                "email": self.email, "show_id": self.show.pk,
+                "song_id": self.song.pk, "cf-turnstile-response": "token-placeholder",
+            })
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(self.client.post("/vote/api/verify/check/", {
+            "code": "111111",
+        }).status_code, 400)
+        self.assertNotIn("airvote_web_email_verified_voter", self.client.session)
+        session = self.client.session
+        session["airvote_web_email_pending_expires"] = 1
+        session.save()
+        self.assertEqual(self.client.post("/vote/api/verify/check/", {
+            "code": "123456",
+        }).status_code, 400)
+
+    def test_failed_email_delivery_leaves_no_valid_verification(self):
+        with patch("apps.voting.portal._turnstile", return_value=True), patch(
+            "apps.voting.portal.send_mail", side_effect=OSError("smtp down"),
+        ):
+            response = self.client.post("/vote/api/verify/start/", {
+                "email": self.email, "show_id": self.show.pk,
+                "song_id": self.song.pk, "cf-turnstile-response": "token-placeholder",
+            })
+        self.assertEqual(response.status_code, 503)
+        self.assertNotIn("airvote_web_pending_email", self.client.session)
+        self.assertNotIn("airvote_web_email_verified_voter", self.client.session)
 
     def test_source_analytics_limited_to_presenters_own_programme(self):
         presenter = get_user_model().objects.create_user(
@@ -226,15 +256,16 @@ class PublicVotePortalTests(TestCase):
             "show_id": self.foreign_show.pk,
         }).status_code, 400)
 
-    def test_phone_normalization_and_identity_are_private_and_stable(self):
-        self.assertEqual(normalized_phone("077 123 4567"), self.phone)
-        self.assertEqual(normalized_phone("263771234567"), self.phone)
-        self.assertEqual(normalized_phone("invalid-number"), "")
-        self.assertEqual(len(phone_fingerprint(self.phone)), 64)
+    def test_email_normalization_and_identity_are_private_and_stable(self):
+        self.assertEqual(normalized_email(" Listener@Example.com "), self.email)
+        self.assertEqual(normalized_email("invalid email"), "")
+        self.assertEqual(len(email_fingerprint(self.email)), 64)
         self.assertEqual(
-            phone_fingerprint("0771234567"),
-            phone_fingerprint("+263771234567"),
+            email_fingerprint("Lis.tener+vote@gmail.com"),
+            email_fingerprint("listener@googlemail.com"),
         )
+        self.assertNotEqual(email_fingerprint(self.email),
+                            email_fingerprint("someoneelse@example.com"))
 
     def test_turnstile_validation_checks_hostname_and_action(self):
         from apps.voting.portal import _turnstile

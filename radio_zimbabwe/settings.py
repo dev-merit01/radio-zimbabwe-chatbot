@@ -218,9 +218,17 @@ AIRVOTE_PUBLIC_VOTING_ENABLED = env.bool(
 )
 AIRVOTE_TURNSTILE_SITE_KEY = env.str("AIRVOTE_TURNSTILE_SITE_KEY", default="")
 AIRVOTE_TURNSTILE_SECRET_KEY = env.str("AIRVOTE_TURNSTILE_SECRET_KEY", default="")
-AIRVOTE_VERIFY_API_KEY = env.str("AIRVOTE_VERIFY_API_KEY", default="")
-AIRVOTE_BIRD_VERIFY_REGION = env.str("AIRVOTE_BIRD_VERIFY_REGION", default="us1")
-# Never accept arbitrary provider base URLs from the browser or environment.
+# Email verification for the public portal; configured privately on the
+# Railway web service. Existing WhatsApp/Bird channels are unchanged.
+EMAIL_HOST = env.str("AIRVOTE_EMAIL_HOST", default="")
+EMAIL_PORT = env.int("AIRVOTE_EMAIL_PORT", default=587)
+EMAIL_HOST_USER = env.str("AIRVOTE_EMAIL_USERNAME", default="")
+EMAIL_HOST_PASSWORD = env.str("AIRVOTE_EMAIL_PASSWORD", default="")
+EMAIL_USE_TLS = env.bool("AIRVOTE_EMAIL_USE_TLS", default=True)
+EMAIL_USE_SSL = env.bool("AIRVOTE_EMAIL_USE_SSL", default=False)
+EMAIL_TIMEOUT = 10
+DEFAULT_FROM_EMAIL = env.str("AIRVOTE_EMAIL_FROM", default="")
+
 # Explicit opt-in: reuse a recently OpenAI-confirmed listener spelling only
 # after station/canonical song/exhaustive-ambiguity checks. No listener IDs
 # are cached and all actual votes still flow through anti-spam/limit rules.

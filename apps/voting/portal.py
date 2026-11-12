@@ -5,45 +5,70 @@ Only published, verified song IDs in an OPEN programme are eligible. Public
 submissions are queued into the existing AI verification worker (fail closed).
 """
 import hashlib
+import hmac
 import logging
 import re
+import secrets
+import smtplib
 import time
 import uuid
 
 import requests
 from django.conf import settings
 from django.core.cache import cache
+from django.core.mail import send_mail
 from django.db import transaction
 from django.http import JsonResponse
 from django.shortcuts import render
 from django.utils import timezone
+from django.utils.crypto import salted_hmac
 from django.views.decorators.cache import never_cache
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_GET, require_POST
 
 from apps.accounts.models import BroadcastStation
-from apps.voting.channels import normalized_phone, phone_fingerprint
+from apps.voting.channels import normalized_email, email_fingerprint
 from apps.voting.models import (
     ChartShow, CleanedSong, EditionCandidate, EligibleEdition, InboundEvent,
 )
 
 logger = logging.getLogger(__name__)
 
-VERIFY_PHONE_SESSION = "airvote_web_pending_phone"
-VERIFIED_ID_SESSION = "airvote_web_verified_voter"
-VERIFIED_UNTIL_SESSION = "airvote_web_verified_until"
-OTP_EXPIRES_SESSION = "airvote_web_pending_expires"
+VERIFY_EMAIL_SESSION = "airvote_web_pending_email"
+VERIFIED_ID_SESSION = "airvote_web_email_verified_voter"
+VERIFIED_UNTIL_SESSION = "airvote_web_email_verified_until"
+OTP_EXPIRES_SESSION = "airvote_web_email_pending_expires"
+OTP_DIGEST_SESSION = "airvote_web_email_code_digest"
+OTP_NONCE_SESSION = "airvote_web_email_code_nonce"
+OTP_ATTEMPTS_SESSION = "airvote_web_email_code_attempts"
+
+
+def _clear_pending(request):
+    for key in (
+        VERIFY_EMAIL_SESSION, OTP_EXPIRES_SESSION, OTP_DIGEST_SESSION,
+        OTP_NONCE_SESSION, OTP_ATTEMPTS_SESSION,
+    ):
+        request.session.pop(key, None)
+
+
+def _code_digest(email, code, nonce):
+    return salted_hmac("airvote-portal-email-otp-v1",
+                       f"{nonce}:{email}:{code}").hexdigest()
 
 
 def portal_enabled():
-    """Do not launch paid/public intake without all safety controls."""
+    """Fail closed until a verified outbound email service is configured."""
     return (
         settings.AIRVOTE_PUBLIC_VOTING_ENABLED
         and settings.AI_ALL_VOTES
         and bool(settings.AIRVOTE_TURNSTILE_SITE_KEY)
         and bool(settings.AIRVOTE_TURNSTILE_SECRET_KEY)
-        and bool(settings.AIRVOTE_VERIFY_API_KEY)
-        and settings.AIRVOTE_BIRD_VERIFY_REGION in {"us1", "eu1"}
+        and bool(settings.EMAIL_HOST)
+        and bool(settings.EMAIL_HOST_USER)
+        and bool(settings.EMAIL_HOST_PASSWORD)
+        and bool(settings.DEFAULT_FROM_EMAIL)
+        and (settings.EMAIL_USE_TLS or settings.EMAIL_USE_SSL)
+        and not (settings.EMAIL_USE_TLS and settings.EMAIL_USE_SSL)
     )
 
 
@@ -99,24 +124,6 @@ def _turnstile(request, action):
     except (requests.RequestException, ValueError):
         logger.warning("Online vote bot verification unavailable")
         return False
-
-
-def _bird_verify(payload, endpoint):
-    """Only two fixed Bird Verify endpoints are allowed (no URL injection)."""
-    region = settings.AIRVOTE_BIRD_VERIFY_REGION
-    if region not in {"us1", "eu1"} or endpoint not in {"verifications", "verifications/check"}:
-        raise ValueError("Invalid verification configuration")
-    result = requests.post(
-        f"https://{region}.platform.bird.com/v1/verify/{endpoint}",
-        headers={
-            "Authorization": "Bearer " + settings.AIRVOTE_VERIFY_API_KEY,
-            "Content-Type": "application/json",
-        },
-        json=payload,
-        timeout=8,
-    )
-    result.raise_for_status()
-    return result.json()
 
 
 @never_cache
@@ -207,9 +214,9 @@ def show_detail(request, show_id):
 def start_verification(request):
     if not portal_enabled():
         return _json_error("Online voting is not enabled yet.", 503)
-    phone = normalized_phone(request.POST.get("phone", ""))
-    if not phone:
-        return _json_error("Enter a valid phone number, including country code.")
+    email = normalized_email(request.POST.get("email", ""))
+    if not email:
+        return _json_error("Enter a valid email address.")
     show_id, song_id = request.POST.get("show_id", ""), request.POST.get("song_id", "")
     if not (show_id.isdecimal() and song_id.isdecimal()):
         return _json_error("Select an eligible song before requesting a code.")
@@ -228,24 +235,43 @@ def start_verification(request):
         return _json_error("Choose a song from the published eligible list.", 409)
     if not _turnstile(request, "airvote-verify"):
         return _json_error("Complete the security check to request a code.", 403)
-    fingerprint = phone_fingerprint(phone)
+    fingerprint = email_fingerprint(email)
     if not _rate(("otp-ip", _browser_key(request)), 20, 3600):
-        return _json_error("Too many requests. Try again later.", 429)
-    if not _rate(("otp-phone", fingerprint), 3, 3600):
-        return _json_error("Too many verification requests for this number.", 429)
-    try:
-        result = _bird_verify({"to": {"phone_number": phone}}, "verifications")
-        if result.get("status") != "pending":
-            return _json_error("Phone verification is currently unavailable.", 503)
-    except (requests.RequestException, ValueError, KeyError):
-        logger.warning("Bird phone verification could not be started")
-        return _json_error("Verification is unavailable. Try again later.", 503)
+        return _json_error("Too many verification requests. Try again later.", 429)
+    if not _rate(("otp-email", fingerprint), 3, 3600):
+        return _json_error("Too many requests for this email address.", 429)
 
-    request.session[VERIFY_PHONE_SESSION] = phone
-    request.session[OTP_EXPIRES_SESSION] = int(time.time()) + 600
+    # Only a digest is persisted server-side, never the one-time code.
+    code = f"{secrets.randbelow(1000000):06d}"
+    nonce = secrets.token_urlsafe(20)
+    digest = _code_digest(email, code, nonce)
+    _clear_pending(request)
     request.session.pop(VERIFIED_ID_SESSION, None)
     request.session.pop(VERIFIED_UNTIL_SESSION, None)
-    return JsonResponse({"ok": True, "message": "A verification code was requested."})
+    try:
+        sent = send_mail(
+            subject="Your AirVote voting code",
+            message=(
+                f"Your AirVote verification code is: {code}\n\n"
+                "This code expires in 10 minutes.\n"
+                "Do not share this code. If you did not request it, "
+                "you can ignore this message."
+            ),
+            from_email=settings.DEFAULT_FROM_EMAIL,
+            recipient_list=[email],
+            fail_silently=False,
+        )
+        if sent != 1:
+            return _json_error("Verification email is unavailable. Try again later.", 503)
+    except (smtplib.SMTPException, OSError, ValueError):
+        logger.warning("Online voting verification email could not be sent")
+        return _json_error("Verification email is unavailable. Try again later.", 503)
+    request.session[VERIFY_EMAIL_SESSION] = email
+    request.session[OTP_NONCE_SESSION] = nonce
+    request.session[OTP_DIGEST_SESSION] = digest
+    request.session[OTP_ATTEMPTS_SESSION] = 0
+    request.session[OTP_EXPIRES_SESSION] = int(time.time()) + 600
+    return JsonResponse({"ok": True, "message": "A verification code has been sent to your email."})
 
 
 @never_cache
@@ -253,30 +279,33 @@ def start_verification(request):
 def check_verification(request):
     if not portal_enabled():
         return _json_error("Online voting is not enabled yet.", 503)
-    phone = request.session.get(VERIFY_PHONE_SESSION, "")
+    email = request.session.get(VERIFY_EMAIL_SESSION, "")
     expiry = request.session.get(OTP_EXPIRES_SESSION, 0)
-    if not phone or type(expiry) is not int or time.time() >= expiry:
-        return _json_error("Request a new verification code.")
+    digest = request.session.get(OTP_DIGEST_SESSION, "")
+    nonce = request.session.get(OTP_NONCE_SESSION, "")
+    if (not email or not digest or not nonce or
+            type(expiry) is not int or time.time() >= expiry):
+        _clear_pending(request)
+        return _json_error("Request a new email verification code.")
     code = request.POST.get("code", "")
-    if not isinstance(code, str) or not re.fullmatch(r"[0-9]{4,8}", code):
-        return _json_error("Enter the verification code you received.")
-    if not _rate(("otp-check", _browser_key(request), phone_fingerprint(phone)), 8, 600):
-        return _json_error("Too many attempts. Try again later.", 429)
-    try:
-        result = _bird_verify(
-            {"to": {"phone_number": phone}, "code": code},
-            "verifications/check",
-        )
-        if result.get("success") is not True:
-            return _json_error("Incorrect or expired verification code.")
-    except (requests.RequestException, ValueError, KeyError):
-        logger.warning("Bird phone verification could not be checked")
-        return _json_error("Verification is unavailable. Try again later.", 503)
-    request.session[VERIFIED_ID_SESSION] = phone_fingerprint(phone)
+    if not isinstance(code, str) or not re.fullmatch(r"[0-9]{6}", code):
+        return _json_error("Enter the six-digit code sent to your email.")
+    fingerprint = email_fingerprint(email)
+    attempts = request.session.get(OTP_ATTEMPTS_SESSION, 0)
+    if attempts >= 6 or not _rate(
+        ("otp-check", fingerprint), 12, 600,
+    ):
+        _clear_pending(request)
+        return _json_error("Too many attempts. Request a new code.", 429)
+    request.session[OTP_ATTEMPTS_SESSION] = attempts + 1
+    if not hmac.compare_digest(digest, _code_digest(email, code, nonce)):
+        if attempts + 1 >= 6:
+            _clear_pending(request)
+        return _json_error("Incorrect or expired email verification code.")
+    request.session[VERIFIED_ID_SESSION] = fingerprint
     request.session[VERIFIED_UNTIL_SESSION] = int(time.time()) + 1800
-    request.session.pop(VERIFY_PHONE_SESSION, None)
-    request.session.pop(OTP_EXPIRES_SESSION, None)
-    return JsonResponse({"ok": True, "message": "Phone number verified."})
+    _clear_pending(request)
+    return JsonResponse({"ok": True, "message": "Email verified. You can now vote."})
 
 
 @never_cache
@@ -289,10 +318,10 @@ def vote(request):
     if (not isinstance(voter_key, str)
             or not re.fullmatch(r"[0-9a-f]{64}", voter_key)
             or type(expires) is not int or time.time() >= expires):
-        return _json_error("Verify your phone number before voting.", 403)
+        return _json_error("Verify your email before voting.", 403)
     if not _rate(("vote-ip", _browser_key(request)), 90, 3600):
         return _json_error("Too many votes from this connection.", 429)
-    if not _rate(("vote-phone", voter_key), 12, 3600):
+    if not _rate(("vote-email", voter_key), 12, 3600):
         return _json_error("Vote submission limit reached. Try again later.", 429)
     if not _turnstile(request, "airvote-vote"):
         return _json_error("Complete the security check before voting.", 403)

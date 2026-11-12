@@ -160,7 +160,7 @@
     try {
       const token = turnstileToken("verification-turnstile");
       const result = await post("/vote/api/verify/start/", {
-        phone: $("phone").value, show_id: state.show.id,
+        email: $("email").value, show_id: state.show.id,
         song_id: state.selected.id, "cf-turnstile-response": token,
       });
       form.hidden = true;
@@ -177,7 +177,7 @@
     try {
       const result = await post("/vote/api/verify/check/", {code:$("otp").value});
       state.verified = true;
-      $("verified-state").textContent = "✓ Phone verified. You can cast your vote.";
+      $("verified-state").textContent = "✓ Email verified. You can cast your vote.";
       $("verified-state").classList.add("ok");
       $("verify-start-form").hidden = true;
       $("verify-check-form").hidden = true;

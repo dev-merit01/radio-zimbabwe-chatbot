@@ -7,7 +7,7 @@
   <meta name="description" content="Discover radio chart shows and vote for your favourite verified songs on AirVote.">
   <title>AirVote · Make your music count</title>
   <link rel="stylesheet" href="{% static 'vote/portal.css' %}?v=1">
-  <script defer src="{% static 'vote/portal.js' %}?v=1"></script>
+  <script defer src="{% static 'vote/portal.js' %}?v=email-20261112"></script>
   {% if voting_ready %}<script defer src="https://challenges.cloudflare.com/turnstile/v0/api.js"></script>{% endif %}
 </head>
 <body>
@@ -95,22 +95,22 @@
             <span class="panel-label">YOUR SELECTION</span>
             <h3 id="vote-panel-title">Make your vote count</h3>
             <div class="selected-song" id="selected-song">Choose a song from the list.</div>
-            <div class="verified-state" id="verified-state" aria-live="polite">Secure phone verification is required before voting.</div>
+            <div class="verified-state" id="verified-state" aria-live="polite">Email verification helps prevent duplicate voting.</div>
             <form id="verify-start-form">
               {% csrf_token %}
-              <label for="phone">Your mobile number</label>
-              <input id="phone" type="tel" name="phone" placeholder="+263 77 123 4567" autocomplete="tel" required maxlength="25">
+              <label for="email">Email address</label>
+              <input id="email" type="email" name="email" placeholder="you@example.com" autocomplete="email" required maxlength="254">
               {% if voting_ready %}
               <div class="captcha-wrap" id="verification-turnstile">
                 <div class="cf-turnstile" data-sitekey="{{ site_key }}" data-action="airvote-verify" data-theme="auto"></div>
               </div>
               {% endif %}
-              <button type="submit" class="action secondary-action" id="send-code" {% if not voting_ready %}disabled{% endif %}>Send verification code</button>
+              <button type="submit" class="action secondary-action" id="send-code" {% if not voting_ready %}disabled{% endif %}>Email me a voting code</button>
             </form>
             <form id="verify-check-form" hidden>
-              <label for="otp">Verification code</label>
-              <input id="otp" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="8" pattern="[0-9]{4,8}" placeholder="Enter your code" required>
-              <button type="submit" class="action secondary-action">Verify phone</button>
+              <label for="otp">Six-digit email code</label>
+              <input id="otp" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" placeholder="Enter your code" required>
+              <button type="submit" class="action secondary-action">Verify email</button>
             </form>
             <form id="vote-form">
               {% if voting_ready %}
@@ -121,7 +121,7 @@
               <button class="action vote-action" type="submit" id="vote-button" disabled>Vote for this song <span aria-hidden="true">→</span></button>
             </form>
             <div id="action-message" class="action-message" role="status" aria-live="polite"></div>
-            <p class="privacy-note">Your number is verified to help prevent duplicate voting. Online votes are checked before they count. Never share your verification code with anyone.</p>
+            <p class="privacy-note">Your email is verified to help prevent duplicate voting. Only a protected email identifier is stored with the vote. Never share your verification code.</p>
           </aside>
         </div>
       </section>
@@ -132,7 +132,7 @@
         <div class="how-grid">
           <article><span>01</span><h3>Find your show</h3><p>Choose your station and the chart show you follow.</p></article>
           <article><span>02</span><h3>Pick your song</h3><p>Vote only from the presenter's published eligible-song list.</p></article>
-          <article><span>03</span><h3>Verify &amp; vote</h3><p>Verify your number and submit. AirVote checks each vote before counting it.</p></article>
+          <article><span>03</span><h3>Verify &amp; vote</h3><p>Confirm the code sent to your email and vote. AirVote checks each vote before counting it.</p></article>
         </div>
       </section>
     </div>
