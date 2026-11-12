@@ -216,8 +216,13 @@ class SuspectedSpamVoteTests(TestCase):
         self.client.post("/accounts/switch-station/", {"station": "power_fm"})
         self.assertEqual(self.client.get("/api/workspace/spam").json()["pending"], 0)
         self.assertEqual(self.review(flagged.pk, "release").status_code, 404)
+        power = ChartShow.objects.get(station="power_fm", code="P40")
+        power.is_enabled = True
+        power.schedule_mode = "manual"
+        power.manual_open = True
+        power.save(update_fields=["is_enabled", "schedule_mode", "manual_open"])
         self.assertEqual(self.send_vote(
-            "Another Artist - Song Title", "power-first",
+            "P40 Another Artist - Song Title", "power-first",
             number="+263790563340"
         ).status_code, 202)
         self.assertFalse(InboundEvent.objects.get(
