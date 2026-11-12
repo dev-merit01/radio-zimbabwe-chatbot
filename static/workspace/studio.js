@@ -1446,8 +1446,8 @@
     if (action === "edit" || action === "add") {
       modal(
         action === "add" ? "Add song" : "Edit song",
-        field("Main artist", "artist", song?.primary_artist ?? song?.artist) +
-          field("Song title", "title", song?.title) +
+        field("Artist", "artist", song?.primary_artist ?? song?.artist) +
+          field("Title", "title", song?.title) +
           '<label class="field">Featured artists (optional)' +
           '<input name="featured_artists" type="text" maxlength="240" ' +
           'placeholder="e.g. Gemma Griffiths, Learn Zimbabwe" value="' +
