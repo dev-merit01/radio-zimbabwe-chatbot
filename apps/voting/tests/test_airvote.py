@@ -54,7 +54,9 @@ class AirVoteTests(TestCase):
         self.client.force_login(self.staff)
 
     def station(self):
-        return self.client.get('/api/workspace/overview').json()['station']
+        # Station selection remains testable before a programme is assigned;
+        # programme overview is intentionally forbidden for unassigned users.
+        return self.client.get('/api/workspace/shows').json()['station']
 
     def test_password_gate_admin_bypass_and_rotation(self):
         self.provision()
@@ -123,11 +125,9 @@ class AirVoteTests(TestCase):
         self.client.force_login(self.staff)
         self.assertEqual(self.post('votes', data).status_code, 403)
         self.staff.user_permissions.add(Permission.objects.get(codename='add_rawvote'))
-        self.assertEqual(self.post('votes', data).status_code, 202)
-        self.assertEqual(InboundEvent.objects.get().station, 'radio_zimbabwe')
-        data['text'] = 'Different Artist - Other Song'
-        self.assertEqual(self.post('votes', data).status_code, 409)
-        self.assertEqual(InboundEvent.objects.count(), 1)
+        # Django permissions cannot bypass mandatory presenter assignment.
+        self.assertEqual(self.post('votes', data).status_code, 403)
+        self.assertEqual(InboundEvent.objects.count(), 0)
 
     @override_settings(TELEGRAM_WEBHOOK_SECRET='telegram-test', TELEGRAM_STATION='national_fm',
                        ONEMSG_WEBHOOK_SECRET='onemsg-test', ONEMSG_STATION='national_fm',
