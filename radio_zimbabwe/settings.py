@@ -210,6 +210,17 @@ ALLOW_REPEAT_SONG = env.bool("ALLOW_REPEAT_SONG", default=False)
 AUTO_AI_MATCH = env.bool("AUTO_AI_MATCH", default=False)
 # Opt-in production mode: every new valid vote must be AI checked before counting.
 AI_ALL_VOTES = env.bool("AI_ALL_VOTES", default=False)
+
+# Public voting is deliberately off until verification and bot-protection
+# credentials have been configured. Staff/API/WhatsApp channels are unaffected.
+AIRVOTE_PUBLIC_VOTING_ENABLED = env.bool(
+    "AIRVOTE_PUBLIC_VOTING_ENABLED", default=False,
+)
+AIRVOTE_TURNSTILE_SITE_KEY = env.str("AIRVOTE_TURNSTILE_SITE_KEY", default="")
+AIRVOTE_TURNSTILE_SECRET_KEY = env.str("AIRVOTE_TURNSTILE_SECRET_KEY", default="")
+AIRVOTE_VERIFY_API_KEY = env.str("AIRVOTE_VERIFY_API_KEY", default="")
+AIRVOTE_BIRD_VERIFY_REGION = env.str("AIRVOTE_BIRD_VERIFY_REGION", default="us1")
+# Never accept arbitrary provider base URLs from the browser or environment.
 # Explicit opt-in: reuse a recently OpenAI-confirmed listener spelling only
 # after station/canonical song/exhaustive-ambiguity checks. No listener IDs
 # are cached and all actual votes still flow through anti-spam/limit rules.

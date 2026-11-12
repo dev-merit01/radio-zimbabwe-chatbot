@@ -37,6 +37,7 @@ urlpatterns = [
     path("workspace/songs/add", workspace.add_song),
     path("workspace/songs/<int:song_id>/review", workspace.review),
     path("workspace/incoming", workspace.incoming),
+    path("workspace/source-analytics", workspace.source_analytics),
     path("workspace/health", workspace.health),
     path("workspace/retry", workspace.retry_failed),
     path("workspace/audit", workspace.audit),
