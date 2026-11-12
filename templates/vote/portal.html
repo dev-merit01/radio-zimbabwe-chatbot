@@ -1,0 +1,146 @@
+{% load static %}<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0a1530">
+  <meta name="description" content="Discover radio chart shows and vote for your favourite verified songs on AirVote.">
+  <title>AirVote · Make your music count</title>
+  <link rel="stylesheet" href="{% static 'vote/portal.css' %}?v=1">
+  <script defer src="{% static 'vote/portal.js' %}?v=1"></script>
+  {% if voting_ready %}<script defer src="https://challenges.cloudflare.com/turnstile/v0/api.js"></script>{% endif %}
+</head>
+<body>
+  <header class="site-header">
+    <a href="/vote/" class="brand" aria-label="AirVote home">
+      <img src="{% static 'images/airvote/airvote.png' %}" alt="" width="39" height="39">
+      <span>Air<span class="brand-accent">Vote</span></span>
+    </a>
+    <nav class="top-links" aria-label="Main navigation">
+      <a href="#stations">Stations</a>
+      <a href="#how-it-works">How it works</a>
+      <a href="/accounts/login/" class="staff-link">Staff sign in</a>
+    </nav>
+  </header>
+
+  <main id="portal" data-enabled="{{ voting_ready|yesno:'true,false' }}">
+    <section class="hero">
+      <div class="hero-inner">
+        <div class="hero-copy">
+          <span class="eyebrow"><span class="live-dot"></span>THE MUSIC IS IN YOUR HANDS</span>
+          <h1>Your music.<br><span>Your vote.</span></h1>
+          <p>Support the songs you love on your favourite radio stations. Find your chart show, choose your song, and make your voice count.</p>
+          <a class="hero-cta" href="#stations">Explore stations <span aria-hidden="true">↗</span></a>
+        </div>
+        <div class="hero-decoration" aria-hidden="true">
+          <div class="vinyl"><div class="vinyl-label">AV</div></div>
+          <div class="sound-waves"><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+        </div>
+      </div>
+    </section>
+
+    {% if not voting_ready %}
+    <div class="notice-bar" role="status">
+      <strong>Online voting is being prepared.</strong> You can explore stations and chart shows, but online vote submission will open after secure verification is configured. Existing WhatsApp voting is not affected.
+    </div>
+    {% endif %}
+
+    <div class="content-shell">
+      <section class="section" id="stations" aria-labelledby="station-title">
+        <div class="section-heading">
+          <div><span class="section-kicker">01 / PICK YOUR STATION</span>
+            <h2 id="station-title">Which station is your favourite?</h2>
+            <p>Select a radio station to see its chart shows.</p>
+          </div>
+          <span class="section-count" id="station-count"></span>
+        </div>
+        <div class="station-grid" id="station-list" aria-live="polite">
+          <p class="loading">Loading stations…</p>
+        </div>
+      </section>
+
+      <section class="section" id="chart-shows" aria-labelledby="show-title">
+        <div class="section-heading">
+          <div><span class="section-kicker">02 / PICK A CHART SHOW</span>
+            <h2 id="show-title">Find your countdown</h2>
+            <p id="show-instruction">Choose a station above to see its programmes.</p>
+          </div>
+        </div>
+        <div id="show-list" class="show-grid" aria-live="polite">
+          <div class="empty-state">Your favourite chart show will appear here.</div>
+        </div>
+      </section>
+
+      <section class="section voting-section" id="songs" aria-labelledby="songs-title">
+        <div class="section-heading">
+          <div><span class="section-kicker">03 / SELECT YOUR SONG</span>
+            <h2 id="songs-title">Choose a song to support</h2>
+            <p id="song-instruction">Select a chart show to view its official song list.</p>
+          </div>
+          <span id="voting-status" class="status-badge" hidden></span>
+        </div>
+        <div class="song-workspace">
+          <div class="song-list-panel">
+            <label class="search-label" for="song-search">Find a song or artist</label>
+            <div class="search-wrap">
+              <span aria-hidden="true">⌕</span>
+              <input id="song-search" type="search" placeholder="Search available songs…" autocomplete="off" disabled>
+            </div>
+            <div id="song-list" class="song-list" aria-live="polite">
+              <div class="empty-state">Songs on your selected chart show will appear here.</div>
+            </div>
+          </div>
+
+          <aside class="vote-panel" aria-labelledby="vote-panel-title">
+            <span class="panel-label">YOUR SELECTION</span>
+            <h3 id="vote-panel-title">Make your vote count</h3>
+            <div class="selected-song" id="selected-song">Choose a song from the list.</div>
+            <div class="verified-state" id="verified-state" aria-live="polite">Secure phone verification is required before voting.</div>
+            <form id="verify-start-form">
+              {% csrf_token %}
+              <label for="phone">Your mobile number</label>
+              <input id="phone" type="tel" name="phone" placeholder="+263 77 123 4567" autocomplete="tel" required maxlength="25">
+              {% if voting_ready %}
+              <div class="captcha-wrap" id="verification-turnstile">
+                <div class="cf-turnstile" data-sitekey="{{ site_key }}" data-action="airvote-verify" data-theme="auto"></div>
+              </div>
+              {% endif %}
+              <button type="submit" class="action secondary-action" id="send-code" {% if not voting_ready %}disabled{% endif %}>Send verification code</button>
+            </form>
+            <form id="verify-check-form" hidden>
+              <label for="otp">Verification code</label>
+              <input id="otp" name="code" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="8" pattern="[0-9]{4,8}" placeholder="Enter your code" required>
+              <button type="submit" class="action secondary-action">Verify phone</button>
+            </form>
+            <form id="vote-form">
+              {% if voting_ready %}
+              <div class="captcha-wrap" id="vote-turnstile">
+                <div class="cf-turnstile" data-sitekey="{{ site_key }}" data-action="airvote-vote" data-theme="auto"></div>
+              </div>
+              {% endif %}
+              <button class="action vote-action" type="submit" id="vote-button" disabled>Vote for this song <span aria-hidden="true">→</span></button>
+            </form>
+            <div id="action-message" class="action-message" role="status" aria-live="polite"></div>
+            <p class="privacy-note">Your number is verified to help prevent duplicate voting. Online votes are checked before they count. Never share your verification code with anyone.</p>
+          </aside>
+        </div>
+      </section>
+
+      <section class="how" id="how-it-works">
+        <span class="section-kicker">THE PROCESS</span>
+        <h2>Three steps to the top.</h2>
+        <div class="how-grid">
+          <article><span>01</span><h3>Find your show</h3><p>Choose your station and the chart show you follow.</p></article>
+          <article><span>02</span><h3>Pick your song</h3><p>Vote only from the presenter's published eligible-song list.</p></article>
+          <article><span>03</span><h3>Verify &amp; vote</h3><p>Verify your number and submit. AirVote checks each vote before counting it.</p></article>
+        </div>
+      </section>
+    </div>
+  </main>
+  <footer class="site-footer">
+    <span>Air<span>Vote</span></span>
+    <p>One platform. Every station. Your music matters.</p>
+    <small>Powered by AirVote • Secure multi-station music voting</small>
+  </footer>
+</body>
+</html>
