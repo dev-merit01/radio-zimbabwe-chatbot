@@ -49,14 +49,20 @@ class StationAccountProvisioningTests(TestCase):
                 self.assertTrue(client.login(
                     username=entry["username"], password=entry["password"]
                 ))
-                overview = client.get("/api/workspace/overview")
-                self.assertEqual(overview.status_code, 200)
-                self.assertEqual(overview.json()["station"], entry["station"])
-                self.assertFalse(overview.json()["is_admin"])
-                # A forged station query never changes a dedicated user's scope.
+                # Dedicated station credentials are not presenter identities.
+                # No station's chart shows or votes are exposed until an admin
+                # assigns this account to a specific programme.
+                shows = client.get("/api/workspace/shows")
+                self.assertEqual(shows.status_code, 200)
+                self.assertEqual(shows.json()["station"], entry["station"])
+                self.assertTrue(shows.json()["assignment_required"])
+                self.assertEqual(shows.json()["shows"], [])
                 self.assertEqual(
-                    client.get("/api/workspace/overview?station=radio_zimbabwe")
-                    .json()["station"], entry["station"]
+                    client.get("/api/workspace/overview").status_code, 403
+                )
+                self.assertEqual(
+                    client.get("/api/workspace/overview?station=radio_zimbabwe").status_code,
+                    403,
                 )
         self.assertEqual(
             AccountProfile.objects.filter(
