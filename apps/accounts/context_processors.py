@@ -47,8 +47,8 @@ def get_active_station(request) -> str:
         if not user or not getattr(user, "is_authenticated", False):
             return Station.RADIO_ZIMBABWE
 
-        from .permissions import presenter_show
-        assigned = presenter_show(user)
+        from .permissions import request_presenter_show
+        assigned = request_presenter_show(request)
         if assigned:
             # Assigned presenters can never override their station with a
             # stale session or an independently supplied station password.
@@ -107,8 +107,8 @@ def station_branding(request):
 
         # Every signed-in station user can request a password-protected switch
         user = getattr(request, "user", None)
-        from .permissions import presenter_show
-        assigned = presenter_show(user)
+        from .permissions import request_presenter_show
+        assigned = request_presenter_show(request)
         can_switch_station = bool(
             user and getattr(user, "is_authenticated", False)
             and assigned is None
