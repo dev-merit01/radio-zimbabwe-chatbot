@@ -53,12 +53,12 @@ def serialize(show):
 def list_shows(request):
     station = get_active_station(request)
     config, _ = StationVotingConfig.objects.get_or_create(station=station)
-    from apps.accounts.permissions import presenter_show
+    from apps.accounts.permissions import request_presenter_show
     from apps.charts.routing import station_requires_codes
-    assigned = presenter_show(request.user)
+    assigned = request_presenter_show(request)
     visible = ChartShow.objects.filter(station=station)
     if not request.user.is_superuser:
-        # Unassigned station logins are not shared presenter credentials.
+        # Station accounts without a chart-show selection cannot browse programmes.
         # An assignment must be made before any chart show is visible.
         visible = visible.filter(pk=assigned.pk) if assigned else visible.none()
     return JsonResponse({
