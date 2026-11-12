@@ -69,6 +69,35 @@ Server controls:
 - Keep the server's verification and anti-bot credentials on the web service;
   the existing worker has no need to call these providers.
 
+## Understanding "Voting closed" versus missing songs
+
+The public portal shows distinct, **independent** reasons a vote cannot be
+accepted. A programme's normal voting hours are **not** the same as public
+web-voting activation:
+
+- **Awaiting song list:** no eligible edition has been published for the
+  currently selected chart show and date. Existing verified songs in the
+  station-wide catalogue are not automatically on that chart. The presenter
+  signs in with station credentials and chooses the programme, then opens
+  **Eligible songs**, creates the next edition, adds the verified songs, and
+  selects **Publish eligible list** before the voting window opens.
+- **No eligible songs:** a published edition exists but it currently has no
+  eligible verified songs.
+- **Voting hours closed:** the chart show's own admin-configured weekly,
+  manual or campaign schedule does not allow submissions at this time.
+- **Online voting not active:** email delivery, Cloudflare Turnstile or the
+  public feature flag is not yet configured. The chart's voting hours may
+  still be open, and WhatsApp intake is unaffected.
+- **Voting open:** all the checks above pass. A listener can select a
+  published song, verify an email and submit a vote for AI processing.
+
+The blue **Browse eligible songs** panel is a real button: tapping it scrolls
+to the searchable song list. If the presenter's list is missing, tapping
+explains why there is no song to select. Email/vote controls are hidden
+until votes can actually be submitted, so the portal never suggests a
+disabled button is functional. The backend continues to reject closed,
+unpublished and unverified submissions regardless of UI state.
+
 ## Combined voting and source attribution
 
 RawVote now persists an immutable `source` value:
