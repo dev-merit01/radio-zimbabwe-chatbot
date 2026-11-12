@@ -49,7 +49,7 @@ def serialize(show):
 
 
 @require_GET
-@api_access()
+@api_access(allow_unassigned=True)
 def list_shows(request):
     station = get_active_station(request)
     config, _ = StationVotingConfig.objects.get_or_create(station=station)
@@ -57,8 +57,10 @@ def list_shows(request):
     from apps.charts.routing import station_requires_codes
     assigned = presenter_show(request.user)
     visible = ChartShow.objects.filter(station=station)
-    if assigned:
-        visible = visible.filter(pk=assigned.pk)
+    if not request.user.is_superuser:
+        # Unassigned station logins are not shared presenter credentials.
+        # An assignment must be made before any chart show is visible.
+        visible = visible.filter(pk=assigned.pk) if assigned else visible.none()
     return JsonResponse({
         "station": station, "is_admin": request.user.is_superuser,
         "require_codes": station_requires_codes(station),
@@ -68,6 +70,7 @@ def list_shows(request):
         **({"vote_multiplier": config.vote_multiplier} if request.user.is_superuser else {}),
         "presenter_show_id": assigned.pk if assigned else None,
         "is_presenter": bool(assigned),
+        "assignment_required": not request.user.is_superuser and assigned is None,
         "shows": [serialize(s) for s in
                   visible.order_by("kind", "name", "id")],
         "unassigned_pending": UnassignedVote.objects.filter(

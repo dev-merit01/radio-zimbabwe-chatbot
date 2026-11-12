@@ -83,11 +83,12 @@ class StationEditionTests(TestCase):
         self.assertTrue(
             self.client.login(username="new-member", password=data["password"])
         )
+        shows = self.client.get("/api/workspace/shows").json()
+        self.assertEqual(shows["station"], "national_fm")
+        self.assertTrue(shows["assignment_required"])
+        self.assertEqual(shows["shows"], [])
         self.assertEqual(
-            self.client.get("/api/workspace/overview").json()["station"], "national_fm"
-        )
-        self.assertFalse(
-            self.client.get("/api/workspace/overview").json()["can_review"]
+            self.client.get("/api/workspace/overview").status_code, 403
         )
         self.assertEqual(
             self.client.get("/api/workspace/administration").status_code, 403
@@ -148,9 +149,10 @@ class StationEditionTests(TestCase):
         self.assertEqual(
             self.post("publish", {"chart_date": "2026-09-19"}).status_code, 403
         )
-        overview = self.client.get("/api/workspace/overview").json()
-        self.assertFalse(
-            overview["can_review"] or overview["can_add"] or overview["can_publish"]
+        # Unassigned station users have no chart access even with old
+        # per-model moderation permissions.
+        self.assertEqual(
+            self.client.get("/api/workspace/overview").status_code, 403
         )
 
     def test_station_catalogue_and_moderation_do_not_leak(self):

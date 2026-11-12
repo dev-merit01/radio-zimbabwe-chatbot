@@ -299,7 +299,9 @@ def chart_detail(request, chart_id):
         return JsonResponse({"error": "Chart not found"}, status=404)
 
     assigned = presenter_show(request.user)
-    if assigned and chart.chart_show_id != assigned.pk:
+    if not request.user.is_superuser and (
+        assigned is None or chart.chart_show_id != assigned.pk
+    ):
         return JsonResponse({"error": "Chart not found"}, status=404)
     entries = list(chart.entries.all().order_by("rank"))
     # Newly published charts store their comparison ID and classification.
@@ -372,7 +374,7 @@ def chart_detail(request, chart_id):
 @login_required
 def stats_overview(request):
     """API endpoint returning overall statistics."""
-    if presenter_show(request.user):
+    if not request.user.is_superuser:
         # Global station statistics contain other programmes; a presenter
         # must use the assigned-show overview endpoint instead.
         return JsonResponse(

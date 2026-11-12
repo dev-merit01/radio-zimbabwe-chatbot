@@ -1,5 +1,5 @@
 {% load static %}<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{{ branding_station_name }} · AirVote</title><script src="{% static 'workspace/theme.js' %}?v=theme-20261111"></script><link rel="stylesheet" href="{% static 'workspace/studio.css' %}?v=featured-multiple-20261112"><link rel="stylesheet" href="{% static 'workspace/theme.css' %}?v=theme-20261111"><script defer src="{% static 'workspace/studio.js' %}?v=featured-multiple-20261112"></script></head>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{{ branding_station_name }} · AirVote</title><script src="{% static 'workspace/theme.js' %}?v=theme-20261111"></script><link rel="stylesheet" href="{% static 'workspace/studio.css' %}?v=featured-multiple-20261112"><link rel="stylesheet" href="{% static 'workspace/theme.css' %}?v=theme-20261111"><script defer src="{% static 'workspace/studio.js' %}?v=presenter-scope-20261112"></script></head>
 <body class="airvote-workspace">
 <svg class="svg-defs" aria-hidden="true"><defs>
 <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></symbol>
@@ -21,25 +21,25 @@
 {% if can_switch_station %}<form id="station-switch-form" class="station-switch" method="post" action="{% url 'accounts:switch_station' %}" data-admin="{{ request.user.is_superuser|yesno:'true,false' }}" data-current="{{ active_station }}">{% csrf_token %}<label class="sr-only" for="station-select">Switch station</label><select id="station-select" name="station">{% for value,label in station_choices %}<option value="{{ value }}" {% if value == active_station %}selected{% endif %}>{{ label }}</option>{% endfor %}</select></form>{% endif %}
 <div class="nav-label">WORKSPACE</div><nav aria-label="Main navigation">
 <button class="nav-item active" data-page="overview"><svg><use href="#i-grid"/></svg>Overview</button>
-<button class="nav-item" data-page="shows"><svg><use href="#i-music"/></svg>Chart shows</button>
+{% if request.user.is_superuser or presenter_chart_show_name %}<button class="nav-item" data-page="shows"><svg><use href="#i-music"/></svg>Chart shows</button>{% endif %}
 {% if request.user.is_superuser or presenter_chart_show_name %}<button class="nav-item" data-page="eligibility"><svg><use href="#i-check"/></svg>Eligible songs</button>{% endif %}
-<button class="nav-item" data-page="incoming"><svg><use href="#i-wave"/></svg>Incoming votes</button>
-<button class="nav-item" data-page="review"><svg><use href="#i-check"/></svg>Review queue<span id="nav-pending" class="nav-count">0</span></button>
+{% if request.user.is_superuser or presenter_chart_show_name %}<button class="nav-item" data-page="incoming"><svg><use href="#i-wave"/></svg>Incoming votes</button>
+{% if request.user.is_superuser %}<button class="nav-item" data-page="review"><svg><use href="#i-check"/></svg>Review queue<span id="nav-pending" class="nav-count">0</span></button>{% endif %}
 <button class="nav-item" data-page="catalogue"><svg><use href="#i-music"/></svg>Song catalogue</button>
-<button class="nav-item" data-page="archives"><svg><use href="#i-folder"/></svg>Chart archives</button>
+<button class="nav-item" data-page="archives"><svg><use href="#i-folder"/></svg>Chart archives</button>{% endif %}
 <div class="nav-label secondary-label">PREFERENCES</div><button class="nav-item" type="button" id="appearance-open" aria-haspopup="dialog" aria-controls="appearance-dialog"><svg><use href="#i-settings"/></svg>Appearance</button>
 {% if request.user.is_superuser %}<div class="nav-label secondary-label">ADMINISTRATION</div>
 <button class="nav-item" data-page="administration"><svg><use href="#i-settings"/></svg>Admin control</button>
 <button class="nav-item" data-page="stations"><svg><use href="#i-grid"/></svg>Manage stations</button>
 <button class="nav-item" data-page="presenters"><svg><use href="#i-grid"/></svg>Presenter accounts</button>{% endif %}
 </nav>
-<div class="sidebar-bottom"><div class="profile"><a class="avatar" href="{% url 'accounts:profile' %}" aria-label="Your account">{{ request.user.username|first|upper }}</a><div><a href="{% url 'accounts:profile' %}" title="Your profile"><strong>{{ request.user.first_name|default:request.user.username }}</strong></a><span>{% if request.user.is_superuser %}Administrator{% elif presenter_chart_show_name %}Presenter · {{ presenter_chart_show_name }}{% else %}Station team{% endif %}</span></div><form method="post" action="{% url 'accounts:logout' %}">{% csrf_token %}<button class="signout" title="Sign out" aria-label="Sign out">↗</button></form></div></div>
+<div class="sidebar-bottom"><div class="profile"><a class="avatar" href="{% url 'accounts:profile' %}" aria-label="Your account">{{ request.user.username|first|upper }}</a><div><a href="{% url 'accounts:profile' %}" title="Your profile"><strong>{{ request.user.first_name|default:request.user.username }}</strong></a><span>{% if request.user.is_superuser %}Administrator{% elif presenter_chart_show_name %}Presenter · {{ presenter_chart_show_name }}{% else %}Awaiting chart-show assignment{% endif %}</span></div><form method="post" action="{% url 'accounts:logout' %}">{% csrf_token %}<button class="signout" title="Sign out" aria-label="Sign out">↗</button></form></div></div>
 </aside>
 <div class="main-shell"><header class="topbar"><div><button class="mobile-toggle icon-button" id="menu-toggle" aria-label="Toggle navigation" aria-expanded="false" aria-controls="sidebar">☰</button></div><div class="topbar-right"><button class="theme-quick-toggle" type="button" id="theme-quick-toggle" aria-pressed="false" aria-label="Switch to dark mode" title="Switch to dark mode"><span class="theme-icon" aria-hidden="true">☾</span><span class="theme-toggle-label">Dark</span></button><span class="connection" id="connection"><i></i><span>Connecting</span></span><span class="topbar-divider"></span><span id="today-label"></span><a class="avatar small" href="{% url 'accounts:profile' %}" aria-label="Open your profile" title="Your profile">{{ request.user.username|first|upper }}</a></div></header>
 <main id="main-content"><div class="page-heading"><div><span class="eyebrow" id="page-eyebrow">YOUR STATION, AT A GLANCE</span><h1 id="page-title">Weekly overview</h1><p id="page-description">Received votes, verified results and the songs waiting for review.</p></div></div>
 <div class="notice hidden" id="offline-banner" role="status">Connection interrupted. Results are from the last successful update. Changes are unavailable until reconnected.</div>
 {% if messages %}<div class="notice">{% for message in messages %}<p>{{ message }}</p>{% endfor %}</div>{% endif %}
-{% if not request.user.is_superuser %}<div class="workspace-tools" aria-label="Station tools"><button class="button secondary" data-page="activity">Activity log</button><button class="button secondary" data-page="connections">Connections</button></div>{% endif %}
+
 <div id="page-content"><div class="loading"><span class="spinner"></span>Loading your workspace…</div></div>
 <footer class="workspace-footer"><span>AirVote <b>2.4.0</b> · {{ branding_station_name }}</span><span id="last-updated">Secure station workspace</span></footer></main></div></div>
 <div id="toast" class="toast hidden" role="status"></div>

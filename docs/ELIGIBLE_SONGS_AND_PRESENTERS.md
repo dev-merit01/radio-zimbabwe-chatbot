@@ -8,8 +8,13 @@
 - **Presenter:** uses an individually assigned login for one chart programme.
   The station is derived from that programme. Server-side checks prevent
   editing lists belonging to another presenter, show or station.
-- **Station accounts:** continue working as configured. An existing station
-  user can be assigned to a specific show without changing its password.
+- **Station accounts:** approval to sign in does **not** grant access to all
+  chart shows. An unassigned login sees an assignment notice instead of
+  programme data. The administrator can assign an existing station account
+  to one show without changing its password, or create a separate login for
+  each presenter. Reassigning a login immediately replaces its prior show
+  access; sharing a station-wide account among different presenters is not
+  supported for programme editing.
 
 ## Prepare and publish each chart edition
 
