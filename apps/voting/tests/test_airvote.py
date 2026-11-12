@@ -11,6 +11,7 @@ from django.contrib.auth.models import Permission
 from django.core.cache import cache
 from django.test import TestCase, Client, override_settings
 from apps.accounts.models import StationAccess, AccountProfile
+from apps.voting.models import StationVotingConfig
 from apps.voting.models import InboundEvent, RawVote, VoteJob, OutboundMessage, ReviewAudit, CleanedSong
 from apps.voting.worker import run_one
 from apps.voting.pipeline import review_song
@@ -19,6 +20,13 @@ from apps.voting.pipeline import review_song
 @override_settings(SECURE_SSL_REDIRECT=False, AUTO_AI_MATCH=False)
 class AirVoteTests(TestCase):
     def setUp(self):
+        # This suite explicitly tests backward-compatible code-free intake.
+        # Production's established stations now require programme codes.
+        StationVotingConfig.objects.filter(
+            station__in=("radio_zimbabwe", "national_fm", "power_fm",
+                        "classic_263", "central_radio", "khulumani_fm",
+                        "luzibo_radio")
+        ).update(require_codes=False)
         cache.clear()
         self.admin = get_user_model().objects.create_superuser('admin', password='test-admin-only')
         self.staff = get_user_model().objects.create_user('staff', password='test-staff-only')
