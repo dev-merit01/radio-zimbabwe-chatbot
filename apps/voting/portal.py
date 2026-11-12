@@ -181,6 +181,82 @@ def _published_list(show, day):
     return edition, songs
 
 
+def _show_voting_state(show, instant, published_edition, available_songs):
+    """Report distinct availability blockers; never mistake portal setup for hours.
+
+    This is advisory public metadata only. Vote submission still revalidates
+    the schedule, station and published eligibility on the server.
+    """
+    scheduled_open = show.accepts_at(instant)
+    ready = portal_enabled()
+    blockers = []
+    if published_edition is None:
+        blockers.append({
+            "code": "no_published_list",
+            "message": "The presenter has not published an eligible-song list for this voting period.",
+        })
+    elif not available_songs:
+        blockers.append({
+            "code": "no_verified_songs",
+            "message": "The published list contains no verified eligible songs yet.",
+        })
+
+    if not show.is_enabled:
+        blockers.append({
+            "code": "show_disabled",
+            "message": "This chart show has not been enabled for voting by its administrator.",
+        })
+    elif not scheduled_open:
+        blockers.append({
+            "code": "voting_hours",
+            "message": "The chart show's configured voting hours are not currently open.",
+        })
+
+    if not ready:
+        blockers.append({
+            "code": "online_setup",
+            "message": "Online voting is not yet activated. Email delivery and security verification must be configured by the AirVote administrator.",
+        })
+
+    if show.schedule_mode == "weekly":
+        names = ("Monday", "Tuesday", "Wednesday", "Thursday",
+                 "Friday", "Saturday", "Sunday")
+        schedule_label = (
+            f"{names[show.opens_weekday]} {show.opens_time.strftime('%H:%M')} "
+            f"to {names[show.closes_weekday]} {show.closes_time.strftime('%H:%M')} "
+            "(Zimbabwe time)"
+        )
+    elif show.schedule_mode == "manual":
+        schedule_label = "Voting hours are controlled by the chart-show administrator"
+    else:
+        schedule_label = "Voting is available during the configured campaign dates"
+
+    if published_edition is None:
+        status, label = "awaiting_song_list", "Awaiting song list"
+    elif not available_songs:
+        status, label = "no_eligible_songs", "No eligible songs"
+    elif not show.is_enabled:
+        status, label = "show_disabled", "Show not enabled"
+    elif not scheduled_open:
+        status, label = "voting_hours_closed", "Voting hours closed"
+    elif not ready:
+        status, label = "online_setup", "Online voting not active"
+    else:
+        status, label = "open", "Voting open"
+    return {
+        "voting_open": not blockers,
+        "voting_status": status,
+        "voting_status_label": label,
+        "voting_blockers": blockers,
+        "online_voting_ready": ready,
+        "show_scheduled_open": scheduled_open,
+        "schedule_label": schedule_label,
+        "has_published_edition": published_edition is not None,
+        "has_published_songs": bool(available_songs),
+        "eligible_song_count": len(available_songs),
+    }
+
+
 @never_cache
 @require_GET
 def show_detail(request, show_id):
@@ -192,19 +268,19 @@ def show_detail(request, show_id):
         return _json_error("Chart show not found.", 404)
     now = timezone.now()
     edition, songs = _published_list(show, timezone.localdate(now))
-    voting_open = bool(edition and show.accepts_at(now) and portal_enabled())
+    # Only verified songs that appear in the presenter's published list.
+    available_songs = list(songs[:300])
+    availability = _show_voting_state(show, now, edition, available_songs)
     return JsonResponse({
         "id": show.pk,
         "name": show.name,
         "station": show.station,
         "code": show.code,
         "presenter": show.presenter_name,
-        "voting_open": voting_open,
-        "show_scheduled_open": show.accepts_at(now),
-        "has_published_songs": bool(edition),
+        **availability,
         "songs": [
-            {"id": s.pk, "artist": s.artist, "title": s.title}
-            for s in songs[:300]
+            {"id": song.pk, "artist": song.artist, "title": song.title}
+            for song in available_songs
         ],
     })
 

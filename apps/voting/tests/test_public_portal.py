@@ -117,6 +117,71 @@ class PublicVotePortalTests(TestCase):
         self.assertNotIn("raw_votes", show)
         self.assertEqual(self.client.get("/api/workspace/incoming").status_code, 401)
 
+    def test_no_published_list_explains_reason_without_claiming_hours_closed(self):
+        self.edition.status = "draft"
+        self.edition.save(update_fields=["status"])
+        payload = self.client.get(f"/vote/api/shows/{self.show.pk}/").json()
+        self.assertTrue(payload["show_scheduled_open"])
+        self.assertFalse(payload["voting_open"])
+        self.assertFalse(payload["has_published_edition"])
+        self.assertFalse(payload["has_published_songs"])
+        self.assertEqual(payload["songs"], [])
+        self.assertEqual(payload["voting_status"], "awaiting_song_list")
+        self.assertEqual(payload["voting_status_label"], "Awaiting song list")
+        self.assertEqual(
+            [item["code"] for item in payload["voting_blockers"]],
+            ["no_published_list"],
+        )
+
+    def test_zero_verified_songs_is_not_an_open_voting_show(self):
+        EditionCandidate.objects.filter(edition=self.edition).delete()
+        payload = self.client.get(f"/vote/api/shows/{self.show.pk}/").json()
+        self.assertTrue(payload["has_published_edition"])
+        self.assertFalse(payload["has_published_songs"])
+        self.assertEqual(payload["eligible_song_count"], 0)
+        self.assertFalse(payload["voting_open"])
+        self.assertEqual(payload["voting_status"], "no_eligible_songs")
+        self.assertEqual(
+            [item["code"] for item in payload["voting_blockers"]],
+            ["no_verified_songs"],
+        )
+
+    def test_portal_not_ready_is_not_mistaken_for_closed_voting_hours(self):
+        with override_settings(AIRVOTE_PUBLIC_VOTING_ENABLED=False):
+            payload = self.client.get(f"/vote/api/shows/{self.show.pk}/").json()
+        self.assertTrue(payload["show_scheduled_open"])
+        self.assertTrue(payload["has_published_songs"])
+        self.assertFalse(payload["voting_open"])
+        self.assertFalse(payload["online_voting_ready"])
+        self.assertEqual(payload["voting_status"], "online_setup")
+        self.assertEqual(payload["voting_status_label"], "Online voting not active")
+        self.assertEqual(
+            [item["code"] for item in payload["voting_blockers"]],
+            ["online_setup"],
+        )
+
+    def test_schedule_closed_is_reported_separately_from_portal_setup(self):
+        self.show.manual_open = False
+        self.show.save(update_fields=["manual_open"])
+        payload = self.client.get(f"/vote/api/shows/{self.show.pk}/").json()
+        self.assertFalse(payload["show_scheduled_open"])
+        self.assertTrue(payload["online_voting_ready"])
+        self.assertEqual(payload["voting_status"], "voting_hours_closed")
+        self.assertIn("voting hours", payload["voting_blockers"][0]["message"])
+        self.assertFalse(payload["voting_open"])
+
+    def test_missing_list_and_unconfigured_portal_are_both_explained(self):
+        self.edition.status = "draft"
+        self.edition.save(update_fields=["status"])
+        with override_settings(AIRVOTE_PUBLIC_VOTING_ENABLED=False):
+            payload = self.client.get(f"/vote/api/shows/{self.show.pk}/").json()
+        self.assertEqual(payload["voting_status"], "awaiting_song_list")
+        self.assertTrue(payload["show_scheduled_open"])
+        self.assertEqual(
+            {item["code"] for item in payload["voting_blockers"]},
+            {"no_published_list", "online_setup"},
+        )
+
     def test_missing_provider_credentials_fail_closed_without_changing_other_channels(self):
         with override_settings(EMAIL_HOST_PASSWORD=""):
             self.assertContains(self.client.get("/vote/"), "being prepared")

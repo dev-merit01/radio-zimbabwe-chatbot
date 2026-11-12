@@ -6,8 +6,8 @@
   <meta name="theme-color" content="#0a1530">
   <meta name="description" content="Discover radio chart shows and vote for your favourite verified songs on AirVote.">
   <title>AirVote · Make your music count</title>
-  <link rel="stylesheet" href="{% static 'vote/portal.css' %}?v=1">
-  <script defer src="{% static 'vote/portal.js' %}?v=email-20261112"></script>
+  <link rel="stylesheet" href="{% static 'vote/portal.css' %}?v=availability-20261112">
+  <script defer src="{% static 'vote/portal.js' %}?v=availability-20261112"></script>
   {% if voting_ready %}<script defer src="https://challenges.cloudflare.com/turnstile/v0/api.js"></script>{% endif %}
 </head>
 <body>
@@ -79,6 +79,11 @@
           </div>
           <span id="voting-status" class="status-badge" hidden></span>
         </div>
+        <div class="availability-panel" id="vote-availability" hidden role="status" aria-live="polite">
+          <strong id="vote-availability-title"></strong>
+          <ul id="vote-availability-reasons"></ul>
+          <p id="vote-schedule"></p>
+        </div>
         <div class="song-workspace">
           <div class="song-list-panel">
             <label class="search-label" for="song-search">Find a song or artist</label>
@@ -94,7 +99,10 @@
           <aside class="vote-panel" aria-labelledby="vote-panel-title">
             <span class="panel-label">YOUR SELECTION</span>
             <h3 id="vote-panel-title">Make your vote count</h3>
-            <div class="selected-song" id="selected-song">Choose a song from the list.</div>
+            <button type="button" class="selected-song" id="selected-song" aria-label="Browse the chart show's eligible songs">Browse eligible songs</button>
+            <p class="selection-hint" id="selection-hint">Choose a chart show first.</p>
+            <p class="voting-action-notice" id="voting-action-notice" role="status">Online voting is not yet available for this chart show.</p>
+            <div id="voting-controls" hidden>
             <div class="verified-state" id="verified-state" aria-live="polite">Email verification helps prevent duplicate voting.</div>
             <form id="verify-start-form">
               {% csrf_token %}
@@ -120,8 +128,9 @@
               {% endif %}
               <button class="action vote-action" type="submit" id="vote-button" disabled>Vote for this song <span aria-hidden="true">→</span></button>
             </form>
+            </div>
             <div id="action-message" class="action-message" role="status" aria-live="polite"></div>
-            <p class="privacy-note">Your email is verified to help prevent duplicate voting. Only a protected email identifier is stored with the vote. Never share your verification code.</p>
+            <p class="privacy-note">When online voting is active, a verified email helps prevent repeat voting. Only a protected email identifier is stored with the vote. Never share your verification code.</p>
           </aside>
         </div>
       </section>

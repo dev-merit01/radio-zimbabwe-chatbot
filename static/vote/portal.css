@@ -3,3 +3,16 @@
 @media(max-width:850px){.hero-inner{grid-template-columns:1fr;padding:66px 24px 72px}.hero-decoration{display:none}.station-grid,.show-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.song-workspace{grid-template-columns:1fr}.vote-panel{position:static}.site-footer{flex-wrap:wrap}.top-links{gap:16px}}
 @media(max-width:560px){.site-header{padding:15px 18px}.top-links a:not(.staff-link){display:none}.top-links{font-size:11px}.hero-inner{padding:58px 20px 70px}.hero h1{letter-spacing:-2.5px}.hero-copy>p{font-size:15px}.notice-bar{margin:14px 15px 0}.content-shell{padding:15px 16px 60px}.section{padding-top:48px}.section-heading{align-items:start}.station-grid,.show-grid,.how-grid{grid-template-columns:1fr;gap:12px}.station-card-foot{margin-top:15px}.song-list-panel,.vote-panel{padding:17px}.voting-section{padding-top:55px}.site-footer{padding:28px 18px}.site-footer p{width:100%}}
 @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{transition:none!important}}
+
+
+/* Distinguish unavailable reasons from closed programme voting hours. */
+.availability-panel{padding:20px 23px;margin:0 0 20px;background:#eff6ff;border:1px solid #cfe1fa;border-left:4px solid #357bd2;border-radius:14px;color:#244467;font-size:13px;line-height:1.6}
+.availability-panel strong{display:block;font-size:15px;margin-bottom:7px;color:#173b72}
+.availability-panel ul{padding-left:20px;margin:8px 0 10px}
+.availability-panel li{margin:5px 0}
+.availability-panel p{margin:10px 0 0;font-size:12px;color:#506887}
+.selected-song{display:block;width:100%;text-align:left;cursor:pointer;font-weight:750}
+.selected-song:hover{border-color:#4d93e8;background:#e1f0ff}
+.selected-song:focus-visible{outline:3px solid #4d93e8;outline-offset:2px}
+.selection-hint{font-size:12px;line-height:1.6;color:#60748b;margin:8px 0}
+.voting-action-notice{font-size:13px;line-height:1.6;padding:12px 14px;margin:12px 0 5px;color:#6c5363;background:#fff7f3;border:1px solid #f5e2d9;border-radius:10px}
