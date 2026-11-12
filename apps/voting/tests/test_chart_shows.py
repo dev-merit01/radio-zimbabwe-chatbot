@@ -30,6 +30,7 @@ from apps.voting.worker import run_one
     BIRD_NUMBER_STATION_MAP={
         "263790573340": "national_fm",
         "263790563340": "power_fm",
+        "263790603340": "radio_zimbabwe",
     },
 )
 class MultiChartShowTests(TestCase):
@@ -154,16 +155,94 @@ class MultiChartShowTests(TestCase):
             "vote_text": "River Artist - Morning Song",
         }).status_code, 404)
 
-    def test_code_optional_during_safe_rollout_then_required(self):
+    def test_coded_station_cannot_fall_back_to_historical_even_if_policy_off(self):
+        # A configuration mistake must not turn multi-show voting into a
+        # legacy-chart vote. Neither new nor existing stations need a new
+        # database flag every time an administrator adds a chart programme.
         StationVotingConfig.objects.filter(station="national_fm").update(require_codes=False)
         self.assertEqual(self.bird("River Artist - Morning Song", "legacy").status_code, 202)
-        event = InboundEvent.objects.get()
-        self.assertEqual(event.chart_show.kind, "legacy")
-        self.assertEqual(event.vote_text, "River Artist - Morning Song")
+        self.assertFalse(InboundEvent.objects.exists())
+        row = UnassignedVote.objects.get()
+        self.assertEqual(row.reason, "missing_or_unknown_code")
+        self.assertIsNone(row.intended_show)
+        self.assertEqual(self.post("shows/routing", {"require_codes": False}).status_code, 400)
         self.assertEqual(self.post("shows/routing", {"require_codes": True}).status_code, 200)
         self.assertEqual(self.bird("River Artist - Morning Song", "missing").status_code, 202)
-        self.assertEqual(UnassignedVote.objects.count(), 1)
-        self.assertEqual(InboundEvent.objects.count(), 1)
+        self.assertEqual(UnassignedVote.objects.count(), 2)
+        self.assertFalse(RawVote.objects.exists())
+
+    def test_radio_zimbabwe_gp20_g20_closed_votes_keep_correct_target(self):
+        StationVotingConfig.objects.filter(station="radio_zimbabwe").update(require_codes=False)
+        gospel = ChartShow.objects.get(station="radio_zimbabwe", code="G20")
+        glow = ChartShow.objects.get(station="radio_zimbabwe", code="GP20")
+        self.assertFalse(gospel.accepts_at(timezone.now()))
+        self.assertFalse(glow.accepts_at(timezone.now()))
+        for text, code, expected, mid in (
+            ("GP20 sugar sugar - mudododo", "GP20", glow, "gp20-held"),
+            ("G20 Mathius Mhere - Ndiperekedze", "G20", gospel, "g20-held"),
+        ):
+            with self.subTest(code=code):
+                response = self.bird(text, mid, "+263790603340")
+                self.assertEqual(response.status_code, 202)
+                row = UnassignedVote.objects.get(message_id=mid)
+                self.assertEqual(row.reason, "show_closed")
+                self.assertEqual(row.intended_show_id, expected.pk)
+                self.assertEqual(row.submitted_code, code)
+                self.assertNotIn(code, row.vote_text.upper().split())
+        self.assertFalse(InboundEvent.objects.filter(station="radio_zimbabwe").exists())
+        self.assertFalse(RawVote.objects.filter(station="radio_zimbabwe").exists())
+        # The original webhook cannot be counted twice if Bird retries it.
+        again = self.bird("GP20 sugar sugar - mudododo", "gp20-held", "+263790603340")
+        self.assertTrue(again.json()["duplicate"])
+        self.assertEqual(UnassignedVote.objects.filter(station="radio_zimbabwe").count(), 2)
+
+    def test_radio_zimbabwe_codes_select_correct_show_once_explicitly_opened(self):
+        gospel = ChartShow.objects.get(station="radio_zimbabwe", code="G20")
+        glow = ChartShow.objects.get(station="radio_zimbabwe", code="GP20")
+        for show in (gospel, glow):
+            show.is_enabled = True
+            show.schedule_mode = "manual"
+            show.manual_open = True
+            show.save(update_fields=["is_enabled", "schedule_mode", "manual_open"])
+        for text, expected, mid in (
+            ("GP20 sugar sugar - mudododo", glow, "gp20-live"),
+            ("g20 Mathius Mhere - Ndiperekedze", gospel, "g20-live"),
+        ):
+            with self.subTest(code=expected.code):
+                response = self.bird(text, mid, "+263790603340")
+                self.assertEqual(response.status_code, 202)
+                row = InboundEvent.objects.get(message_id=mid)
+                self.assertEqual(row.station, "radio_zimbabwe")
+                self.assertEqual(row.chart_show_id, expected.pk)
+                self.assertEqual(row.submitted_code, expected.code)
+                self.assertTrue(row.vote_text)
+        self.assertFalse(UnassignedVote.objects.filter(station="radio_zimbabwe").exists())
+
+    def test_held_coded_vote_cannot_be_reassigned_to_another_show(self):
+        gospel = ChartShow.objects.get(station="radio_zimbabwe", code="G20")
+        glow = ChartShow.objects.get(station="radio_zimbabwe", code="GP20")
+        self.bird("GP20 sugar sugar - mudododo", "gp20-reassign", "+263790603340")
+        held = UnassignedVote.objects.get(message_id="gp20-reassign")
+        for show in (gospel, glow):
+            show.is_enabled = True
+            show.schedule_mode = "manual"
+            show.manual_open = True
+            show.save(update_fields=["is_enabled", "schedule_mode", "manual_open"])
+        self.client.post("/accounts/switch-station/", {"station": "radio_zimbabwe"})
+        wrong = self.post("unassigned/assign", {
+            "id": held.pk, "show_id": gospel.pk,
+            "vote_text": "Sugar Sugar - Mudododo",
+        })
+        self.assertEqual(wrong.status_code, 400)
+        self.assertEqual(UnassignedVote.objects.get(pk=held.pk).state, "pending")
+        # Opening the correct show later does NOT change the receipt-time
+        # decision; no retroactive count is created.
+        response = self.post("unassigned/assign", {
+            "id": held.pk, "show_id": glow.pk,
+            "vote_text": "Sugar Sugar - Mudododo",
+        })
+        self.assertEqual(response.status_code, 400)
+        self.assertFalse(InboundEvent.objects.filter(message_id="gp20-reassign").exists())
 
     def test_separate_station_can_reuse_code_but_cannot_cross_station(self):
         power = ChartShow.objects.create(
