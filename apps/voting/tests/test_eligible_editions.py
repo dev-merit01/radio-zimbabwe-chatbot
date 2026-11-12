@@ -221,6 +221,112 @@ class PresenterEligibleEditionsTests(TestCase):
         self.assertEqual(client.get("/api/workspace/health").status_code, 403)
         self.assertEqual(client.get("/api/workspace/audit").status_code, 403)
 
+    def test_unassigned_station_user_cannot_view_any_chart_show_data(self):
+        station_user = get_user_model().objects.create_user(
+            username="station-operator-unassigned",
+            password="Unassigned-Test-Account!867",
+        )
+        AccountProfile.objects.update_or_create(
+            user=station_user, defaults={"station": "national_fm"},
+        )
+        client = Client()
+        client.force_login(station_user)
+        response = client.get("/api/workspace/shows")
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertTrue(response.json()["assignment_required"])
+        self.assertEqual(response.json()["shows"], [])
+
+        for url in (
+            "/api/workspace/overview",
+            f"/api/workspace/overview?show_id={self.saturday.pk}",
+            "/api/workspace/incoming",
+            f"/api/workspace/incoming?show_id={self.gospel.pk}",
+            "/api/workspace/songs?status=all",
+            "/api/workspace/export",
+            "/api/workspace/eligibility",
+            "/api/workspace/health",
+            "/api/workspace/audit",
+            "/api/stats",
+        ):
+            with self.subTest(url=url):
+                self.assertEqual(client.get(url).status_code, 403)
+        for url in (
+            "/api/chart/today",
+            f"/api/chart/today?show_id={self.gospel.pk}",
+            "/api/chart/archives",
+            f"/api/chart/archives?show_id={self.saturday.pk}",
+        ):
+            with self.subTest(url=url):
+                self.assertEqual(client.get(url).status_code, 400)
+        self.assertEqual(client.get("/api/chart/999999").status_code, 404)
+
+    def test_two_presenters_at_same_station_only_see_their_own_show(self):
+        saturday_user = self.create_presenter()
+        gospel_user = self.create_presenter(
+            show=self.gospel, username="gospel-presenter",
+        )
+        for user, allowed, blocked in (
+            (saturday_user, self.saturday, self.gospel),
+            (gospel_user, self.gospel, self.saturday),
+        ):
+            with self.subTest(user=user.username):
+                client = Client()
+                client.force_login(user)
+                shows = client.get("/api/workspace/shows")
+                self.assertEqual(shows.status_code, 200)
+                self.assertEqual(
+                    [row["id"] for row in shows.json()["shows"]], [allowed.pk]
+                )
+                self.assertFalse(shows.json()["assignment_required"])
+                self.assertEqual(
+                    client.get("/api/workspace/overview").json()["chart_show_id"],
+                    allowed.pk,
+                )
+                for url in (
+                    f"/api/workspace/overview?show_id={blocked.pk}",
+                    f"/api/workspace/incoming?show_id={blocked.pk}",
+                    f"/api/chart/today?show_id={blocked.pk}",
+                    f"/api/chart/archives?show_id={blocked.pk}",
+                    f"/api/workspace/eligibility?show_id={blocked.pk}",
+                ):
+                    with self.subTest(url=url):
+                        self.assertEqual(client.get(url).status_code, 400)
+                self.assertEqual(
+                    client.get("/api/workspace/songs", {
+                        "status": "verified",
+                    }).status_code, 200,
+                )
+                self.assertEqual(
+                    client.get("/api/workspace/songs", {
+                        "status": "pending",
+                    }).status_code, 403,
+                )
+
+    def test_reassignment_replaces_old_chart_show_access(self):
+        presenter = self.create_presenter()
+        client = Client()
+        client.force_login(presenter)
+        self.assertEqual(
+            client.get("/api/workspace/shows").json()["presenter_show_id"],
+            self.saturday.pk,
+        )
+        changed = self.post("presenters/assign", {
+            "user_id": presenter.pk, "chart_show_id": self.gospel.pk,
+        })
+        self.assertEqual(changed.status_code, 200, changed.content)
+        result = client.get("/api/workspace/shows").json()
+        self.assertEqual(result["presenter_show_id"], self.gospel.pk)
+        self.assertEqual([row["id"] for row in result["shows"]], [self.gospel.pk])
+        self.assertEqual(
+            client.get("/api/workspace/overview", {
+                "show_id": self.saturday.pk,
+            }).status_code, 400,
+        )
+        self.assertEqual(
+            client.get("/api/workspace/overview").json()["chart_show_id"],
+            self.gospel.pk,
+        )
+
     def test_admin_can_switch_stations_without_presenter_assignment(self):
         self.assertFalse(
             PresenterAssignment.objects.filter(user=self.admin).exists()
