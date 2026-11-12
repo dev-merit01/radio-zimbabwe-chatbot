@@ -6,7 +6,7 @@ from functools import wraps
 from django.conf import settings
 from django.core.paginator import Paginator
 from django.db import IntegrityError, connection
-from django.db.models import Sum, Count
+from django.db.models import Sum, Count, Q
 from django.http import JsonResponse, HttpResponse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
@@ -30,6 +30,7 @@ from apps.voting.models import (
 from apps.voting.pipeline import review_song
 from apps.voting.presentation import music_name
 from apps.voting.artist_credits import combine_artist_credits, split_artist_credits
+from apps.voting.channels import source_label, vote_source
 
 
 def api_access(permission=None, *, allow_unassigned=False):
@@ -303,22 +304,30 @@ def incoming(request):
     # The recent-submissions panel must follow the same live search as votes,
     # otherwise unrelated messages remain visible beneath filtered results.
     submissions = InboundEvent.objects.filter(
-        station=station, chart_show=show, provider="manual",
+        station=station, chart_show=show,
     )
     if q:
         submissions = submissions.filter(text__icontains=q)
     return JsonResponse(
         {
             **meta,
-            "submissions": list(submissions.order_by("-received_at", "-id")
-                .values("id", "state", "reply", "text")[:10]),
+            "submissions": [
+                {**item, "source": vote_source(item["provider"]),
+                 "source_label": source_label(item["provider"])}
+                for item in submissions.order_by("-received_at", "-id")
+                .values("id", "state", "reply", "text", "provider")[:10]
+            ],
             "items": [
                 {
                     "id": v.id,
                     "text": v.raw_input,
                     "song": v.display_name,
                     "channel": v.user.channel,
-                    "listener": "••••" + v.user.user_ref[-4:],
+                    "source": v.source,
+                    "source_label": source_label(v.source),
+                    "verification_status": v.ai_status,
+                    "listener": ("Verified visitor" if v.source == "web"
+                                 else "••••" + v.user.user_ref[-4:]),
                     "date": str(v.vote_date),
                     "received_at": v.created_at.isoformat(),
                 }
@@ -326,6 +335,40 @@ def incoming(request):
             ],
         }
     )
+
+
+@api_access()
+def source_analytics(request):
+    """Source-by-source receipt and AI approval counts for this programme.
+
+    These are *received submissions*, not official eligible song rankings.
+    Station-wide totals are never exposed to other presenters.
+    """
+    station = get_active_station(request)
+    show = get_selected_show(request)
+    base = RawVote.objects.filter(station=station, chart_show=show)
+    grouped = {
+        row["source"]: row
+        for row in base.order_by().values("source").annotate(
+            received=Count("pk"),
+            ai_approved=Count("pk", filter=Q(ai_status__in=["approved", "legacy"])),
+            awaiting=Count("pk", filter=Q(ai_status="awaiting")),
+            needs_review=Count("pk", filter=Q(ai_status="review")),
+        )
+    }
+    return JsonResponse({
+        "station": station,
+        "chart_show_id": show.pk,
+        "note": "Receipts per channel; official chart counts still require verified, eligible songs.",
+        "sources": [
+            {"source": src, "label": source_label(src),
+             "received": grouped.get(src, {}).get("received", 0),
+             "ai_approved": grouped.get(src, {}).get("ai_approved", 0),
+             "awaiting": grouped.get(src, {}).get("awaiting", 0),
+             "needs_review": grouped.get(src, {}).get("needs_review", 0)}
+            for src in ("web", "whatsapp", "sms", "telegram", "manual")
+        ],
+    })
 
 
 @api_access()
