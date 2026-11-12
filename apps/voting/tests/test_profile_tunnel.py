@@ -7,7 +7,7 @@ import time
 from django.contrib.auth import get_user_model
 from django.test import Client, TestCase, override_settings
 from apps.accounts.models import AccountProfile
-from apps.voting.models import StationVotingConfig
+from apps.voting.models import ChartShow, StationVotingConfig
 from apps.voting.models import InboundEvent
 
 
@@ -70,6 +70,16 @@ class TunnelTests(TestCase):
                         "classic_263", "central_radio", "khulumani_fm",
                         "luzibo_radio")
         ).update(require_codes=False)
+        # This test suite exercises the original single-chart/legacy intake.
+        # Remove seeded programme codes to model an installation that truly
+        # has no configured chart shows. Live multi-chart stations never
+        # receive this exception.
+        ChartShow.objects.filter(
+            station__in=("radio_zimbabwe", "national_fm", "power_fm",
+                        "classic_263", "central_radio", "khulumani_fm",
+                        "luzibo_radio"),
+            kind__in=("weekly", "year_end"),
+        ).delete()
 
     def test_tunnel_accepts_signed_bird_requests_but_hides_workspace(self):
         for path in ['/', '/admin/', '/accounts/login/', '/accounts/profile/', '/api/workspace/overview', '/missing']:
