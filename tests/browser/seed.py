@@ -10,7 +10,7 @@ if not settings.DEBUG or get_user_model().objects.exists():
     raise RuntimeError('Browser fixtures require DEBUG and a database with no existing accounts.')
 # Legacy browser fixtures explicitly exercise code-free compatibility mode.
 from apps.voting.models import StationVotingConfig
-StationVotingConfig.objects.filter(station="radio_zimbabwe").update(require_codes=False)
+StationVotingConfig.objects.filter(station__in=("radio_zimbabwe", "national_fm")).update(require_codes=False)
 user = get_user_model().objects.create_superuser('ui-operator', password='local-browser-test-only')
 for i,(artist,title) in enumerate([('Example Artist','Morning Light'),('Studio Band','Together'),('River Voices','Home'),('Sunrise','New Day')]):
     for j in range(3+i):
