@@ -8,6 +8,7 @@ import time
 from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 
+from apps.voting.models import StationVotingConfig
 from apps.voting.models import InboundEvent, OutboundMessage, RawVote, VoteJob, CleanedSong
 from apps.voting.pipeline import review_song
 from apps.voting.worker import run_one
@@ -18,6 +19,15 @@ from apps.voting.worker import run_one
                    BIRD_ACCESS_KEY='', BIRD_WORKSPACE_ID='', BIRD_CHANNEL_ID='',
                    BIRD_STATION='radio_zimbabwe')
 class BirdCurrentTests(TestCase):
+    def setUp(self):
+        # This suite explicitly tests backward-compatible code-free intake.
+        # Production's established stations now require programme codes.
+        StationVotingConfig.objects.filter(
+            station__in=("radio_zimbabwe", "national_fm", "power_fm",
+                        "classic_263", "central_radio", "khulumani_fm",
+                        "luzibo_radio")
+        ).update(require_codes=False)
+
     def post_event(self, data=None, event_type='whatsapp.received', signed=True, delivery='delivery-1'):
         data = data if data is not None else {
             'whatsapp_id': 'wam-test-1', 'direction': 'inbound',
