@@ -14,9 +14,7 @@ const assert = require('node:assert/strict');
       await page.getByLabel('Username', {exact: true}).fill(name);
       await page.getByLabel('Password', {exact: true}).fill(password);
       if (station) {
-        const choice = page.locator('#id_chart_show optgroup').filter({
-          has: page.locator('option'),
-        }).filter({hasText: station}).locator('option').first();
+        const choice = page.locator('#id_chart_show optgroup[label="' + station + '"] option').first();
         const showId = await choice.getAttribute('value');
         assert.ok(showId, 'Chart show must be selectable for the station.');
         await page.getByLabel('Chart show', {exact: true}).selectOption(showId);
