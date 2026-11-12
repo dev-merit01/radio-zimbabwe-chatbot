@@ -49,11 +49,27 @@ def station_show(station, raw, user=None):
     return show
 
 
-def route_vote(station, text, received_at=None):
-    """(show, song_text, submitted_code, error_reason).
+def station_requires_codes(station):
+    """Protect multi-chart stations even after an accidental policy change.
 
-    A code is mandatory only after the administrator enables this requirement.
-    Old stations otherwise keep their legacy no-code flow during rollout.
+    A missing/unknown code must never silently route to a historical chart
+    when the station has published programme codes. Stations with no coded
+    programmes retain the old single-chart onboarding flow.
+    """
+    required = StationVotingConfig.objects.filter(
+        station=station, require_codes=True,
+    ).exists()
+    return required or ChartShow.objects.filter(
+        station=station, kind__in=("weekly", "year_end"),
+    ).exclude(code="").exists()
+
+
+def route_vote(station, text, received_at=None):
+    """Return (open show, vote text, code, reason), always station scoped.
+
+    Known but closed codes are held; they may not be counted just because an
+    administrator opens the same show later. Their intended show is recorded
+    separately on UnassignedVote for safe manual review.
     """
     received_at = received_at or timezone.now()
     raw = (text or "").strip()
@@ -65,7 +81,6 @@ def route_vote(station, text, received_at=None):
             if show.accepts_at(received_at):
                 return show, match.group(2).strip(), code, None
             return None, "", code, "show_closed"
-    config = StationVotingConfig.objects.filter(station=station).first()
-    if config and config.require_codes:
+    if station_requires_codes(station):
         return None, "", "", "missing_or_unknown_code"
     return legacy_show(station), raw, "", None
