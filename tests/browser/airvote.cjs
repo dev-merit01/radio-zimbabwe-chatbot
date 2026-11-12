@@ -9,10 +9,18 @@ const assert = require('node:assert/strict');
     const base = process.env.TEST_BASE_URL || 'http://127.0.0.1:8765';
     const errors = [];
     page.on('pageerror', error => errors.push(error.message));
-    async function login(name, password) {
+    async function login(name, password, station = null) {
       await page.goto(base);
       await page.getByLabel('Username', {exact: true}).fill(name);
       await page.getByLabel('Password', {exact: true}).fill(password);
+      if (station) {
+        const choice = page.locator('#id_chart_show optgroup').filter({
+          has: page.locator('option'),
+        }).filter({hasText: station}).locator('option').first();
+        const showId = await choice.getAttribute('value');
+        assert.ok(showId, 'Chart show must be selectable for the station.');
+        await page.getByLabel('Chart show', {exact: true}).selectOption(showId);
+      }
       await page.getByRole('button', {name: 'Sign in', exact: true}).click();
       await page.locator('#connection').getByText('Connected', {exact: true}).waitFor();
     }
@@ -60,14 +68,16 @@ const assert = require('node:assert/strict');
     const chart = await page.request.get(base + '/api/chart/today');
     assert.equal((await chart.json()).top100[0].count, 1);
     await page.getByRole('button', {name: 'Sign out', exact: true}).click();
-    await login('ui-staff', 'local-staff-test-only');
-    await switchTo('national_fm', 'wrong-password');
+    await login('ui-staff', 'local-staff-test-only', 'Radio Zimbabwe');
     assert.equal(await page.locator('.station strong').textContent(), 'Radio Zimbabwe');
-    await switchTo('national_fm', 'Station-browser-572!');
-    assert.equal(await page.locator('.station strong').textContent(), 'National FM');
+    assert.equal(await page.locator('#station-select').count(), 0,
+      'The selected-show station session must not offer station switching.');
+    const staffShows = await page.evaluate(async () =>
+      (await fetch('/api/workspace/shows')).json());
+    assert.equal(staffShows.shows.length, 1);
     assert.equal(await page.getByRole('button', {name: 'Record vote', exact: true}).count(), 0);
     assert.deepEqual(errors, []);
-    await page.screenshot({path: '/tmp/airvote-station-switch.png', fullPage: true});
-    console.log('AirVote browser passed: admin bypass, password gate, worker intake, review and chart totals.');
+    await page.screenshot({path: '/tmp/airvote-station-chart-show.png', fullPage: true});
+    console.log('AirVote browser passed: admin controls, station chart-show sign-in, worker intake and chart totals.');
   } finally { await browser.close(); }
 })().catch(error => {console.error(error);process.exitCode=1;});
