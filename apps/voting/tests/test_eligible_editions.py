@@ -221,6 +221,128 @@ class PresenterEligibleEditionsTests(TestCase):
         self.assertEqual(client.get("/api/workspace/health").status_code, 403)
         self.assertEqual(client.get("/api/workspace/audit").status_code, 403)
 
+    def test_station_credentials_can_select_show_at_login_and_change_on_next_login(self):
+        user = get_user_model().objects.create_user(
+            username="shared-national-fm",
+            password="Existing-Station-Password!89",
+        )
+        AccountProfile.objects.update_or_create(
+            user=user, defaults={"station": "national_fm"},
+        )
+        station_client = Client()
+        form = station_client.get("/accounts/login/")
+        self.assertEqual(form.status_code, 200)
+        self.assertContains(form, "Chart show")
+        self.assertContains(form, self.saturday.name)
+        self.assertContains(form, self.gospel.name)
+        self.assertContains(form, "National FM")
+
+        def login_to(show):
+            return station_client.post("/accounts/login/", {
+                "username": user.username,
+                "password": "Existing-Station-Password!89",
+                "chart_show": str(show.pk),
+            })
+
+        signed_in = login_to(self.saturday)
+        self.assertEqual(signed_in.status_code, 302, signed_in.content)
+        self.assertEqual(
+            station_client.session["airvote_chart_show_id"], self.saturday.pk,
+        )
+        shows = station_client.get("/api/workspace/shows").json()
+        self.assertEqual([item["id"] for item in shows["shows"]], [self.saturday.pk])
+        self.assertFalse(shows["assignment_required"])
+        self.assertEqual(
+            station_client.get("/api/workspace/overview").json()["chart_show_id"],
+            self.saturday.pk,
+        )
+        self.assertEqual(
+            station_client.get("/api/workspace/overview", {
+                "show_id": self.gospel.pk,
+            }).status_code, 400,
+        )
+        self.assertEqual(
+            station_client.get("/api/workspace/incoming", {
+                "show_id": self.gospel.pk,
+            }).status_code, 400,
+        )
+        self.assertEqual(
+            station_client.get("/api/chart/today", {
+                "show_id": self.gospel.pk,
+            }).status_code, 400,
+        )
+        self.assertEqual(
+            station_client.post("/accounts/switch-station/", {
+                "station": "power_fm",
+            }).status_code, 403,
+        )
+
+        self.assertEqual(
+            station_client.post("/accounts/logout/").status_code, 302,
+        )
+        self.assertNotIn("airvote_chart_show_id", station_client.session)
+        self.assertEqual(login_to(self.gospel).status_code, 302)
+        self.assertEqual(
+            [item["id"] for item in station_client.get("/api/workspace/shows").json()["shows"]],
+            [self.gospel.pk],
+        )
+        self.assertEqual(
+            station_client.get("/api/workspace/overview", {
+                "show_id": self.saturday.pk,
+            }).status_code, 400,
+        )
+
+    def test_login_requires_show_from_the_credentials_station(self):
+        user = get_user_model().objects.create_user(
+            username="shared-nfm-invalid", password="Station-Password!936",
+        )
+        AccountProfile.objects.update_or_create(
+            user=user, defaults={"station": "national_fm"},
+        )
+        client = Client()
+        for selected in ("", str(self.power.pk), "not-a-show", "999999999"):
+            with self.subTest(show=selected):
+                response = client.post("/accounts/login/", {
+                    "username": user.username, "password": "Station-Password!936",
+                    "chart_show": selected,
+                })
+                self.assertIn(response.status_code, (200, 400))
+                self.assertNotIn("_auth_user_id", client.session)
+                self.assertEqual(client.get("/api/workspace/shows").status_code, 401)
+        self.assertEqual(
+            client.post("/accounts/login/", {
+                "username": self.admin.username,
+                "password": "Administrator-Test-Password!8",
+                "chart_show": "",
+            }).status_code, 302,
+        )
+        self.assertGreater(
+            len(client.get("/api/workspace/shows").json()["shows"]), 1,
+        )
+
+    def test_chart_show_choice_overrides_previous_station_assignment(self):
+        presenter = self.create_presenter(show=self.saturday)
+        client = Client()
+        response = client.post("/accounts/login/", {
+            "username": presenter.username,
+            "password": "Presenter-Long-Unique-Test!87",
+            "chart_show": str(self.gospel.pk),
+        })
+        self.assertEqual(response.status_code, 302, response.content)
+        self.assertEqual(
+            client.get("/api/workspace/overview").json()["chart_show_id"],
+            self.gospel.pk,
+        )
+        self.assertEqual(
+            [row["id"] for row in client.get("/api/workspace/shows").json()["shows"]],
+            [self.gospel.pk],
+        )
+        self.assertEqual(
+            client.get("/api/workspace/eligibility", {
+                "show_id": self.saturday.pk,
+            }).status_code, 400,
+        )
+
     def test_unassigned_station_user_cannot_view_any_chart_show_data(self):
         station_user = get_user_model().objects.create_user(
             username="station-operator-unassigned",
