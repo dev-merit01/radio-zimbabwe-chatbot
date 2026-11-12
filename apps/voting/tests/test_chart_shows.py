@@ -54,12 +54,12 @@ class MultiChartShowTests(TestCase):
             station="national_fm"
         ).update(require_codes=True)
 
-    def bird(self, text, message_id="wam-1", number="+263790573340"):
+    def bird(self, text, message_id="wam-1", number="+263790573340", sender="+263771112222"):
         payload = {
             "type": "whatsapp.received",
             "data": {
                 "whatsapp_id": message_id, "direction": "inbound",
-                "from": {"phone_number": "+263771112222"},
+                "from": {"phone_number": sender},
                 "to": {"phone_number": number},
                 "text": {"body": text},
             },
@@ -131,9 +131,11 @@ class MultiChartShowTests(TestCase):
             ("River Artist - Morning Song | GOS", self.gospel, "GOS", "pipe"),
             ("gos River Artist - Morning Song", self.gospel, "GOS", "lowercase"),
         )
-        for text, expected, code, mid in samples:
+        for index, (text, expected, code, mid) in enumerate(samples):
             with self.subTest(text=text):
-                response = self.bird(text, "both-" + mid)
+                response = self.bird(
+                    text, "both-" + mid, sender=f"+2637711122{index:02d}",
+                )
                 self.assertEqual(response.status_code, 202)
                 event = InboundEvent.objects.get(message_id="both-" + mid)
                 self.assertEqual(event.station, "national_fm")
@@ -210,11 +212,14 @@ class MultiChartShowTests(TestCase):
             show.schedule_mode = "manual"
             show.manual_open = True
             show.save(update_fields=["is_enabled", "schedule_mode", "manual_open"])
-        for text, code, expected, mid in (
+        for index, (text, code, expected, mid) in enumerate((
             ("Sugar Sugar - Mudododo GP20", "GP20", glow, "glow-suffix"),
             ("Mathius Mhere - Ndiperekedze G20", "G20", gospel, "gospel-suffix"),
-        ):
-            result = self.bird(text, mid, "+263790603340")
+        )):
+            result = self.bird(
+                text, mid, "+263790603340",
+                sender=f"+2637722200{index:02d}",
+            )
             self.assertEqual(result.status_code, 202)
             vote = InboundEvent.objects.get(message_id=mid)
             self.assertEqual(vote.submitted_code, code)
