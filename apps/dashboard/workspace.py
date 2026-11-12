@@ -28,6 +28,7 @@ from apps.voting.models import (
 )
 from apps.voting.pipeline import review_song
 from apps.voting.presentation import music_name
+from apps.voting.artist_credits import combine_artist_credits, split_artist_credits
 
 
 def api_access(permission=None):
@@ -195,7 +196,9 @@ def songs(request):
             "items": [
                 {
                     "id": s.id,
-                    "artist": music_name(s.artist),
+                    "artist": combine_artist_credits(s.artist, None),
+                    "primary_artist": split_artist_credits(s.artist)[0],
+                    "featured_artists": split_artist_credits(s.artist)[1],
                     "title": music_name(s.title),
                     "status": s.status,
                     "votes": s.votes or 0,
@@ -212,13 +215,16 @@ def songs(request):
 @api_access("voting.change_cleanedsong")
 def review(request, song_id):
     data = json.loads(request.body)
+    artist = data.get("artist")
+    if data["action"] == "edit" and "featured_artists" in data:
+        artist = combine_artist_credits(artist, data["featured_artists"])
     review_song(
         get_active_station(request),
         request.user,
         song_id,
         data["action"],
         target_id=data.get("target_id"),
-        artist=data.get("artist"),
+        artist=artist,
         title=data.get("title"),
     )
     return JsonResponse({"ok": True})
@@ -232,7 +238,8 @@ def add_song(request):
         data.get("title"), str
     ):
         raise ValueError("Artist and title must be text.")
-    artist, title = music_name(data["artist"]), music_name(data["title"])
+    artist = combine_artist_credits(data["artist"], data.get("featured_artists"))
+    title = music_name(data["title"])
     if not artist or not title or len(artist) > 240 or len(title) > 240:
         raise ValueError("Artist and title are required (maximum 240 characters).")
     from django.db import transaction
