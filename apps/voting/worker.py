@@ -62,11 +62,15 @@ def ingest(item):
             if event.media_type:
                 event.reply = "Please send a text vote: Artist - Song. Media messages cannot be counted."
             else:
+                from .channels import vote_source
+                channel = vote_source(event.provider)
                 service = VotingService(
-                    ("manual" if event.provider == "manual" else
-                     "telegram" if event.provider == "telegram" else "whatsapp"),
+                    channel,
                     event.sender,
                     event.station,
+                    # Online verification already bound this HMAC to a phone
+                    # before the queued receipt was created.
+                    voter_fingerprint=event.sender if channel == "web" else "",
                 )
                 from apps.charts.routing import legacy_show
                 show = event.chart_show or legacy_show(event.station)
@@ -77,7 +81,7 @@ def ingest(item):
                 )
             event.save(update_fields=["reply"])
         from django.conf import settings
-        if event.provider != "manual" and not (
+        if event.provider not in {"manual", "web", "sms"} and not (
             event.provider == "bird" and settings.BIRD_SILENT_VOTING
         ) and (event.provider != "bird" or bird_replies_configured()):
             OutboundMessage.objects.get_or_create(
