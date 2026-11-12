@@ -11,7 +11,7 @@ from django.contrib.auth.models import Permission
 from django.core.cache import cache
 from django.test import TestCase, Client, override_settings
 from apps.accounts.models import StationAccess, AccountProfile
-from apps.voting.models import StationVotingConfig
+from apps.voting.models import ChartShow, StationVotingConfig
 from apps.voting.models import InboundEvent, RawVote, VoteJob, OutboundMessage, ReviewAudit, CleanedSong
 from apps.voting.worker import run_one
 from apps.voting.pipeline import review_song
@@ -27,6 +27,16 @@ class AirVoteTests(TestCase):
                         "classic_263", "central_radio", "khulumani_fm",
                         "luzibo_radio")
         ).update(require_codes=False)
+        # This test suite exercises the original single-chart/legacy intake.
+        # Remove seeded programme codes to model an installation that truly
+        # has no configured chart shows. Live multi-chart stations never
+        # receive this exception.
+        ChartShow.objects.filter(
+            station__in=("radio_zimbabwe", "national_fm", "power_fm",
+                        "classic_263", "central_radio", "khulumani_fm",
+                        "luzibo_radio"),
+            kind__in=("weekly", "year_end"),
+        ).delete()
         cache.clear()
         self.admin = get_user_model().objects.create_superuser('admin', password='test-admin-only')
         self.staff = get_user_model().objects.create_user('staff', password='test-staff-only')
