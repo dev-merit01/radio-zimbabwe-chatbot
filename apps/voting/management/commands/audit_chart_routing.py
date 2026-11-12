@@ -7,6 +7,7 @@ from django.core.management.base import BaseCommand
 from django.db.models import Count
 from django.utils import timezone
 
+from apps.charts.routing import station_requires_codes
 from apps.accounts.models import station_choices
 from apps.voting.models import ChartShow, StationVotingConfig, UnassignedVote
 
@@ -18,7 +19,7 @@ class Command(BaseCommand):
         now = timezone.now()
         for station, _name in station_choices(active_only=True):
             config = StationVotingConfig.objects.filter(station=station).first()
-            required = bool(config and config.require_codes)
+            required = station_requires_codes(station)
             shows = ChartShow.objects.filter(station=station).exclude(kind="legacy").order_by("code", "id")
             entries = []
             for show in shows:
@@ -43,4 +44,18 @@ class Command(BaseCommand):
             self.stdout.write(
                 f"routing_holds station={station} pending_by_reason="
                 + ",".join(f"{row['reason']}:{row['n']}" for row in reasons)
+            )
+            held_codes = (
+                UnassignedVote.objects.filter(
+                    station=station, state="pending", reason="show_closed",
+                    intended_show__isnull=False,
+                ).values("intended_show__code").annotate(n=Count("id"))
+                .order_by("intended_show__code")
+            )
+            self.stdout.write(
+                f"routing_held_programmes station={station} codes="
+                + ",".join(
+                    f"{item['intended_show__code']}:{item['n']}"
+                    for item in held_codes
+                )
             )
