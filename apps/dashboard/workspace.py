@@ -11,6 +11,7 @@ from django.http import JsonResponse, HttpResponse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 from apps.accounts.context_processors import get_active_station
+from apps.accounts.permissions import presenter_show
 from apps.charts.routing import get_selected_show, station_show
 from apps.charts.periods import campaign_local_dates
 from apps.charts.show_rankings import counts_for_show
@@ -31,12 +32,20 @@ from apps.voting.presentation import music_name
 from apps.voting.artist_credits import combine_artist_credits, split_artist_credits
 
 
-def api_access(permission=None):
+def api_access(permission=None, *, allow_unassigned=False):
     def wrap(fn):
         @wraps(fn)
         def call(request, *args, **kwargs):
             if not request.user.is_authenticated:
                 return JsonResponse({"error": "Sign in to continue."}, status=401)
+            # Station account approval is not chart-show access.
+            if (not request.user.is_superuser and not allow_unassigned
+                    and not presenter_show(request.user)):
+                return JsonResponse(
+                    {"error": "No chart show is assigned to this account. "
+                              "Ask your AirVote administrator to assign one."},
+                    status=403,
+                )
             admin_only = permission in {"admin", "voting.change_cleanedsong", "voting.add_cleanedsong", "voting.add_weeklychart"}
             if permission and not (request.user.is_superuser if admin_only else request.user.has_perm(permission)):
                 return JsonResponse(
@@ -117,9 +126,10 @@ def overview(request):
                 "vote_multiplier": multiplier,
             } if request.user.is_superuser else {}),
             "listeners": votes.values("user_id").distinct().count(),
-            "pending_songs": CleanedSong.objects.filter(
-                station=station, status="pending"
-            ).count(),
+            "pending_songs": (
+                CleanedSong.objects.filter(station=station, status="pending").count()
+                if request.user.is_superuser else 0
+            ),
             "timeline": [
                 {"date": str(today - timedelta(days=6-i)),
                  "count": daily.get(today - timedelta(days=6-i), 0)}
@@ -159,9 +169,10 @@ def overview(request):
                 "vote_multiplier": multiplier,
             } if request.user.is_superuser else {}),
             "listeners": votes.values("user_id").distinct().count(),
-            "pending_songs": CleanedSong.objects.filter(
-                station=station, status="pending"
-            ).count(),
+            "pending_songs": (
+                CleanedSong.objects.filter(station=station, status="pending").count()
+                if request.user.is_superuser else 0
+            ),
             "timeline": [
                 {
                     "date": str(start + timedelta(days=i)),
@@ -179,6 +190,12 @@ def songs(request):
     station = get_active_station(request)
     qs = CleanedSong.objects.filter(station=station)
     status = request.GET.get("status", "pending")
+    if not request.user.is_superuser:
+        # Presenters may choose from a shared verified catalogue, not review
+        # other programmes' unverified songs.
+        if status in {"pending", "rejected"}:
+            return JsonResponse({"error": "Catalogue review is restricted to administrators."}, status=403)
+        qs = qs.filter(status="verified")
     if status in {"pending", "verified", "rejected"}:
         qs = qs.filter(status=status)
     q = request.GET.get("q", "").strip()[:100]
@@ -201,7 +218,8 @@ def songs(request):
                     "featured_artists": split_artist_credits(s.artist)[1],
                     "title": music_name(s.title),
                     "status": s.status,
-                    "votes": s.votes or 0,
+                    # Station-wide match-key totals include other programmes.
+                    "votes": (s.votes or 0) if request.user.is_superuser else None,
                     "spotify": bool(s.spotify_track_id),
                     "image_url": s.image_url,
                 }
@@ -312,8 +330,7 @@ def incoming(request):
 
 @api_access()
 def health(request):
-    from apps.accounts.permissions import presenter_show
-    if presenter_show(request.user):
+    if not request.user.is_superuser:
         return JsonResponse(
             {"error": "Station connections are administrator tools."}, status=403,
         )
@@ -408,8 +425,7 @@ def retry_failed(request):
 
 @api_access()
 def audit(request):
-    from apps.accounts.permissions import presenter_show
-    if presenter_show(request.user):
+    if not request.user.is_superuser:
         return JsonResponse(
             {"error": "Station audit logs are administrator tools."}, status=403,
         )
@@ -553,7 +569,7 @@ def submit_vote(request):
     except ValueError as error:
         raise ValueError("Invalid submission identifier. Open the form again.") from error
     station = get_active_station(request)
-    show = station_show(station, data.get("show_id"))
+    show = station_show(station, data.get("show_id"), user=request.user)
     from apps.voting.models import StationVotingConfig
     if show.kind == "legacy" and StationVotingConfig.objects.filter(
         station=station, require_codes=True
