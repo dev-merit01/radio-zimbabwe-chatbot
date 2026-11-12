@@ -68,6 +68,25 @@ class RegistrationForm(forms.Form):
 class LoginForm(forms.Form):
     username = forms.CharField(max_length=150)
     password = forms.CharField(widget=forms.PasswordInput)
+    chart_show = forms.ChoiceField(choices=(), required=False)
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        from apps.voting.models import ChartShow
+
+        stations = station_choices(active_only=True)
+        station_ids = [slug for slug, _ in stations]
+        grouped = {slug: [] for slug in station_ids}
+        rows = ChartShow.objects.filter(
+            station__in=station_ids, kind__in=("weekly", "year_end"),
+            is_archived=False,
+        ).order_by("name", "pk").values_list("station", "pk", "name")
+        for station, show_id, show_name in rows:
+            grouped[station].append((str(show_id), show_name))
+        self.fields["chart_show"].choices = [
+            ("", "Choose your chart show"),
+            *[(name, grouped[slug]) for slug, name in stations if grouped[slug]],
+        ]
 
 
 class ProfileForm(forms.ModelForm):
