@@ -191,6 +191,21 @@
       showsCache = showsData.shows;
       showPolicyEnabled = showsData.require_codes;
       activeVoteMultiplier = showsData.vote_multiplier || 1;
+      if (showsData.assignment_required) {
+        selectedShowId = null;
+        permissions = {};
+        $("page-title").textContent = "Awaiting chart-show assignment";
+        $("page-description").textContent = "A presenter needs an individual chart-show assignment.";
+        $("page-content").innerHTML =
+          '<section class="panel"><div class="empty"><h3>No chart show assigned</h3>' +
+          '<p>Your station account is active, but it has not been assigned a programme. ' +
+          'Ask your AirVote administrator to open Presenter accounts and assign this login ' +
+          'to your specific chart show.</p>' +
+          '<p>Other programmes and their votes are not accessible with this account.</p></div></section>';
+        status(true);
+        $("last-updated").textContent = "Programme assignment required";
+        return;
+      }
       if (!showsCache.some((show) => show.id === selectedShowId))
         selectedShowId = showsData.presenter_show_id ||
           showsCache.find((show) => show.kind === "legacy")?.id ||
@@ -208,7 +223,7 @@
       const overview = await read("workspace/overview?show_id=" + selectedShowId);
       if (current !== generation) return;
       permissions = overview;
-      $("nav-pending").textContent = num(overview.pending_songs);
+      if ($("nav-pending")) $("nav-pending").textContent = num(overview.pending_songs);
       if (page === "overview") {
         const data = await read(`chart/today?limit=${chartSize}&period=${selectedShow?.kind === "year_end" ? "year_end" : chartPeriod}&show_id=${selectedShowId}`);
         html = `<div class="metrics">${[
@@ -216,7 +231,7 @@
           ["Verified votes", overview.verified_votes],
           ...(overview.vote_multiplier > 1 ? [["Weighted chart points", overview.verified_score]] : []),
           ["Unique listeners", overview.listeners],
-          ["Songs awaiting review", overview.pending_songs],
+          ...(permissions.can_review ? [["Songs awaiting review", overview.pending_songs]] : []),
         ]
           .map(
             ([label, value]) =>
@@ -232,12 +247,13 @@
               chart(data.top100, data.comparison),
             `<a class="button secondary" href="/api/workspace/export?limit=${chartSize}&period=${chartPeriod}&show_id=${selectedShowId}">Export CSV</a>`,
           ) +
-          '</div><aside class="side-stack"><section class="panel activity-card"><h2>Votes this week</h2><p>Received votes by day, including songs awaiting review.</p><canvas id="timeline" width="520" height="250" aria-label="Daily vote counts" role="img"></canvas><p id="timeline-summary" class="sr-only"></p></section><section class="review-callout"><h3>' +
-          num(overview.pending_songs) +
-          (overview.pending_songs === 1
-            ? " song to review</h3>"
-            : " songs to review</h3>") +
-          '<p>Check new entries before they appear on the chart.</p><button class="button secondary" data-page="review">Open review queue</button></section></aside></div>';
+          '</div><aside class="side-stack"><section class="panel activity-card"><h2>Votes this week</h2><p>Received votes by day for this chart show.</p><canvas id="timeline" width="520" height="250" aria-label="Daily vote counts" role="img"></canvas><p id="timeline-summary" class="sr-only"></p></section>' +
+          (permissions.can_review
+            ? '<section class="review-callout"><h3>' +
+              num(overview.pending_songs) +
+              (overview.pending_songs === 1 ? " song to review</h3>" : " songs to review</h3>") +
+              '<p>Check new entries before they appear on the chart.</p><button class="button secondary" data-page="review">Open review queue</button></section>'
+            : '') + '</aside></div>';
       } else if (["review", "catalogue", "incoming"].includes(page)) {
         const incoming = page === "incoming";
         const d = await read(
@@ -246,7 +262,7 @@
         let rows = d.items.map((r) =>
           incoming
             ? `<tr><td>${esc(r.text)}</td><td>${esc(r.channel)}</td><td>${esc(r.listener)}</td><td>${esc(new Date(r.received_at).toLocaleString())}</td></tr>`
-            : `<tr><td><strong>${esc(r.title)}</strong><br>${esc(r.artist)}<br><small>Song ID: ${r.id}</small></td><td>${num(r.votes)}</td><td>${esc(r.status)}</td><td><div class="row-actions">${permissions.can_review ? btn("Edit", "edit", r.id) + btn("Verify", "verified", r.id) + btn("Reject", "rejected", r.id) + btn("Merge", "merge", r.id) : ""}</div></td></tr>`,
+            : `<tr><td><strong>${esc(r.title)}</strong><br>${esc(r.artist)}<br><small>Song ID: ${r.id}</small></td>${permissions.is_admin ? `<td>${num(r.votes)}</td>` : ''}<td>${esc(r.status)}</td>${permissions.can_review ? `<td><div class="row-actions">${btn("Edit", "edit", r.id) + btn("Verify", "verified", r.id) + btn("Reject", "rejected", r.id) + btn("Merge", "merge", r.id)}</div></td>` : ''}</tr>`,
         );
         html = panel(
           incoming
@@ -259,7 +275,9 @@
               ? table(
                   incoming
                     ? ["Vote", "Channel", "Listener", "Received"]
-                    : ["Song", "All-time mapped votes", "Status", "Actions"],
+                    : (permissions.is_admin
+                      ? ["Song", "All-time mapped votes", "Status", "Actions"]
+                      : ["Song", "Status"]),
                   rows,
                 )
               : empty) +
