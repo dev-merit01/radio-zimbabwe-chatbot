@@ -182,7 +182,7 @@ class MultiChartShowTests(TestCase):
         self.assertFalse(RawVote.objects.exists())
 
     def test_missing_and_other_station_suffix_codes_cannot_select_a_show(self):
-        power = ChartShow.objects.create(
+        ChartShow.objects.create(
             station="power_fm", name="Power Top 20", code="P20",
             is_enabled=True, manual_open=True, schedule_mode="manual",
         )
