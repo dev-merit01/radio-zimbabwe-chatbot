@@ -5,7 +5,6 @@ Only published, verified song IDs in an OPEN programme are eligible. Public
 submissions are queued into the existing AI verification worker (fail closed).
 """
 import hashlib
-import json
 import logging
 import re
 import time
@@ -25,7 +24,7 @@ from django.views.decorators.http import require_GET, require_POST
 from apps.accounts.models import BroadcastStation
 from apps.voting.channels import normalized_phone, phone_fingerprint
 from apps.voting.models import (
-    ChartShow, CleanedSong, EditionCandidate, EligibleEdition, InboundEvent,
+    ChartShow, CleanedSong, EligibleEdition, InboundEvent,
 )
 
 logger = logging.getLogger(__name__)
