@@ -12,8 +12,7 @@ class WorkspaceSecurityMiddleware:
             from django.shortcuts import redirect
 
             return redirect("/accounts/login/?next=/admin/")
-        public_portal = request.path.startswith("/vote/")
-        private = not request.path.startswith(("/webhook/", "/static/", "/vote/"))
+        private = not request.path.startswith(("/webhook/", "/static/"))
         if private and request.user.is_authenticated and not request.user.is_superuser:
             from apps.accounts.models import station_exists
 
@@ -32,17 +31,6 @@ class WorkspaceSecurityMiddleware:
             response["Cache-Control"] = "no-store, private"
             response["Referrer-Policy"] = "same-origin"
             response["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
-        if public_portal:
-            response["Cache-Control"] = "no-store, private"
-            response["Referrer-Policy"] = "strict-origin-when-cross-origin"
-            response["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
-            response["Content-Security-Policy"] = (
-                "default-src 'none'; script-src 'self' https://challenges.cloudflare.com; "
-                "style-src 'self'; img-src 'self' https: data:; connect-src 'self' "
-                "https://challenges.cloudflare.com; frame-src https://challenges.cloudflare.com; "
-                "font-src 'self'; object-src 'none'; base-uri 'self'; "
-                "form-action 'self'; frame-ancestors 'none'"
-            )
         if request.path == "/" or request.path.startswith("/accounts/"):
             response["Content-Security-Policy"] = (
                 "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' https: data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
