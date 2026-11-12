@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">AirVote</string>
+    <string name="connection_settings">Connection settings</string>
+    <string name="reload">Reload</string>
+    <string name="cancel">Cancel</string>
+    <string name="connect">Connect securely</string>
+    <string name="retry">Retry connection</string>
+    <string name="server_hint">https://your-airvote-server.example</string>
+    <string name="server_label">AirVote server HTTPS address</string>
+    <string name="connection_help">Enter the same Railway HTTPS address used by the Windows application. Staff credentials are never stored in the mobile app.</string>
+    <string name="connection_error">Connection could not be verified. Check the server address, internet connection and HTTPS certificate.</string>
+    <string name="connection_heading">Connect to your AirVote workspace</string>
+    <string name="connection_subheading">One workspace. Your stations, chart shows and votes stay in sync.</string>
+    <string name="offline_heading">AirVote is unavailable</string>
+    <string name="offline_detail">Your connection or station server could not be reached. No votes or settings have been changed on this phone.</string>
+    <string name="open_settings">Change server</string>
+    <string name="checking_server">Verifying AirVote server…</string>
+    <string name="opening_workspace">Opening your station workspace…</string>
+    <string name="settings_button">App options</string>
+</resources>
