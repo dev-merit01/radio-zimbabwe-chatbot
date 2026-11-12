@@ -2,7 +2,7 @@ from datetime import timedelta
 from django.test import TestCase, override_settings
 from django.contrib.auth import get_user_model
 from django.utils import timezone
-from apps.voting.models import StationVotingConfig
+from apps.voting.models import ChartShow, StationVotingConfig
 from apps.voting.models import (
     InboundEvent,
     RawVote,
@@ -32,6 +32,16 @@ class TestVersionTwo(TestCase):
                         "classic_263", "central_radio", "khulumani_fm",
                         "luzibo_radio")
         ).update(require_codes=False)
+        # This test suite exercises the original single-chart/legacy intake.
+        # Remove seeded programme codes to model an installation that truly
+        # has no configured chart shows. Live multi-chart stations never
+        # receive this exception.
+        ChartShow.objects.filter(
+            station__in=("radio_zimbabwe", "national_fm", "power_fm",
+                        "classic_263", "central_radio", "khulumani_fm",
+                        "luzibo_radio"),
+            kind__in=("weekly", "year_end"),
+        ).delete()
         self.admin = get_user_model().objects.create_superuser(
             "operator", password="test-only-password"
         )
