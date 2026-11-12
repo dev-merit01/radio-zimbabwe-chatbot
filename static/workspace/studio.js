@@ -653,11 +653,14 @@
                 '<span class="show-status show-status--' + (showsData.require_codes ? "live" : "scheduled") + '">' +
                 (showsData.require_codes ? "Codes required" : "Compatibility mode") +
                 '</span></div>' +
-              '<p>' + (showsData.require_codes
-                ? "Listeners must include an active programme code. Unknown codes go to the review queue."
-                : "Warning: Uncoded votes will enter the historical chart while compatibility mode is active. Require programme codes before opening chart voting.") +
+              '<p>' + (showsData.codes_enforced_by_shows
+                ? "Programme codes are enforced for this multi-chart station. Missing and unknown codes are held for review, not counted under historical charts."
+                : showsData.require_codes
+                ? "Listeners must include a programme code. Unknown codes are held for review."
+                : "No coded programmes have been configured. Enable codes before opening voting.") +
               '</p>' +
-              btn(showsData.require_codes ? "Make codes optional" : "Require programme codes", "show-policy") +
+              (showsData.codes_enforced_by_shows ? "" :
+                btn(showsData.require_codes ? "Make codes optional" : "Require programme codes", "show-policy")) +
             '</section>' +
             '<section class="panel show-settings-panel" aria-labelledby="show-unassigned-title">' +
               '<div class="show-settings-head"><h2 id="show-unassigned-title">Unassigned votes</h2>' +
@@ -665,13 +668,17 @@
               '<p>Messages with missing, unknown or closed-show codes are never added to a chart automatically.</p>' +
               (waiting.items.length
                 ? '<div class="show-queue-table">' + table(
-                    ["Received", "Vote text", "Reason", "Actions"],
+                    ["Received", "Vote text", "Intended chart", "Reason", "Actions"],
                     waiting.items.map((item) =>
                       '<tr><td>' + esc(new Date(item.received_at).toLocaleString()) +
                       '</td><td class="show-queue-text">' + esc(item.text) +
+                      '</td><td>' + esc(item.intended_show || "Unspecified") +
+                      (item.code ? " (" + esc(item.code) + ")" : "") +
                       '</td><td>' + esc(item.reason.replaceAll("_", " ")) +
                       '</td><td><div class="show-queue-actions">' +
-                      btn("Assign", "show-assign", item.id) +
+                      (item.reason === "show_closed"
+                        ? '<span class="show-queue-count">Held · voting was closed</span>'
+                        : btn("Assign", "show-assign", item.id)) +
                       btn("Dismiss", "show-dismiss", item.id) +
                       '</div></td></tr>'
                     )
