@@ -45,6 +45,7 @@
   function updateVoteButton() {
     const open = enabled && Boolean(state.detail?.voting_open);
     $("vote-button").disabled = !open || !state.selected || !state.verified;
+    $("send-code").disabled = !open || !state.selected || state.verified;
   }
   function renderStations() {
     $("station-count").textContent = state.stations.length + " stations";
@@ -150,19 +151,24 @@
 
   $("verify-start-form").addEventListener("submit", async (event) => {
     event.preventDefault();message("");
-    if (!enabled) return;
+    if (!enabled || !state.selected || !state.detail?.voting_open) {
+      message("Choose an eligible song on an open chart show first.","error");
+      return;
+    }
     const form = event.currentTarget;
     setBusy(form,true);
     try {
       const token = turnstileToken("verification-turnstile");
       const result = await post("/vote/api/verify/start/", {
-        phone: $("phone").value, "cf-turnstile-response": token,
+        phone: $("phone").value, show_id: state.show.id,
+        song_id: state.selected.id, "cf-turnstile-response": token,
       });
+      form.hidden = true;
       $("verify-check-form").hidden = false;
       $("otp").focus();
       message(result.message,"success");
     } catch (err) {message(err.message,"error");}
-    finally {setBusy(form,false);resetTurnstile("verification-turnstile");}
+    finally {setBusy(form,false);updateVoteButton();resetTurnstile("verification-turnstile");}
   });
   $("verify-check-form").addEventListener("submit", async (event) => {
     event.preventDefault();message("");
