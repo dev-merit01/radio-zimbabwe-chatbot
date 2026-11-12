@@ -189,7 +189,13 @@ const assert = require('node:assert/strict');
   await page.getByRole('button',{name:'Save changes',exact:true}).click();
   await page.locator('#modal').waitFor({state:'hidden'});
   await page.getByText('Test New Broadcast Song',{exact:true}).waitFor();
-  await page.getByText('feat. Feature One, Feature Two',{exact:true}).waitFor();
+  const featuredProposal = page.locator('.eligible-suggestions tbody tr')
+    .filter({hasText:'Test New Broadcast Song'});
+  await featuredProposal.waitFor();
+  const proposalCredits = await featuredProposal.innerText();
+  assert.ok(proposalCredits.includes('Feature One') &&
+    proposalCredits.includes('Feature Two'),
+    'Both credited artists should be visible in the proposal: ' + proposalCredits);
   await page.getByRole('button',{name:'Link verified song',exact:true}).click();
   await page.locator('#eligible-proposal-query').fill('Morning Light');
   await page.locator('.eligible-proposal-option').filter({hasText:'Morning Light'}).first().waitFor();
