@@ -9,7 +9,7 @@ from django.utils import timezone
 
 from apps.charts.routing import station_requires_codes
 from apps.accounts.models import station_choices
-from apps.voting.models import ChartShow, StationVotingConfig, UnassignedVote
+from apps.voting.models import ChartShow, UnassignedVote
 
 
 class Command(BaseCommand):
@@ -18,7 +18,6 @@ class Command(BaseCommand):
     def handle(self, *args, **kwargs):
         now = timezone.now()
         for station, _name in station_choices(active_only=True):
-            config = StationVotingConfig.objects.filter(station=station).first()
             required = station_requires_codes(station)
             shows = ChartShow.objects.filter(station=station).exclude(kind="legacy").order_by("code", "id")
             entries = []
