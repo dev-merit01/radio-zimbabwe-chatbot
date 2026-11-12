@@ -13,6 +13,7 @@ from .models import (
     make_display_name,
 )
 from .text_cleaning import clean_vote_text, correct_artist_typo
+from .channels import vote_source, phone_fingerprint
 
 logger = logging.getLogger(__name__)
 
@@ -306,12 +307,16 @@ def validate_submission(text):
 
 
 class VotingService:
-    def __init__(self, channel: str, user_ref: str, station="radio_zimbabwe"):
+    def __init__(self, channel: str, user_ref: str, station="radio_zimbabwe",
+                 voter_fingerprint=""):
         from apps.accounts.models import station_exists
 
         if not station_exists(station, active_only=True):
             raise ValueError("Unknown station")
         self.channel, self.user_ref, self.station = channel, user_ref, station
+        self.voter_fingerprint = voter_fingerprint or (
+            phone_fingerprint(user_ref) if channel in {"whatsapp", "sms"} else ""
+        )
 
     def handle_incoming_text(self, text: str, vote_date=None, chart_show=None, submitted_code="") -> str:
         """Record a vote in exactly one chart show; AI matching remains station-shared."""
@@ -365,9 +370,14 @@ class VotingService:
             )
             user = User.objects.select_for_update().get(pk=user.pk)
             votes = RawVote.objects.filter(
-                user=user, station=self.station, vote_date=today,
-                chart_show=chart_show,
+                station=self.station, vote_date=today, chart_show=chart_show,
             )
+            if self.voter_fingerprint:
+                # One daily allowance for the same verified phone across
+                # online, WhatsApp and future SMS voting channels.
+                votes = votes.filter(voter_fingerprint=self.voter_fingerprint)
+            else:
+                votes = votes.filter(user=user)
             if not settings.ALLOW_REPEAT_SONG:
                 if self._already_voted(votes, match_key, artist, title):
                     return "⚠️ You already voted for this song today. Please choose another song."
@@ -379,6 +389,8 @@ class VotingService:
             vote = RawVote.objects.create(
                 user=user,
                 station=self.station,
+                source=vote_source(self.channel),
+                voter_fingerprint=self.voter_fingerprint,
                 raw_input=text,
                 artist_raw=artist_raw,
                 song_raw=song_raw,
