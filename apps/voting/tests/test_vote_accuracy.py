@@ -4,7 +4,7 @@ import json
 from datetime import date, timedelta
 from unittest.mock import patch
 from django.test import TestCase, override_settings
-from apps.voting.models import StationVotingConfig
+from apps.voting.models import ChartShow, StationVotingConfig
 from apps.voting.models import (
     RawVote,
     InboundEvent,
@@ -35,6 +35,16 @@ class VoteAccuracyTests(TestCase):
                         "classic_263", "central_radio", "khulumani_fm",
                         "luzibo_radio")
         ).update(require_codes=False)
+        # This test suite exercises the original single-chart/legacy intake.
+        # Remove seeded programme codes to model an installation that truly
+        # has no configured chart shows. Live multi-chart stations never
+        # receive this exception.
+        ChartShow.objects.filter(
+            station__in=("radio_zimbabwe", "national_fm", "power_fm",
+                        "classic_263", "central_radio", "khulumani_fm",
+                        "luzibo_radio"),
+            kind__in=("weekly", "year_end"),
+        ).delete()
 
     def song(
         self,
