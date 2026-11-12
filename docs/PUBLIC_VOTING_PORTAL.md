@@ -10,7 +10,8 @@ presenter/administrator routes.
    that show's configuration, not its broadcast airtime.
 3. Browse/search the current **published** eligible-song list; do not allow
    free-text artist or programme codes from the browser.
-4. Verify a mobile number using a one-time passcode delivered by Bird Verify.
+4. Enter an email address and confirm the six-digit one-time verification code
+   delivered by AirVote's secure SMTP provider. **No phone number is requested.**
 5. Complete Cloudflare Turnstile and submit a selected song.
 
 The server derives station, show, artist, title and code from verified
@@ -31,25 +32,34 @@ the following **on the Railway web service** before enabling:
 | `AI_ALL_VOTES` | `true` (required; online votes must not bypass AI) |
 | `AIRVOTE_TURNSTILE_SITE_KEY` | Public Cloudflare Turnstile site key |
 | `AIRVOTE_TURNSTILE_SECRET_KEY` | Private matching Turnstile secret |
-| `AIRVOTE_VERIFY_API_KEY` | Private Bird API key with Verify permission |
-| `AIRVOTE_BIRD_VERIFY_REGION` | `us1` or `eu1` matching the key; defaults to `us1` |
+| `AIRVOTE_EMAIL_HOST` | SMTP host for verified transactional emails |
+| `AIRVOTE_EMAIL_PORT` | SMTP port (default `587` for STARTTLS) |
+| `AIRVOTE_EMAIL_USERNAME` | SMTP username |
+| `AIRVOTE_EMAIL_PASSWORD` | Private SMTP password / provider API key |
+| `AIRVOTE_EMAIL_FROM` | Verified sender address, e.g. `votes@yourdomain` |
+| `AIRVOTE_EMAIL_USE_TLS` | `true` (default, STARTTLS) |
+| `AIRVOTE_EMAIL_USE_SSL` | `false` (set `true` for port 465; disable TLS then) |
 
 Create a Turnstile widget for **the exact domain** hosting the public portal.
-Do not expose the secret in HTML or JavaScript. Configure Bird Verify's
-supported recipient country/channels, available credits, billing and OTP
-sending restrictions before enabling. **Phone verification can incur charges.**
-No sender number or additional database is needed for Bird Verify, but the
-Verify product must be available for your Bird account.
+Do not expose the secret in HTML or JavaScript. Configure a reliable email
+provider (SMTP credentials and a verified sending domain) before enabling the
+public portal. Email delivery may incur provider fees or quota limits. The
+existing Bird WhatsApp integration is not used to verify website listeners.
 
 Server controls:
 - CSRF on every POST; no browser-provided station/artist text is trusted.
 - Cloudflare Turnstile is verified **server-side** for OTP request and each
   vote, including the token's action and hostname.
-- Bird generates and validates OTPs; no OTP hashes or raw codes are stored
-  in the AirVote vote database.
-- A temporary server-side session records the pending phone and then holds
-  only its HMAC fingerprint after verification. The fingerprint expires after
-  30 minutes. Raw phone numbers are never stored on web vote receipts.
+- AirVote creates a cryptographically random six-digit code and sends it via
+  the configured SMTP service. The pending session stores only a keyed digest
+  of that code; it expires after 10 minutes and has strict attempt limits.
+- The pending session temporarily contains the email address for delivery.
+  After verification, it is replaced by a keyed HMAC email identifier with a
+  30-minute expiry. Neither the address nor the code is stored on web vote
+  receipts or published to presenters.
+- Common Gmail dot and +label aliases are normalised to the same identity.
+  This helps prevent repeat voting under aliases, but no email-only system
+  can guarantee that a person cannot create multiple distinct mailboxes.
 - Shared cache rate limits, duplicate-song and daily vote limits, and
   database transactions are enforced; Redis failures close the voting gate.
 - Only enabled open programmes with a presenter-published eligible list
@@ -75,18 +85,19 @@ Each incoming-vote row shows the source label, and the **Voting channels**
 panel separates received, AI-approved, awaiting-AI and needs-review records.
 These are *intake metrics*, not equivalent to official chart positions.
 
-Future incoming WhatsApp/SMS votes and web votes with the same normalised
-phone share a privacy-preserving HMAC fingerprint for the daily vote limit.
-Older stored WhatsApp votes are not retroactively fingerprinted by this
-migration; their previous totals and records remain intact. A dedicated
-SMS provider/webhook is required before SMS intake can be marked live.
+New online votes enforce limits using an HMAC fingerprint of the **verified
+email address**. WhatsApp/SMS use phone-based identities and remain unaffected.
+Without a common identifier, the system cannot reliably deduplicate a person
+across email-only online votes and phone-based WhatsApp/SMS votes. Do not claim
+such cross-channel protection. Existing chart totals remain unchanged.
+A dedicated SMS webhook is required before SMS intake can be marked live.
 
 ## Deployment checklist
 
 1. Test the portal at /vote/ while the public-voting flag is false.
 2. Verify configured Turnstile hostname and both server-side challenge actions.
-3. Test Bird Verify send and check using an approved phone and monitor
-   verification delivery costs.
+3. Test secure email delivery, correct-code confirmation, wrong codes,
+   expiry and the resend limits. Monitor SMTP provider costs and quotas.
 4. Enable `AI_ALL_VOTES` on **both** web and worker so every new web
    vote stays pending until verified.
 5. Enable the portal flag and cast a test vote on an **open** chart show
