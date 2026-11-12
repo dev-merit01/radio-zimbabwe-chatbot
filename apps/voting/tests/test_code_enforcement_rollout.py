@@ -37,7 +37,7 @@ class CodeEnforcementRolloutTests(TestCase):
                     "radio_zimbabwe", f"{code} {title}"
                 )
                 self.assertIsNone(show)
-                self.assertEqual(vote, "")
+                self.assertEqual(vote, title)
                 self.assertEqual(submitted, code)
                 self.assertEqual(reason, "show_closed")
         self.assertFalse(RawVote.objects.exists())
