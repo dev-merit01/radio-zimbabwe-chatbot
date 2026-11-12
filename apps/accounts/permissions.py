@@ -21,29 +21,33 @@ SESSION_CHART_SHOW_KEY = "airvote_chart_show_id"
 def request_presenter_show(request):
     """The programme selected at login, or an explicitly assigned programme.
 
-    Individual presenter assignments take priority. Shared station accounts
-    may select an existing show at sign-in, but the resulting session is
-    restricted to that station and show for its entire lifetime.
+    A show chosen during interactive sign-in takes priority over an older
+    assignment. Existing explicitly assigned accounts without a login choice
+    retain their assigned show. Each session accesses just one programme.
     """
     user = getattr(request, "user", None)
-    assigned = presenter_show(user)
-    if assigned:
-        return assigned
     if (not getattr(user, "is_authenticated", False)
             or getattr(user, "is_superuser", False)):
         return None
     session = getattr(request, "session", None)
-    show_id = session.get(SESSION_CHART_SHOW_KEY) if session else None
-    if type(show_id) is not int or show_id <= 0:
-        return None
-    station = getattr(getattr(user, "profile", None), "station", None)
-    if not station:
-        return None
-    from apps.voting.models import ChartShow
-    return ChartShow.objects.filter(
-        pk=show_id, station=station, kind__in=("weekly", "year_end"),
-        is_archived=False,
-    ).first()
+    if session is not None and SESSION_CHART_SHOW_KEY in session:
+        show_id = session.get(SESSION_CHART_SHOW_KEY)
+        if type(show_id) is not int or show_id <= 0:
+            return None
+        station = getattr(getattr(user, "profile", None), "station", None)
+        if not station:
+            return None
+        from apps.voting.models import ChartShow
+        # A login choice supersedes any older single-presenter assignment.
+        # This permits existing station credentials to select a programme
+        # while still limiting this authenticated session to ONE programme.
+        return ChartShow.objects.filter(
+            pk=show_id, station=station, kind__in=("weekly", "year_end"),
+            is_archived=False,
+        ).first()
+    # Preserve explicit assignments for existing authenticated sessions and
+    # API clients that do not use the interactive login form.
+    return presenter_show(user)
 
 
 def require_presenter_show(request, show):
