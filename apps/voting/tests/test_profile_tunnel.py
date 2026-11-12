@@ -7,6 +7,7 @@ import time
 from django.contrib.auth import get_user_model
 from django.test import Client, TestCase, override_settings
 from apps.accounts.models import AccountProfile
+from apps.voting.models import StationVotingConfig
 from apps.voting.models import InboundEvent
 
 
@@ -61,6 +62,15 @@ class ProfileTests(TestCase):
                    LOCAL_WEBHOOK_HOSTS=['station.ngrok-free.dev'],
                    BIRD_WEBHOOK_SECRET='whsec_' + base64.b64encode(b'tunnel-test').decode())
 class TunnelTests(TestCase):
+    def setUp(self):
+        # This suite explicitly tests backward-compatible code-free intake.
+        # Production's established stations now require programme codes.
+        StationVotingConfig.objects.filter(
+            station__in=("radio_zimbabwe", "national_fm", "power_fm",
+                        "classic_263", "central_radio", "khulumani_fm",
+                        "luzibo_radio")
+        ).update(require_codes=False)
+
     def test_tunnel_accepts_signed_bird_requests_but_hides_workspace(self):
         for path in ['/', '/admin/', '/accounts/login/', '/accounts/profile/', '/api/workspace/overview', '/missing']:
             self.assertEqual(self.client.get(path, HTTP_HOST='station.ngrok-free.dev').status_code, 404)
