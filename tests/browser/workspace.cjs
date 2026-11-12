@@ -125,7 +125,7 @@ const assert = require("node:assert/strict");
   await page.locator("#modal").waitFor({ state: "hidden" });
   // Main catalogue search must update without submitting the form, preserve
   // focus and restore the full catalogue when the query is cleared.
-  const liveSearch = page.getByRole("textbox", { name: "Search records" });
+  const liveSearch = page.getByRole("searchbox", { name: "Search records" });
   await liveSearch.fill("no-such-record-in-the-catalogue-999");
   await page.locator("#page-content .panel .empty").waitFor({state:"visible"});
   assert.equal(await liveSearch.inputValue(), "no-such-record-in-the-catalogue-999");
@@ -179,12 +179,33 @@ const assert = require("node:assert/strict");
   assert.ok(download.suggestedFilename().endsWith(".csv"));
   await page.locator('nav [data-page="incoming"]').click();
   await page.locator('#page-content[aria-busy="false"]').waitFor();
-  const voteSearch = page.getByRole("textbox", {name:"Search records"});
+  const voteSearch = page.getByRole("searchbox", { name: "Search records" });
   await voteSearch.fill("unmatched-vote-search-999");
   await page.locator("#page-content .panel .empty").waitFor({state:"visible"});
   await voteSearch.fill("Example Artist");
   await page.locator("tbody tr").filter({hasText:"Example Artist"}).first().waitFor();
   assert.equal(await voteSearch.inputValue(),"Example Artist");
+  // The search filters while typing; a separate Search button is not needed.
+  assert.equal(await page.locator("#search-form button[type=submit]").count(), 0);
+  // Incoming-vote cards show their labels and fit the phone viewport without
+  // hiding the incoming channel, listener or vote text.
+  await page.setViewportSize({ width: 390, height: 844 });
+  const incomingCards = page.locator("#page-content .table-wrap--cards").first();
+  assert.equal(await incomingCards.count(), 1);
+  assert.ok(await incomingCards.locator('td[data-label="Vote"]').count() > 0);
+  assert.ok(await incomingCards.locator('td[data-label="Source"]').count() > 0);
+  assert.equal(await incomingCards.evaluate(el =>
+    el.querySelector("table").getBoundingClientRect().width <=
+    el.getBoundingClientRect().width + 1
+  ), true, "incoming vote cards must not overflow their panel");
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+  const submissions = page.locator("#page-content .panel").filter({
+    has: page.getByRole("heading", { name: "Recent submissions" }),
+  });
+  if (await submissions.count()) {
+    assert.ok(await submissions.locator('td.submission-result[data-label="Result"]').count() > 0);
+    assert.equal(await submissions.locator(".table-wrap--cards").count(), 1);
+  }
   await page.context().setOffline(true);
   await page.locator("#offline-banner").waitFor({ state: "visible" });
   await page.context().setOffline(false);

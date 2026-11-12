@@ -83,8 +83,8 @@
   }
   const btn = (label, action, id = "") =>
     `<button class="button secondary" data-action="${action}" data-id="${esc(id)}">${esc(label)}</button>`;
-  const table = (headers, rows) =>
-    `<div class="table-wrap"><table><thead><tr>${headers.map((h) => `<th>${h}</th>`).join("")}</tr></thead><tbody>${rows.join("")}</tbody></table></div>`;
+  const table = (headers, rows, mobileCards = false) =>
+    `<div class="table-wrap${mobileCards ? " table-wrap--cards" : ""}"><table><thead><tr>${headers.map((h) => `<th scope="col">${h}</th>`).join("")}</tr></thead><tbody>${rows.join("")}</tbody></table></div>`;
   const empty =
     '<div class="empty"><h3>Nothing to show here</h3><p>Records will appear as your station receives and reviews votes.</p></div>';
   function panel(title, body, actions = "") {
@@ -162,7 +162,28 @@
   const pager = (d) =>
     `<div class="table-footer"><span>${num(d.total)} records</span><div class="pagination">${d.page > 1 ? btn("Previous", "previous") : ""}<span>${d.page} / ${d.pages}</span>${d.page < d.pages ? btn("Next", "next") : ""}</div></div>`;
   const search = () =>
-    `<form id="search-form" class="toolbar" role="search"><label class="searchbox"><input id="live-record-search" name="q" aria-label="Search records" placeholder="Search as you type…" autocomplete="off" maxlength="100" value="${esc(query)}"></label><button class="button secondary" type="submit">Search</button></form>`;
+    `<form id="search-form" class="toolbar record-search" role="search"><label class="searchbox"><svg aria-hidden="true"><use href="#i-search"></use></svg><input id="live-record-search" type="search" name="q" aria-label="Search records" placeholder="Search as you type…" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="100" value="${esc(query)}"></label></form>`;
+  function enhanceTables() {
+    $("page-content").querySelectorAll(".table-wrap").forEach((wrapper) => {
+      const contents = wrapper.querySelector("table");
+      if (!contents) return;
+      if (wrapper.classList.contains("table-wrap--cards")) {
+        const headers = Array.from(contents.querySelectorAll("thead th"), (head) => head.textContent.trim());
+        contents.querySelectorAll("tbody tr").forEach((row) => {
+          Array.from(row.children).forEach((cell, index) => {
+            if (cell.tagName === "TD") cell.dataset.label = headers[index] || "Details";
+          });
+        });
+      }
+      const scrollable = wrapper.scrollWidth > wrapper.clientWidth + 1;
+      wrapper.tabIndex = scrollable ? 0 : -1;
+      if (scrollable) {
+        wrapper.setAttribute("role", "region");
+        const title = wrapper.closest(".panel")?.querySelector(".panel-head h2")?.textContent;
+        wrapper.setAttribute("aria-label", (title || "Records") + " table, scroll to see all columns");
+      }
+    });
+  }
   function status(ok) {
     online = ok;
     $("connection").classList.toggle("offline", !ok);
@@ -278,6 +299,7 @@
                       ? ["Song", "All-time mapped votes", "Status", "Actions"]
                       : ["Song", "Status"]),
                   rows,
+                  incoming,
                 )
               : empty) +
             pager(d),
@@ -301,7 +323,20 @@
               )));
         }
         if (incoming && d.submissions?.length) {
-          html += `<section class="panel"><div class="panel-heading"><h2>Recent submissions</h2></div><div class="table-wrap"><table><thead><tr><th>Vote</th><th>Source</th><th>Processing</th><th>Result</th></tr></thead><tbody>${d.submissions.map(s => `<tr><td>${esc(s.text)}</td><td>${esc(s.source_label || s.provider)}</td><td>${esc(s.state)}</td><td>${esc(s.reply || "Waiting for the voting worker")}</td></tr>`).join("")}</tbody></table></div></section>`;
+          html += panel(
+            "Recent submissions",
+            table(
+              ["Vote", "Source", "Processing", "Result"],
+              d.submissions.map((submission) =>
+                '<tr><td>' + esc(submission.text) + '</td><td>' +
+                esc(submission.source_label || submission.provider) +
+                '</td><td class="submission-state">' + esc(submission.state) +
+                '</td><td class="submission-result">' +
+                esc(submission.reply || "Waiting for the voting worker") + '</td></tr>'
+              ),
+              true,
+            ),
+          );
         }
       } else if (page === "eligibility") {
         const show = showsCache.find((item) => item.id === selectedShowId);
@@ -827,6 +862,7 @@
           '</select></label></div>' + html;
       }
       $("page-content").innerHTML = html;
+      enhanceTables();
       if (focusState) {
         const nextField = document.getElementById(focusState.id);
         if (nextField) {
