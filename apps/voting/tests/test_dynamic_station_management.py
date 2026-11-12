@@ -22,6 +22,13 @@ from apps.voting.models import ChartShow, InboundEvent, StationVotingConfig
 )
 class DynamicStationProvisioningTests(TestCase):
     def setUp(self):
+        # This suite explicitly tests backward-compatible code-free intake.
+        # Production's established stations now require programme codes.
+        StationVotingConfig.objects.filter(
+            station__in=("radio_zimbabwe", "national_fm", "power_fm",
+                        "classic_263", "central_radio", "khulumani_fm",
+                        "luzibo_radio")
+        ).update(require_codes=False)
         self.admin = get_user_model().objects.create_superuser(
             username="network-admin", password="Network-Test-Only!47"
         )

@@ -12,6 +12,7 @@ from django.utils import timezone
 
 from apps.accounts.models import AccountProfile
 from apps.charts.publishing import publish_edition
+from apps.voting.models import StationVotingConfig
 from apps.voting.models import (
     ChartShow, InboundEvent, OutboundMessage, RawVote,
     ReviewAudit, SuspectedSpamVote, VoteJob, WeeklyChart,
@@ -32,6 +33,13 @@ from apps.voting.worker import run_one
 )
 class SuspectedSpamVoteTests(TestCase):
     def setUp(self):
+        # This suite explicitly tests backward-compatible code-free intake.
+        # Production's established stations now require programme codes.
+        StationVotingConfig.objects.filter(
+            station__in=("radio_zimbabwe", "national_fm", "power_fm",
+                        "classic_263", "central_radio", "khulumani_fm",
+                        "luzibo_radio")
+        ).update(require_codes=False)
         self.admin = get_user_model().objects.create_superuser(
             username="spam-admin", password="Only-Testing-Password-78!"
         )

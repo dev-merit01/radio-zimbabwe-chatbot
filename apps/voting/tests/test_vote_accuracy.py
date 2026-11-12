@@ -4,6 +4,7 @@ import json
 from datetime import date, timedelta
 from unittest.mock import patch
 from django.test import TestCase, override_settings
+from apps.voting.models import StationVotingConfig
 from apps.voting.models import (
     RawVote,
     InboundEvent,
@@ -26,6 +27,15 @@ from apps.voting.text_cleaning import clean_vote_text
     ALLOW_REPEAT_SONG=False,
 )
 class VoteAccuracyTests(TestCase):
+    def setUp(self):
+        # This suite explicitly tests backward-compatible code-free intake.
+        # Production's established stations now require programme codes.
+        StationVotingConfig.objects.filter(
+            station__in=("radio_zimbabwe", "national_fm", "power_fm",
+                        "classic_263", "central_radio", "khulumani_fm",
+                        "luzibo_radio")
+        ).update(require_codes=False)
+
     def song(
         self,
         artist="Example Artist",

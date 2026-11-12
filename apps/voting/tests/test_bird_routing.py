@@ -8,6 +8,7 @@ import time
 
 from django.test import TestCase, override_settings
 
+from apps.voting.models import StationVotingConfig
 from apps.voting.models import InboundEvent
 
 
@@ -18,6 +19,15 @@ from apps.voting.models import InboundEvent
     BIRD_NUMBER_STATION_MAP={"263790573340": "national_fm"},
 )
 class BirdNumberRoutingTests(TestCase):
+    def setUp(self):
+        # This suite explicitly tests backward-compatible code-free intake.
+        # Production's established stations now require programme codes.
+        StationVotingConfig.objects.filter(
+            station__in=("radio_zimbabwe", "national_fm", "power_fm",
+                        "classic_263", "central_radio", "khulumani_fm",
+                        "luzibo_radio")
+        ).update(require_codes=False)
+
     def send_event(self, receiving_number="+263790573340", message_id="wam-1", extra=None):
         data = {
             "whatsapp_id": message_id,

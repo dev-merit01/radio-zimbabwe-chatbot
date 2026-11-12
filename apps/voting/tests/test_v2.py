@@ -2,6 +2,7 @@ from datetime import timedelta
 from django.test import TestCase, override_settings
 from django.contrib.auth import get_user_model
 from django.utils import timezone
+from apps.voting.models import StationVotingConfig
 from apps.voting.models import (
     InboundEvent,
     RawVote,
@@ -24,6 +25,13 @@ from desktop.launcher import validate_url
 )
 class TestVersionTwo(TestCase):
     def setUp(self):
+        # This suite explicitly tests backward-compatible code-free intake.
+        # Production's established stations now require programme codes.
+        StationVotingConfig.objects.filter(
+            station__in=("radio_zimbabwe", "national_fm", "power_fm",
+                        "classic_263", "central_radio", "khulumani_fm",
+                        "luzibo_radio")
+        ).update(require_codes=False)
         self.admin = get_user_model().objects.create_superuser(
             "operator", password="test-only-password"
         )

@@ -612,6 +612,20 @@
             '<div class="show-summary-item"><span>Voting codes</span><strong>' +
               (showsData.require_codes ? "Required" : "Optional") + '</strong></div>' +
           '</div>' +
+          (!liveCount
+            ? '<section class="review-callout" role="status"><h3>No chart shows are accepting votes</h3>' +
+              '<p>All programme voting windows at this station are currently closed. ' +
+              'Messages containing programme codes are safely held rather than counted. ' +
+              (showsData.is_admin
+                ? 'Use Edit settings below to enable a programme and configure its voting window.'
+                : 'Please contact the administrator to open the programme.') +
+              '</p></section>'
+            : '') +
+          (showsData.unassigned_pending
+            ? '<section class="review-callout" role="status"><h3>' +
+              num(showsData.unassigned_pending) + ' votes need routing review</h3>' +
+              '<p>These messages were not counted. The Unassigned votes list below shows the reason.</p></section>'
+            : '') +
           '<section class="panel show-directory" aria-labelledby="show-directory-title">' +
             '<div class="show-directory-head">' +
               '<div><h2 id="show-directory-title">Programmes for this station</h2>' +
@@ -641,7 +655,7 @@
                 '</span></div>' +
               '<p>' + (showsData.require_codes
                 ? "Listeners must include an active programme code. Unknown codes go to the review queue."
-                : "Votes without a code still go to the historical chart. Enable mandatory codes after announcing them to listeners.") +
+                : "Warning: Uncoded votes will enter the historical chart while compatibility mode is active. Require programme codes before opening chart voting.") +
               '</p>' +
               btn(showsData.require_codes ? "Make codes optional" : "Require programme codes", "show-policy") +
             '</section>' +
