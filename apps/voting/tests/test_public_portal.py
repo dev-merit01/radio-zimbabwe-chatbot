@@ -79,7 +79,9 @@ class PublicVotePortalTests(TestCase):
         ) as bird:
             bird.return_value = {"status": "pending"}
             response = client.post("/vote/api/verify/start/", {
-                "phone": self.phone, "cf-turnstile-response": "token-placeholder",
+                "phone": self.phone,
+                "show_id": self.show.pk, "song_id": self.song.pk,
+                "cf-turnstile-response": "token-placeholder",
             })
             self.assertEqual(response.status_code, 200, response.content)
             bird.assert_called_once_with(
