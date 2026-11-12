@@ -125,7 +125,7 @@ const assert = require("node:assert/strict");
   await page.locator("#modal").waitFor({ state: "hidden" });
   // Main catalogue search must update without submitting the form, preserve
   // focus and restore the full catalogue when the query is cleared.
-  const liveSearch = page.getByRole("textbox", { name: "Search records" });
+  const liveSearch = page.getByRole("searchbox", { name: "Search records" });
   await liveSearch.fill("no-such-record-in-the-catalogue-999");
   await page.locator("#page-content .panel .empty").waitFor({state:"visible"});
   assert.equal(await liveSearch.inputValue(), "no-such-record-in-the-catalogue-999");
@@ -179,7 +179,7 @@ const assert = require("node:assert/strict");
   assert.ok(download.suggestedFilename().endsWith(".csv"));
   await page.locator('nav [data-page="incoming"]').click();
   await page.locator('#page-content[aria-busy="false"]').waitFor();
-  const voteSearch = page.getByRole("textbox", {name:"Search records"});
+  const voteSearch = page.getByRole("searchbox", { name: "Search records" });
   await voteSearch.fill("unmatched-vote-search-999");
   await page.locator("#page-content .panel .empty").waitFor({state:"visible"});
   await voteSearch.fill("Example Artist");
