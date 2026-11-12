@@ -260,7 +260,7 @@
         );
         let rows = d.items.map((r) =>
           incoming
-            ? `<tr><td>${esc(r.text)}</td><td>${esc(r.channel)}</td><td>${esc(r.listener)}</td><td>${esc(new Date(r.received_at).toLocaleString())}</td></tr>`
+            ? `<tr><td>${esc(r.text)}</td><td><strong>${esc(r.source_label || r.source || r.channel)}</strong></td><td>${esc(r.listener)}</td><td>${esc(new Date(r.received_at).toLocaleString())}</td></tr>`
             : `<tr><td><strong>${esc(r.title)}</strong><br>${esc(r.artist)}<br><small>Song ID: ${r.id}</small></td>${permissions.is_admin ? `<td>${num(r.votes)}</td>` : ''}<td>${esc(r.status)}</td>${permissions.can_review ? `<td><div class="row-actions">${btn("Edit", "edit", r.id) + btn("Verify", "verified", r.id) + btn("Reject", "rejected", r.id) + btn("Merge", "merge", r.id)}</div></td>` : ''}</tr>`,
         );
         html = panel(
@@ -273,7 +273,7 @@
             (rows.length
               ? table(
                   incoming
-                    ? ["Vote", "Channel", "Listener", "Received"]
+                    ? ["Vote", "Source", "Listener", "Received"]
                     : (permissions.is_admin
                       ? ["Song", "All-time mapped votes", "Status", "Actions"]
                       : ["Song", "Status"]),
@@ -285,8 +285,23 @@
           !incoming && permissions.can_add ? btn("Add song", "add") : "",
         );
         window.studioSongs = d.items;
+        if (incoming) {
+          const channels = await read(
+            "workspace/source-analytics?show_id=" + selectedShowId
+          );
+          if (current !== generation) return;
+          html += panel("Voting channels",
+            '<p class="hint">All channels contribute to one chart. Received and AI-approved totals are shown here; official rankings also require published eligible songs.</p>' +
+            table(["Source", "Received", "AI approved", "Awaiting AI", "Needs review"],
+              channels.sources.map(item =>
+                '<tr><td><strong>' + esc(item.label) + '</strong></td><td>' +
+                num(item.received) + '</td><td>' + num(item.ai_approved) +
+                '</td><td>' + num(item.awaiting) + '</td><td>' +
+                num(item.needs_review) + '</td></tr>'
+              )));
+        }
         if (incoming && d.submissions?.length) {
-          html += `<section class="panel"><div class="panel-heading"><h2>Recent submissions</h2></div><div class="table-wrap"><table><thead><tr><th>Vote</th><th>Processing</th><th>Result</th></tr></thead><tbody>${d.submissions.map(s => `<tr><td>${esc(s.text)}</td><td>${esc(s.state)}</td><td>${esc(s.reply || "Waiting for the voting worker")}</td></tr>`).join("")}</tbody></table></div></section>`;
+          html += `<section class="panel"><div class="panel-heading"><h2>Recent submissions</h2></div><div class="table-wrap"><table><thead><tr><th>Vote</th><th>Source</th><th>Processing</th><th>Result</th></tr></thead><tbody>${d.submissions.map(s => `<tr><td>${esc(s.text)}</td><td>${esc(s.source_label || s.provider)}</td><td>${esc(s.state)}</td><td>${esc(s.reply || "Waiting for the voting worker")}</td></tr>`).join("")}</tbody></table></div></section>`;
         }
       } else if (page === "eligibility") {
         const show = showsCache.find((item) => item.id === selectedShowId);
