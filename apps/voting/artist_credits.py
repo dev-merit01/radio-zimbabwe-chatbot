@@ -10,7 +10,7 @@ from .presentation import music_name
 
 
 _SPLIT = re.compile(r"\s+(?:feat(?:uring)?|ft)\.?\s*:?\s+", re.IGNORECASE)
-_LEADING_CREDIT = re.compile(r"^(?:feat(?:uring)?|ft)\.?\s*:?\s*", re.IGNORECASE)
+_LEADING_CREDIT = re.compile(r"^(?:feat(?:uring)?|ft)\b\.?\s*:?\s*", re.IGNORECASE)
 
 
 def split_artist_credits(artist):

@@ -178,9 +178,24 @@ const assert = require('node:assert/strict');
   await page.getByRole('button',{name:'Propose a new song',exact:true}).click();
   await page.locator('#modal-content input[name="artist"]').fill('Test Studio Artist');
   await page.locator('#modal-content input[name="title"]').fill('Test New Broadcast Song');
+  await page.locator('#modal input[name="featured_artists"]').fill('Feature One');
+  await page.getByRole('button',{name:'+ Add featured artist'}).click();
+  assert.equal(await page.locator('#modal input[name="featured_artists"]').count(), 2);
+  await page.locator('#modal input[name="featured_artists"]').nth(1).fill('Feature To Remove');
+  await page.getByRole('button',{name:'Remove featured artist'}).last().click();
+  assert.equal(await page.locator('#modal input[name="featured_artists"]').count(), 1);
+  await page.getByRole('button',{name:'+ Add featured artist'}).click();
+  await page.locator('#modal input[name="featured_artists"]').nth(1).fill('Feature Two');
   await page.getByRole('button',{name:'Save changes',exact:true}).click();
   await page.locator('#modal').waitFor({state:'hidden'});
   await page.getByText('Test New Broadcast Song',{exact:true}).waitFor();
+  const featuredProposal = page.locator('.eligible-suggestions tbody tr')
+    .filter({hasText:'Test New Broadcast Song'});
+  await featuredProposal.waitFor();
+  const proposalCredits = await featuredProposal.innerText();
+  assert.ok(proposalCredits.includes('Feature One') &&
+    proposalCredits.includes('Feature Two'),
+    'Both credited artists should be visible in the proposal: ' + proposalCredits);
   await page.getByRole('button',{name:'Link verified song',exact:true}).click();
   await page.locator('#eligible-proposal-query').fill('Morning Light');
   await page.locator('.eligible-proposal-option').filter({hasText:'Morning Light'}).first().waitFor();

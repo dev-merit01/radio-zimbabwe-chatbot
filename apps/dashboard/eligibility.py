@@ -18,6 +18,7 @@ from apps.voting.models import (
     EligibleEdition, InboundEvent, MatchKeyMapping, RawVote, ReviewAudit,
 )
 from apps.voting.pipeline import lock_station
+from apps.voting.artist_credits import combine_artist_credits, split_artist_credits
 
 from .workspace import api_access
 
@@ -136,6 +137,8 @@ def _serialize(edition, details=False):
         ]
         data["suggestions"] = [
             {"id": row.pk, "artist": row.artist, "title": row.title,
+             "primary_artist": split_artist_credits(row.artist)[0],
+             "featured_artists": split_artist_credits(row.artist)[1],
              "notes": row.notes, "status": row.status,
              "matched_song_id": row.matched_song_id}
             for row in edition.suggestions.order_by("-created_at", "-pk")[:100]
@@ -279,6 +282,10 @@ def suggest_song(request):
             2 <= len(artist.strip()) <= 240 and 2 <= len(title.strip()) <= 240
             and len(notes) <= 500):
         raise ValueError("Provide an artist and title of 2–240 characters.")
+    # Keep main and featured credits in the same canonical format as the
+    # station catalogue, so admin review, duplicate detection and matching
+    # preserve the collaborators without changing the existing schema.
+    artist = combine_artist_credits(artist, data.get("featured_artists"))
     with transaction.atomic():
         station = get_active_station(request)
         lock_station(station)
@@ -286,12 +293,12 @@ def suggest_song(request):
         if edition.status not in ("draft", "returned", "submitted"):
             raise ValueError("This list is no longer open for suggestions.")
         if CleanedSong.objects.filter(
-            station=station, canonical_name__iexact=f"{artist.strip()} - {title.strip()}",
+            station=station, canonical_name__iexact=f"{artist} - {title.strip()}",
             status="verified",
         ).exists():
             raise ValueError("That song is already verified. Search and add it directly.")
         proposal = CandidateSongSuggestion.objects.create(
-            edition=edition, artist=artist.strip(), title=title.strip(),
+            edition=edition, artist=artist, title=title.strip(),
             notes=notes.strip(), suggested_by=request.user,
         )
         ReviewAudit.objects.create(

@@ -113,11 +113,14 @@ const assert = require("node:assert/strict");
   }
   await page.locator('nav [data-page="catalogue"]').click();
   await page.getByRole("button", { name: "Add song", exact: true }).click();
-  await page.getByLabel("Artist", { exact: true }).fill("Browser Test Artist");
+  await page.getByLabel("Main artist", { exact: true }).fill("Browser Test Artist");
   await page
-    .getByLabel("Title", { exact: true })
+    .getByLabel("Song title", { exact: true })
     .fill("Browser Test Song " + Date.now());
-  await page.locator('#modal input[name="featured_artists"]').fill("Test Guest, Second Guest");
+  await page.locator('#modal input[name="featured_artists"]').fill("Test Guest");
+  await page.getByRole("button", { name: "+ Add featured artist" }).click();
+  assert.equal(await page.locator('#modal input[name="featured_artists"]').count(), 2);
+  await page.locator('#modal input[name="featured_artists"]').nth(1).fill("Second Guest");
   await page.getByRole("button", { name: "Save changes" }).click();
   await page.locator("#modal").waitFor({ state: "hidden" });
   // Main catalogue search must update without submitting the form, preserve
@@ -143,12 +146,14 @@ const assert = require("node:assert/strict");
   const row = page.locator("tbody tr").first();
   assert.ok((await row.innerText()).includes("Browser Test Artist feat. Test Guest, Second Guest"));
   await row.getByRole("button", { name: "Edit", exact: true }).click();
-  assert.equal(await page.getByLabel("Artist", { exact: true }).inputValue(), "Browser Test Artist");
-  assert.equal(
-    await page.locator('#modal input[name="featured_artists"]').inputValue(),
-    "Test Guest, Second Guest",
+  assert.equal(await page.getByLabel("Main artist", { exact: true }).inputValue(), "Browser Test Artist");
+  assert.deepEqual(
+    await page.locator('#modal input[name="featured_artists"]').evaluateAll(
+      nodes => nodes.map(node => node.value)
+    ),
+    ["Test Guest", "Second Guest"],
   );
-  await page.locator('#modal input[name="featured_artists"]').fill("Test Guest, New Guest");
+  await page.locator('#modal input[name="featured_artists"]').nth(1).fill("New Guest");
   await page.getByRole("button", { name: "Save changes" }).click();
   await page.locator("#modal").waitFor({ state: "hidden" });
   await page.locator("tbody tr").filter({hasText:"New Guest"}).first().waitFor();

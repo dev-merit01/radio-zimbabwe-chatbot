@@ -9,8 +9,8 @@ from django.utils import timezone
 from apps.accounts.models import AccountProfile, PresenterAssignment
 from apps.charts.show_rankings import counts_for_show, ranked_songs
 from apps.voting.models import (
-    ChartShow, CleanedSong, EditionCandidate, EligibleEdition, MatchKeyMapping,
-    RawVote, ReviewAudit, User,
+    CandidateSongSuggestion, ChartShow, CleanedSong, EditionCandidate,
+    EligibleEdition, MatchKeyMapping, RawVote, ReviewAudit, User,
 )
 
 
@@ -338,6 +338,88 @@ class PresenterEligibleEditionsTests(TestCase):
         self.assertEqual(
             self.add_candidate(eid, power_song.pk, client).status_code, 400,
         )
+
+    def test_presenter_proposal_preserves_multiple_featured_artists(self):
+        presenter = self.create_presenter()
+        presenter_client = Client()
+        presenter_client.force_login(presenter)
+        eid = self.create_edition(presenter_client)
+        response = self.post("eligibility/suggest", {
+            "edition_id": eid,
+            "artist": "Jnr Spragga",
+            "featured_artists": "Delroy Shewe, Gemma Griffiths",
+            "title": "Pandotadza Ndepapi",
+            "notes": "New collaboration",
+        }, presenter_client)
+        self.assertEqual(response.status_code, 200, response.content)
+        proposal = CandidateSongSuggestion.objects.get(
+            pk=response.json()["suggestion_id"]
+        )
+        self.assertEqual(
+            proposal.artist, "Jnr Spragga feat. Delroy Shewe, Gemma Griffiths"
+        )
+        self.assertEqual(proposal.title, "Pandotadza Ndepapi")
+        self.assertFalse(
+            CleanedSong.objects.filter(
+                canonical_name=proposal.artist + " - " + proposal.title
+            ).exists()
+        )
+        selected = presenter_client.get("/api/workspace/eligibility", {
+            "show_id": self.saturday.pk, "edition_id": eid,
+        }).json()["selected"]
+        self.assertEqual(selected["suggestions"][0]["primary_artist"], "Jnr Spragga")
+        self.assertEqual(
+            selected["suggestions"][0]["featured_artists"],
+            "Delroy Shewe, Gemma Griffiths",
+        )
+
+        # Old clients may still submit complete credits in the artist field.
+        legacy = self.post("eligibility/suggest", {
+            "edition_id": eid,
+            "artist": "Freeman HKD feat. Delroy Shewe",
+            "title": "Another Collab",
+        }, presenter_client)
+        self.assertEqual(legacy.status_code, 200, legacy.content)
+        self.assertEqual(
+            CandidateSongSuggestion.objects.get(
+                pk=legacy.json()["suggestion_id"]
+            ).artist,
+            "Freeman HKD feat. Delroy Shewe",
+        )
+
+    def test_presenter_proposal_prevents_duplicate_verified_collaborations(self):
+        presenter = self.create_presenter()
+        presenter_client = Client()
+        presenter_client.force_login(presenter)
+        eid = self.create_edition(presenter_client)
+        CleanedSong.objects.create(
+            station="national_fm",
+            artist="Jnr Spragga feat. Delroy Shewe",
+            title="Pandotadza Ndepapi",
+            canonical_name="Jnr Spragga feat. Delroy Shewe - Pandotadza Ndepapi",
+            status="verified",
+        )
+        response = self.post("eligibility/suggest", {
+            "edition_id": eid, "artist": "Jnr Spragga",
+            "featured_artists": "Delroy Shewe",
+            "title": "Pandotadza Ndepapi",
+        }, presenter_client)
+        self.assertEqual(response.status_code, 400)
+        self.assertIn("already verified", response.json()["error"])
+        self.assertEqual(CandidateSongSuggestion.objects.count(), 0)
+
+    def test_presenter_proposal_rejects_invalid_featured_credits(self):
+        presenter = self.create_presenter()
+        presenter_client = Client()
+        presenter_client.force_login(presenter)
+        eid = self.create_edition(presenter_client)
+        response = self.post("eligibility/suggest", {
+            "edition_id": eid, "artist": "Jnr Spragga",
+            "featured_artists": ["Delroy Shewe"],
+            "title": "Daka",
+        }, presenter_client)
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(CandidateSongSuggestion.objects.count(), 0)
 
     def test_pending_suggestion_does_not_delay_verified_list_publication(self):
         presenter = self.create_presenter()
