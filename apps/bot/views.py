@@ -180,7 +180,7 @@ def receive(request, provider):
         if not text and not media:
             return JsonResponse({"ok": True, "ignored": True})
         from apps.voting.services import validate_submission
-        from apps.charts.routing import CODE_VOTE, route_vote
+        from apps.charts.routing import route_vote
         from apps.voting.models import ChartShow, UnassignedVote, SuspectedSpamVote
         from apps.voting.spam_detection import suspected_spam_reason
         from apps.voting.pipeline import lock_station
@@ -213,7 +213,7 @@ def receive(request, provider):
                 .exclude(kind="legacy").first()
                 if route_error == "show_closed" and submitted_code else None
             )
-            code_match = CODE_VOTE.match(text.strip()) if intended else None
+
             UnassignedVote.objects.get_or_create(
                 provider=provider, station=station, message_id=message_id,
                 defaults={
@@ -221,7 +221,7 @@ def receive(request, provider):
                     "received_at": received_at,
                     "intended_show": intended,
                     "submitted_code": submitted_code if intended else "",
-                    "vote_text": code_match.group(2).strip() if code_match else "",
+                    "vote_text": vote_text if intended else "",
                 },
             )
             # Safe acknowledgement to Bird itself; never reply to the listener.

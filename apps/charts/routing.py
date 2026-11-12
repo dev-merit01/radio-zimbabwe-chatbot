@@ -9,6 +9,10 @@ from apps.accounts.permissions import presenter_show, require_presenter_show
 
 
 CODE_VOTE = re.compile(r"^([A-Za-z0-9]{2,16})(?:\s*[:|]\s*|\s+)(.+)$", re.S)
+# The same programme code may appear after the song, separated by whitespace,
+# a colon, or a pipe. Never treat an arbitrary final song word as a code:
+# both patterns must be validated against this receiving station's catalogue.
+CODE_AT_END = re.compile(r"^(.+?)(?:\s*[:|]\s*|\s+)([A-Za-z0-9]{2,16})$", re.S)
 
 
 def legacy_show(station):
@@ -65,22 +69,41 @@ def station_requires_codes(station):
 
 
 def route_vote(station, text, received_at=None):
-    """Return (open show, vote text, code, reason), always station scoped.
+    """Return (open show, code-stripped song, code, reason), station scoped.
 
-    Known but closed codes are held; they may not be counted just because an
-    administrator opens the same show later. Their intended show is recorded
-    separately on UnassignedVote for safe manual review.
+    Recognise a published programme code at EITHER end of a message. Reject
+    two valid code tokens rather than guessing which show is intended. A
+    closed show's identity and stripped song text are returned for safe
+    recording in the held-vote queue; no chart tally is changed here.
     """
     received_at = received_at or timezone.now()
     raw = (text or "").strip()
-    match = CODE_VOTE.match(raw)
-    if match:
-        code = match.group(1).upper()
-        show = ChartShow.objects.filter(station=station, code=code).first()
-        if show is not None:
-            if show.accepts_at(received_at):
-                return show, match.group(2).strip(), code, None
-            return None, "", code, "show_closed"
-    if station_requires_codes(station):
+    start = CODE_VOTE.match(raw)
+    end = CODE_AT_END.match(raw)
+    # Always resolve against the receiving station; matching a code belonging
+    # only to another station must not select or disclose that other show.
+    codes = {}
+    for show in ChartShow.objects.filter(station=station).exclude(code=""):
+        codes[show.code.upper()] = show
+
+    prefix = codes.get(start.group(1).upper()) if start else None
+    suffix = codes.get(end.group(2).upper()) if end else None
+    if prefix and suffix:
+        return None, "", "", "ambiguous_code"
+    if prefix:
+        show = prefix
+        song_text = start.group(2).strip()
+    elif suffix:
+        show = suffix
+        song_text = end.group(1).strip()
+    else:
+        if station_requires_codes(station):
+            return None, "", "", "missing_or_unknown_code"
+        return legacy_show(station), raw, "", None
+
+    # Never accept a code without a substantive song submission.
+    if not song_text:
         return None, "", "", "missing_or_unknown_code"
-    return legacy_show(station), raw, "", None
+    if show.accepts_at(received_at):
+        return show, song_text, show.code.upper(), None
+    return None, song_text, show.code.upper(), "show_closed"

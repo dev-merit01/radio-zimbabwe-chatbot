@@ -54,12 +54,12 @@ class MultiChartShowTests(TestCase):
             station="national_fm"
         ).update(require_codes=True)
 
-    def bird(self, text, message_id="wam-1", number="+263790573340"):
+    def bird(self, text, message_id="wam-1", number="+263790573340", sender="+263771112222"):
         payload = {
             "type": "whatsapp.received",
             "data": {
                 "whatsapp_id": message_id, "direction": "inbound",
-                "from": {"phone_number": "+263771112222"},
+                "from": {"phone_number": sender},
                 "to": {"phone_number": number},
                 "text": {"body": text},
             },
@@ -122,6 +122,122 @@ class MultiChartShowTests(TestCase):
             self.assertEqual(result.status_code, 200)
             self.assertEqual(result.json()["total_votes"], 1)
             self.assertEqual(result.json()["top100"][0]["count"], 1)
+
+    def test_code_at_either_end_routes_and_strips_before_verification(self):
+        samples = (
+            ("SAT River Artist - Morning Song", self.saturday, "SAT", "prefix"),
+            ("River Artist - Morning Song SAT", self.saturday, "SAT", "suffix"),
+            ("River Artist - Morning Song : gos", self.gospel, "GOS", "colon"),
+            ("River Artist - Morning Song | GOS", self.gospel, "GOS", "pipe"),
+            ("gos River Artist - Morning Song", self.gospel, "GOS", "lowercase"),
+        )
+        for index, (text, expected, code, mid) in enumerate(samples):
+            with self.subTest(text=text):
+                response = self.bird(
+                    text, "both-" + mid, sender=f"+2637711122{index:02d}",
+                )
+                self.assertEqual(response.status_code, 202)
+                event = InboundEvent.objects.get(message_id="both-" + mid)
+                self.assertEqual(event.station, "national_fm")
+                self.assertEqual(event.chart_show_id, expected.pk)
+                self.assertEqual(event.vote_text, "River Artist - Morning Song")
+                self.assertEqual(event.submitted_code, code)
+        self.assertEqual(UnassignedVote.objects.count(), 0)
+        self.consume()
+        self.assertEqual(RawVote.objects.count(), len(samples))
+        self.assertFalse(RawVote.objects.exclude(
+            song_raw="Morning Song",
+        ).exists())
+        self.assertEqual(OutboundMessage.objects.count(), 0)
+
+    def test_closed_suffix_code_is_held_with_intended_chart_and_song_text(self):
+        self.gospel.manual_open = False
+        self.gospel.save(update_fields=["manual_open"])
+        response = self.bird(
+            "Mathius Mhere - Ndiperekedze GOS", "suffix-held",
+        )
+        self.assertEqual(response.status_code, 202)
+        held = UnassignedVote.objects.get(message_id="suffix-held")
+        self.assertEqual(held.reason, "show_closed")
+        self.assertEqual(held.intended_show_id, self.gospel.pk)
+        self.assertEqual(held.submitted_code, "GOS")
+        self.assertEqual(held.vote_text, "Mathius Mhere - Ndiperekedze")
+        self.assertFalse(InboundEvent.objects.exists())
+        self.assertFalse(RawVote.objects.exists())
+        # Bird retries never create a second vote or re-evaluate a window.
+        again = self.bird("Mathius Mhere - Ndiperekedze GOS", "suffix-held")
+        self.assertTrue(again.json()["duplicate"])
+        self.assertEqual(UnassignedVote.objects.count(), 1)
+
+    def test_conflicting_or_duplicate_codes_are_held_without_guessing(self):
+        for i, message in enumerate((
+            "SAT River Artist - Morning Song GOS",
+            "SAT River Artist - Morning Song SAT",
+        )):
+            with self.subTest(message=message):
+                response = self.bird(message, f"ambiguous-{i}")
+                self.assertEqual(response.status_code, 202)
+                held = UnassignedVote.objects.get(message_id=f"ambiguous-{i}")
+                self.assertEqual(held.reason, "ambiguous_code")
+                self.assertIsNone(held.intended_show)
+        self.assertFalse(InboundEvent.objects.exists())
+        self.assertFalse(RawVote.objects.exists())
+
+    def test_missing_and_other_station_suffix_codes_cannot_select_a_show(self):
+        ChartShow.objects.create(
+            station="power_fm", name="Power Top 20", code="P20",
+            is_enabled=True, manual_open=True, schedule_mode="manual",
+        )
+        for i, text in enumerate((
+            "River Artist - Morning Song",
+            "River Artist - Morning Song P20",
+            "River Artist - Morning Song WRONG",
+            "GOS",
+        )):
+            with self.subTest(text=text):
+                response = self.bird(text, f"invalid-{i}")
+                self.assertEqual(response.status_code, 202)
+                self.assertEqual(
+                    UnassignedVote.objects.get(message_id=f"invalid-{i}").reason,
+                    "missing_or_unknown_code",
+                )
+        self.assertFalse(InboundEvent.objects.exists())
+        self.assertFalse(RawVote.objects.exists())
+
+    def test_radio_zimbabwe_suffix_codes_open_and_closed(self):
+        gospel = ChartShow.objects.get(station="radio_zimbabwe", code="G20")
+        glow = ChartShow.objects.get(station="radio_zimbabwe", code="GP20")
+        for show in (gospel, glow):
+            show.is_enabled = True
+            show.schedule_mode = "manual"
+            show.manual_open = True
+            show.save(update_fields=["is_enabled", "schedule_mode", "manual_open"])
+        for index, (text, code, expected, mid) in enumerate((
+            ("Sugar Sugar - Mudododo GP20", "GP20", glow, "glow-suffix"),
+            ("Mathius Mhere - Ndiperekedze G20", "G20", gospel, "gospel-suffix"),
+        )):
+            result = self.bird(
+                text, mid, "+263790603340",
+                sender=f"+2637722200{index:02d}",
+            )
+            self.assertEqual(result.status_code, 202)
+            vote = InboundEvent.objects.get(message_id=mid)
+            self.assertEqual(vote.submitted_code, code)
+            self.assertEqual(vote.chart_show_id, expected.pk)
+            self.assertEqual(vote.vote_text, text.rsplit(" ", 1)[0])
+        gospel.manual_open = False
+        gospel.save(update_fields=["manual_open"])
+        held = self.bird(
+            "Mathius Mhere - Ndiperekedze G20",
+            "gospel-suffix-closed", "+263790603340",
+        )
+        self.assertEqual(held.status_code, 202)
+        row = UnassignedVote.objects.get(message_id="gospel-suffix-closed")
+        self.assertEqual(row.intended_show_id, gospel.pk)
+        self.assertEqual(row.vote_text, "Mathius Mhere - Ndiperekedze")
+        self.assertFalse(InboundEvent.objects.filter(
+            message_id="gospel-suffix-closed",
+        ).exists())
 
     def test_unknown_and_closed_codes_are_held_without_counting(self):
         self.assertEqual(self.bird("UNKNOWN River Artist - Morning Song", "unknown").status_code, 202)
