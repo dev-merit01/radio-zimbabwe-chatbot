@@ -14,9 +14,14 @@ or workspace; no shared song import or shared verification is exposed.
    to another station simply by choosing it during registration.
 3. An administrator opens **Admin control**, checks the requested station, and
    chooses **Approve access**. The member can then sign in.
-4. Ordinary accounts can view their station's songs, incoming votes, results and
-   archives. Only administrators can add, edit, verify, reject or merge songs and
-   save chart editions. Old per-model moderation permissions do not bypass this.
+4. Approved station accounts **must be assigned to a specific chart show** in
+   **Presenter accounts** before they can access its voting workspace. An
+   unassigned account sees no shows or vote data and is shown an assignment
+   notice. An assigned presenter sees only their programme's votes, rankings,
+   eligible lists and archives. The station's verified catalogue may be
+   searched for selecting songs, but cross-show vote totals are not shown.
+   Only the central administrator verifies songs, manages all shows and
+   accesses station-wide statistics.
 5. **Manage accounts** opens the existing administrator user editor for station
    assignments, password resets and disabling access. The initial admin created by
    setup-local is already an administrator. Administrator means Django superuser;
