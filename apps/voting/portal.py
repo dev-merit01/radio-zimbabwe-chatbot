@@ -24,7 +24,7 @@ from django.views.decorators.http import require_GET, require_POST
 from apps.accounts.models import BroadcastStation
 from apps.voting.channels import normalized_phone, phone_fingerprint
 from apps.voting.models import (
-    ChartShow, CleanedSong, EligibleEdition, InboundEvent,
+    ChartShow, CleanedSong, EditionCandidate, EligibleEdition, InboundEvent,
 )
 
 logger = logging.getLogger(__name__)
@@ -207,16 +207,32 @@ def show_detail(request, show_id):
 def start_verification(request):
     if not portal_enabled():
         return _json_error("Online voting is not enabled yet.", 503)
-    if not _rate(("otp-ip", _browser_key(request)), 20, 3600):
-        return _json_error("Too many requests. Try again later.", 429)
     phone = normalized_phone(request.POST.get("phone", ""))
     if not phone:
         return _json_error("Enter a valid phone number, including country code.")
-    fingerprint = phone_fingerprint(phone)
-    if not _rate(("otp-phone", fingerprint), 3, 3600):
-        return _json_error("Too many verification requests for this number.", 429)
+    show_id, song_id = request.POST.get("show_id", ""), request.POST.get("song_id", "")
+    if not (show_id.isdecimal() and song_id.isdecimal()):
+        return _json_error("Select an eligible song before requesting a code.")
+    show = ChartShow.objects.filter(
+        pk=int(show_id), kind__in=("weekly", "year_end"),
+        is_archived=False,
+        station__in=BroadcastStation.objects.filter(is_active=True).values("slug"),
+    ).first()
+    if show is None or not show.accepts_at(timezone.now()):
+        return _json_error("Voting for this chart show is not open.", 409)
+    edition, _ = _published_list(show, timezone.localdate())
+    if not edition or not EditionCandidate.objects.filter(
+        edition=edition, song_id=int(song_id), song__status="verified",
+        song__station=show.station,
+    ).exists():
+        return _json_error("Choose a song from the published eligible list.", 409)
     if not _turnstile(request, "airvote-verify"):
         return _json_error("Complete the security check to request a code.", 403)
+    fingerprint = phone_fingerprint(phone)
+    if not _rate(("otp-ip", _browser_key(request)), 20, 3600):
+        return _json_error("Too many requests. Try again later.", 429)
+    if not _rate(("otp-phone", fingerprint), 3, 3600):
+        return _json_error("Too many verification requests for this number.", 429)
     try:
         result = _bird_verify({"to": {"phone_number": phone}}, "verifications")
         if result.get("status") != "pending":
