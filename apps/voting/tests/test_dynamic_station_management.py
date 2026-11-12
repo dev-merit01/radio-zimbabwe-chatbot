@@ -158,7 +158,15 @@ class DynamicStationProvisioningTests(TestCase):
         self.assertEqual(unknown.status_code, 200)
         self.assertTrue(unknown.json()["ignored"])
         self.assertEqual(InboundEvent.objects.count(), 1)
-        self.assertEqual(self.bird("+263790573340", message_id="legacy").status_code, 202)
+        nfm = ChartShow.objects.get(station="national_fm", code="N20")
+        nfm.is_enabled = True
+        nfm.schedule_mode = "manual"
+        nfm.manual_open = True
+        nfm.save(update_fields=["is_enabled", "schedule_mode", "manual_open"])
+        self.assertEqual(self.bird(
+            "+263790573340", message_id="nfm-code",
+            body="N20 Artist - Song",
+        ).status_code, 202)
         self.assertEqual(
             set(InboundEvent.objects.values_list("station", flat=True)),
             {slug, "national_fm"},
