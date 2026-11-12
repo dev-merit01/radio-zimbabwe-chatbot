@@ -10,7 +10,7 @@ from apps.accounts.models import BroadcastStation, AccountProfile, PresenterAssi
 from apps.voting.channels import phone_fingerprint, normalized_phone
 from apps.voting.models import (
     ChartShow, CleanedSong, EditionCandidate, EligibleEdition,
-    InboundEvent, RawVote, User, VoteJob,
+    InboundEvent, RawVote, VoteJob,
 )
 from apps.voting.services import VotingService
 from apps.voting.worker import run_one
