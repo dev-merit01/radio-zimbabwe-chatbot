@@ -195,15 +195,14 @@
         selectedShowId = null;
         permissions = {};
         $("page-title").textContent = "Awaiting chart-show assignment";
-        $("page-description").textContent = "A presenter needs an individual chart-show assignment.";
+        $("page-description").textContent = "Select a chart show when signing in.";
         $("page-content").innerHTML =
-          '<section class="panel"><div class="empty"><h3>No chart show assigned</h3>' +
-          '<p>Your station account is active, but it has not been assigned a programme. ' +
-          'Ask your AirVote administrator to open Presenter accounts and assign this login ' +
-          'to your specific chart show.</p>' +
-          '<p>Other programmes and their votes are not accessible with this account.</p></div></section>';
+          '<section class="panel"><div class="empty"><h3>No chart show selected</h3>' +
+          '<p>Sign out and sign in again using your station credentials. ' +
+          'Choose your programme from the Chart show list on the login page.</p>' +
+          '<p>Only the selected programme will be available during this session.</p></div></section>';
         status(true);
-        $("last-updated").textContent = "Programme assignment required";
+        $("last-updated").textContent = "Chart-show selection required";
         return;
       }
       if (!showsCache.some((show) => show.id === selectedShowId))
