@@ -11,7 +11,7 @@ from django.http import JsonResponse, HttpResponse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 from apps.accounts.context_processors import get_active_station
-from apps.accounts.permissions import presenter_show
+from apps.accounts.permissions import request_presenter_show
 from apps.charts.routing import get_selected_show, station_show
 from apps.charts.periods import campaign_local_dates
 from apps.charts.show_rankings import counts_for_show
@@ -40,10 +40,10 @@ def api_access(permission=None, *, allow_unassigned=False):
                 return JsonResponse({"error": "Sign in to continue."}, status=401)
             # Station account approval is not chart-show access.
             if (not request.user.is_superuser and not allow_unassigned
-                    and not presenter_show(request.user)):
+                    and not request_presenter_show(request)):
                 return JsonResponse(
-                    {"error": "No chart show is assigned to this account. "
-                              "Ask your AirVote administrator to assign one."},
+                    {"error": "No chart show selected for this login. "
+                              "Sign out and choose your chart show at sign-in."},
                     status=403,
                 )
             admin_only = permission in {"admin", "voting.change_cleanedsong", "voting.add_cleanedsong", "voting.add_weeklychart"}
@@ -458,7 +458,7 @@ def publish(request):
 
     data = json.loads(request.body)
     station = get_active_station(request)
-    show = station_show(station, data.get("show_id"), user=request.user)
+    show = station_show(station, data.get("show_id"), user=request.user, request=request)
     chart, created = publish_edition(
         station,
         date.fromisoformat(data["chart_date"]),
@@ -569,7 +569,7 @@ def submit_vote(request):
     except ValueError as error:
         raise ValueError("Invalid submission identifier. Open the form again.") from error
     station = get_active_station(request)
-    show = station_show(station, data.get("show_id"), user=request.user)
+    show = station_show(station, data.get("show_id"), user=request.user, request=request)
     from apps.voting.models import StationVotingConfig
     if show.kind == "legacy" and StationVotingConfig.objects.filter(
         station=station, require_codes=True

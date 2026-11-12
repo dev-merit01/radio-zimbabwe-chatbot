@@ -5,7 +5,7 @@ from django.utils import timezone
 
 from apps.voting.models import ChartShow, StationVotingConfig
 from apps.accounts.context_processors import get_active_station
-from apps.accounts.permissions import presenter_show, require_presenter_show
+from apps.accounts.permissions import request_presenter_show, presenter_show, require_presenter_show
 
 
 CODE_VOTE = re.compile(r"^([A-Za-z0-9]{2,16})(?:\s*[:|]\s*|\s+)(.+)$", re.S)
@@ -27,7 +27,7 @@ def get_selected_show(request):
     """Only station-scoped shows may be read; never accept arbitrary station IDs."""
     station = get_active_station(request)
     raw = request.GET.get("show_id") or request.POST.get("show_id")
-    assignment = presenter_show(request.user)
+    assignment = request_presenter_show(request)
     if not request.user.is_superuser and assignment is None:
         raise ValueError("No chart show assigned to this account.")
     if raw is None or raw == "":
@@ -40,9 +40,11 @@ def get_selected_show(request):
     return require_presenter_show(request, show)
 
 
-def station_show(station, raw, user=None):
+def station_show(station, raw, user=None, request=None):
     """Validate a programme ID against the authenticated user's station."""
-    assigned = presenter_show(user) if user else None
+    assigned = request_presenter_show(request) if request is not None else (
+        presenter_show(user) if user else None
+    )
     if user is not None and not user.is_superuser and assigned is None:
         raise ValueError("No chart show assigned to this account.")
     if raw is None or raw == "":

@@ -14,14 +14,15 @@ or workspace; no shared song import or shared verification is exposed.
    to another station simply by choosing it during registration.
 3. An administrator opens **Admin control**, checks the requested station, and
    chooses **Approve access**. The member can then sign in.
-4. Approved station accounts **must be assigned to a specific chart show** in
-   **Presenter accounts** before they can access its voting workspace. An
-   unassigned account sees no shows or vote data and is shown an assignment
-   notice. An assigned presenter sees only their programme's votes, rankings,
-   eligible lists and archives. The station's verified catalogue may be
-   searched for selecting songs, but cross-show vote totals are not shown.
-   Only the central administrator verifies songs, manages all shows and
-   accesses station-wide statistics.
+4. At **Sign in**, enter the existing station username and password and
+   choose the chart show from the grouped programme list. A station login
+   selects **one chart show for that session**. Only its votes, rankings,
+   eligible lists and archives are visible; a direct URL cannot access another
+   programme. To select a different show, sign out and select it on the next
+   login. No separate presenter password or PIN is required.
+   The verified station catalogue is shared for song selection but station-wide
+   vote totals remain administrator-only. The central administrator can sign in
+   without choosing a show and manages all stations and programmes.
 5. **Manage accounts** opens the existing administrator user editor for station
    assignments, password resets and disabling access. The initial admin created by
    setup-local is already an administrator. Administrator means Django superuser;

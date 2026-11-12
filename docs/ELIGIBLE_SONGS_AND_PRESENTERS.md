@@ -5,20 +5,23 @@
 - **Central administrator:** manages stations, programme configuration,
   presenter accounts, voting schedules and station-level catalogue verification.
   The administrator does **not** approve individual eligible song lists.
-- **Presenter:** uses an individually assigned login for one chart programme.
-  The station is derived from that programme. Server-side checks prevent
-  editing lists belonging to another presenter, show or station.
-- **Station accounts:** approval to sign in does **not** grant access to all
-  chart shows. An unassigned login sees an assignment notice instead of
-  programme data. The administrator can assign an existing station account
-  to one show without changing its password, or create a separate login for
-  each presenter. Reassigning a login immediately replaces its prior show
-  access; sharing a station-wide account among different presenters is not
-  supported for programme editing.
+- **Presenter:** signs in using the existing radio-station credentials and
+  selects their chart show from the login page. That session is limited to
+  the chosen programme for eligible lists, votes, rankings and archives.
+  Selecting another show requires signing out and signing in again.
+- **Station accounts:** one username and password can be reused to sign in
+  to different chart shows at the **same station**, one programme per
+  session. No separate PIN is required (Option A). Existing individually
+  assigned presenter accounts continue to work; interactive show selection
+  takes priority when a show was explicitly chosen on the login page.
+  **Shared credentials cannot distinguish individual presenters in audit
+  logs**. Anyone who knows the station credentials can choose any of that
+  station's programmes on a new login. Use separate presenter accounts
+  if individual accountability becomes necessary.
 
 ## Prepare and publish each chart edition
 
-1. The administrator assigns a presenter login to the programme.
+1. The presenter signs in with station credentials and selects the programme. An administrator can also provision individual accounts.
 2. The presenter opens **Eligible songs** and creates an edition for the
    upcoming broadcast date. The eligible candidate count may exceed the
    published Top 20, Top 40 or Top 50 chart size.

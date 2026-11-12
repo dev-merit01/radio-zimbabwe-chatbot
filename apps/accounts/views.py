@@ -66,9 +66,42 @@ def login_view(request):
                 )
             user = authenticate(request, username=username, password=password)
             if user is not None:
-                cache.delete(throttle)
-                login(request, user)
-                return redirect(next_url or "dashboard")
+                from apps.voting.models import ChartShow
+                from .permissions import SESSION_CHART_SHOW_KEY
+
+                chosen = form.cleaned_data.get("chart_show")
+                show = None
+                if not user.is_superuser:
+                    if not chosen:
+                        form.add_error("chart_show", "Choose the chart show you are presenting.")
+                    else:
+                        station = getattr(getattr(user, "profile", None), "station", None)
+                        if station and station_exists(station, active_only=True):
+                            show = ChartShow.objects.filter(
+                                pk=int(chosen), station=station,
+                                kind__in=("weekly", "year_end"),
+                                is_archived=False,
+                            ).first()
+                        if show is None:
+                            form.add_error(
+                                "chart_show",
+                                "Select a chart show belonging to your station.",
+                            )
+                if user.is_superuser or show is not None:
+                    cache.delete(throttle)
+                    login(request, user)
+                    # The selected programme belongs to this login session,
+                    # never to a URL or a user-editable station switch value.
+                    request.session.pop("switched_station", None)
+                    request.session.pop("station_access_version", None)
+                    request.session.pop(SESSION_CHART_SHOW_KEY, None)
+                    if show is not None:
+                        request.session[SESSION_CHART_SHOW_KEY] = show.pk
+                    return redirect(next_url or "dashboard")
+                return render(
+                    request, "accounts/login.html",
+                    {"form": form, "next": next_url}, status=400,
+                )
             messages.error(request, "Invalid credentials, or your account is awaiting administrator approval.")
     else:
         form = LoginForm()
@@ -122,9 +155,9 @@ def switch_station(request):
     from django.contrib.auth.hashers import check_password
     from .models import StationAccess
     from .context_processors import get_active_station
-    from .permissions import presenter_show
+    from .permissions import request_presenter_show
     from apps.voting.models import ReviewAudit
-    if presenter_show(request.user):
+    if request_presenter_show(request):
         return JsonResponse(
             {"error": "Presenters are restricted to their assigned station."},
             status=403,
