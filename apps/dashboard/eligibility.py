@@ -9,7 +9,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_GET, require_POST
 
 from apps.accounts.context_processors import get_active_station
-from apps.accounts.permissions import presenter_show, require_presenter_show
+from apps.accounts.permissions import request_presenter_show, require_presenter_show
 from apps.charts.routing import station_show
 from apps.charts.periods import campaign_local_dates
 from apps.charts.movement import previous_published_chart, comparison_metadata
@@ -24,12 +24,12 @@ from .workspace import api_access
 
 
 def _permitted(request):
-    return request.user.is_superuser or bool(presenter_show(request.user))
+    return request.user.is_superuser or bool(request_presenter_show(request))
 
 
 def _show(request, show_id):
     station = get_active_station(request)
-    show = station_show(station, show_id, user=request.user)
+    show = station_show(station, show_id, user=request.user, request=request)
     if show.kind == "legacy":
         raise ValueError("Select a regular or end-of-year chart show.")
     return show
