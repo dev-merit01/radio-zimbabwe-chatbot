@@ -117,6 +117,7 @@ const assert = require("node:assert/strict");
   await page
     .getByLabel("Title", { exact: true })
     .fill("Browser Test Song " + Date.now());
+  await page.locator('#modal input[name="featured_artists"]').fill("Test Guest, Second Guest");
   await page.getByRole("button", { name: "Save changes" }).click();
   await page.locator("#modal").waitFor({ state: "hidden" });
   // Main catalogue search must update without submitting the form, preserve
@@ -140,6 +141,17 @@ const assert = require("node:assert/strict");
     document.querySelector("#page-content[aria-busy='false']")
   );
   const row = page.locator("tbody tr").first();
+  assert.ok((await row.innerText()).includes("Browser Test Artist feat. Test Guest, Second Guest"));
+  await row.getByRole("button", { name: "Edit", exact: true }).click();
+  assert.equal(await page.getByLabel("Artist", { exact: true }).inputValue(), "Browser Test Artist");
+  assert.equal(
+    await page.locator('#modal input[name="featured_artists"]').inputValue(),
+    "Test Guest, Second Guest",
+  );
+  await page.locator('#modal input[name="featured_artists"]').fill("Test Guest, New Guest");
+  await page.getByRole("button", { name: "Save changes" }).click();
+  await page.locator("#modal").waitFor({ state: "hidden" });
+  await page.locator("tbody tr").filter({hasText:"New Guest"}).first().waitFor();
   await row.getByRole("button", { name: "Verify", exact: true }).click();
   await page.getByRole("button", { name: "Save changes" }).click();
   await page.locator("#modal").waitFor({ state: "hidden" });

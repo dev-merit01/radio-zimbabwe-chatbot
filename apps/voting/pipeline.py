@@ -19,6 +19,7 @@ from .models import (
     StationState,
 )
 from .presentation import music_name
+from .artist_credits import combine_artist_credits
 
 logger = logging.getLogger(__name__)
 
@@ -588,7 +589,11 @@ def review_song(
         elif action == "edit":
             if not isinstance(artist, str) or not isinstance(title, str):
                 raise ValueError("Artist and title must be text.")
-            artist, title = music_name(artist), music_name(title)
+            # Keep the literal 'feat.' separator and artist-name acronym
+            # casing intact during edits. Applying music_name() to the full
+            # compound credit would turn 'feat.' into 'Feat.' and 'HKD'
+            # into 'Hkd', generating a different canonical song identity.
+            artist, title = combine_artist_credits(artist, None), music_name(title)
             if not artist or not title or len(artist) > 240 or len(title) > 240:
                 raise ValueError(
                     "Artist and title are required (maximum 240 characters)."

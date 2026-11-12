@@ -1446,8 +1446,15 @@
     if (action === "edit" || action === "add") {
       modal(
         action === "add" ? "Add song" : "Edit song",
-        field("Artist", "artist", song?.artist) +
-          field("Title", "title", song?.title),
+        field("Artist", "artist", song?.primary_artist ?? song?.artist) +
+          field("Title", "title", song?.title) +
+          '<label class="field">Featured artists (optional)' +
+          '<input name="featured_artists" type="text" maxlength="240" ' +
+          'placeholder="e.g. Gemma Griffiths, Learn Zimbabwe" value="' +
+          esc(song?.featured_artists || "") + '">' +
+          '<small class="hint">Separate multiple featured artists with commas. ' +
+          'AirVote displays them as “Main Artist feat. Guest” and matches votes ' +
+          'using both main and featured artist credits.</small></label>',
         (f) =>
           api(
             action === "add"
