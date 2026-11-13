@@ -82,8 +82,10 @@ def call_openai_api(system_prompt: str, user_prompt: str, *, response_format=Non
         ],
         # JSON mode makes the result small and parseable for the vote worker.
         "response_format": response_format or {"type": "json_object"},
-        "reasoning_effort": settings.OPENAI_REASONING_EFFORT,
     }
+    # A non-reasoning fallback model does not support reasoning_effort.
+    if not (model or settings.OPENAI_MODEL).startswith("gpt-4o"):
+        payload["reasoning_effort"] = settings.OPENAI_REASONING_EFFORT
 
     try:
         response = requests.post(
