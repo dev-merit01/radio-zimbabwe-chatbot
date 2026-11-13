@@ -41,6 +41,7 @@ urlpatterns = [
     path("workspace/health", workspace.health),
     path("workspace/intelligence", matching_intelligence.intelligence),
     path("workspace/intelligence/save", matching_intelligence.save_intelligence),
+    path("workspace/intelligence/voting-policy", matching_intelligence.save_station_voting_policy),
     path("workspace/retry", workspace.retry_failed),
     path("workspace/audit", workspace.audit),
     path("workspace/publish", workspace.publish),
