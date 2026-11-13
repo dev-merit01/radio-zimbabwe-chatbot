@@ -3,7 +3,6 @@ import json
 import math
 from datetime import timedelta
 
-from django.conf import settings
 from django.db import transaction
 from django.db.models import Avg, Count, Q
 from django.http import JsonResponse
