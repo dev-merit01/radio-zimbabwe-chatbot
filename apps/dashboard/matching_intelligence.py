@@ -12,8 +12,10 @@ from django.views.decorators.http import require_POST
 
 from apps.accounts.context_processors import get_active_station
 from apps.voting.calibration import active_thresholds
-from apps.voting.matching_controls import options_for_station
-from apps.voting.models import MatchingControl, ReviewAudit, VoteMatchingDiagnostic
+from apps.voting.matching_controls import options_for_station, matching_model_choices
+from apps.voting.models import MatchingControl, ReviewAudit, VoteMatchingDiagnostic, StationVotingConfig
+from apps.voting.station_vote_policy import voting_rules_for_station
+from apps.voting.pipeline import lock_station
 from .workspace import api_access
 
 
@@ -46,11 +48,10 @@ def intelligence(request):
         "station": station,
         "config": effective,
         "model_options": [
-            {"value": "", "label": f"Railway default ({settings.OPENAI_MODEL})"},
-            {"value": "gpt-4o-mini", "label": "GPT-4o mini"},
-            *([] if settings.OPENAI_MODEL in {"", "gpt-4o-mini"} else
-              [{"value": settings.OPENAI_MODEL, "label": settings.OPENAI_MODEL}]),
+            {"value": value, "label": label}
+            for value, label in matching_model_choices()
         ],
+        "vote_policy": voting_rules_for_station(station),
         "metrics": {
             key: (round(value, 1) if isinstance(value, float) else value)
             for key, value in totals.items()
@@ -88,7 +89,7 @@ def save_intelligence(request):
     limit = data.get("shortlist_limit")
     artist = data.get("retrieval_min_artist")
     title = data.get("retrieval_min_title")
-    permitted_models = {"", settings.OPENAI_MODEL, "gpt-4o-mini"}
+    permitted_models = {value for value, _ in matching_model_choices()}
     if type(model) is not str or model not in permitted_models:
         return JsonResponse({"error": "Choose an approved model."}, status=400)
     if type(mode) is not str or mode not in {"inherit", "on", "off"}:
@@ -122,3 +123,42 @@ def save_intelligence(request):
             details={"before": before, "after": values},
         )
     return JsonResponse({"ok": True, "config": options_for_station(station)})
+
+
+@require_POST
+@api_access("admin")
+def save_station_voting_policy(request):
+    """Only change this station; never alter historical votes or chart editions."""
+    data = json.loads(request.body)
+    station = get_active_station(request)
+    limit = data.get("station_daily_limit")
+    policy = data.get("repeat_song_policy")
+    if limit is not None and (type(limit) is not int or not 1 <= limit <= 100):
+        return JsonResponse(
+            {"error": "Station-wide daily limit must be 1–100, or no extra limit."},
+            status=400,
+        )
+    if type(policy) is not str or policy not in {"inherit", "block", "allow"}:
+        return JsonResponse({"error": "Choose a valid repeat-song policy."}, status=400)
+    with transaction.atomic():
+        # Same station lock as vote intake: no mid-transaction policy changes.
+        lock_station(station)
+        config, _ = StationVotingConfig.objects.select_for_update().get_or_create(
+            station=station
+        )
+        before = {
+            "station_daily_limit": config.station_daily_limit,
+            "repeat_song_policy": config.repeat_song_policy,
+        }
+        config.station_daily_limit = limit
+        config.repeat_song_policy = policy
+        config.save(update_fields=[
+            "station_daily_limit", "repeat_song_policy", "updated_at",
+        ])
+        ReviewAudit.objects.create(
+            station=station, actor=request.user, action="station_vote_policy",
+            details={"before": before, "after": {
+                "station_daily_limit": limit, "repeat_song_policy": policy,
+            }},
+        )
+    return JsonResponse({"ok": True, "vote_policy": voting_rules_for_station(station)})
