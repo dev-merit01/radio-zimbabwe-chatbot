@@ -12,7 +12,7 @@ from django.utils import timezone
 from django.views.decorators.http import require_POST
 from apps.accounts.context_processors import get_active_station
 from apps.accounts.permissions import request_presenter_show
-from apps.charts.routing import get_selected_show, station_show
+from apps.charts.routing import get_selected_show, station_show, station_requires_codes
 from apps.charts.periods import campaign_local_dates
 from apps.charts.show_rankings import counts_for_show
 from apps.charts.multiplier import station_multiplier, score_for_votes
@@ -432,7 +432,8 @@ def health(request):
                     ),
                 ]
             ],
-            "ai_enabled": settings.AUTO_AI_MATCH,
+            "ai_enabled": settings.AI_ALL_VOTES or settings.AUTO_AI_MATCH,
+            "ai_all_votes": settings.AI_ALL_VOTES,
             "daily_limit": settings.VOTING_DAILY_LIMIT,
             "repeat_songs": settings.ALLOW_REPEAT_SONG,
             "database": connection.vendor,
@@ -518,7 +519,16 @@ def export_chart(request):
     from .views import chart_today, chart_detail
 
     archive = request.GET.get("archive")
-    response = chart_detail(request, int(archive)) if archive else chart_today(request)
+    if archive:
+        try:
+            archive_id = int(archive)
+            if archive_id <= 0:
+                raise ValueError
+        except (TypeError, ValueError):
+            return JsonResponse({"error": "Invalid archived chart ID."}, status=400)
+        response = chart_detail(request, archive_id)
+    else:
+        response = chart_today(request)
     if response.status_code != 200:
         return response
     data = json.loads(response.content)
@@ -613,10 +623,7 @@ def submit_vote(request):
         raise ValueError("Invalid submission identifier. Open the form again.") from error
     station = get_active_station(request)
     show = station_show(station, data.get("show_id"), user=request.user, request=request)
-    from apps.voting.models import StationVotingConfig
-    if show.kind == "legacy" and StationVotingConfig.objects.filter(
-        station=station, require_codes=True
-    ).exists():
+    if show.kind == "legacy" and station_requires_codes(station):
         raise ValueError("Select an active chart show to record this vote.")
     if show.kind != "legacy" and not show.accepts_at(timezone.now()):
         raise ValueError("This chart show is not currently accepting votes.")
