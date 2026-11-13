@@ -214,6 +214,13 @@ class StationVotingConfig(models.Model):
     require_codes = models.BooleanField(default=False)
     # Applies to chart points only, never the number of authentic listener votes.
     vote_multiplier = models.PositiveSmallIntegerField(default=1)
+    # Optional station-wide cap in addition to the chart show's daily limit.
+    station_daily_limit = models.PositiveSmallIntegerField(null=True, blank=True, default=None)
+    repeat_song_policy = models.CharField(
+        max_length=8, default="inherit",
+        choices=[("inherit", "System default"), ("block", "Block across station"),
+                 ("allow", "Allow repeat songs")],
+    )
     updated_at = models.DateTimeField(auto_now=True)
 
 
