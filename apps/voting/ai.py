@@ -84,7 +84,7 @@ def call_openai_api(system_prompt: str, user_prompt: str, *, response_format=Non
         "response_format": response_format or {"type": "json_object"},
     }
     # A non-reasoning fallback model does not support reasoning_effort.
-    if not (model or settings.OPENAI_MODEL).startswith("gpt-4o"):
+    if not (model or settings.OPENAI_MODEL).startswith("gpt-4"):
         payload["reasoning_effort"] = settings.OPENAI_REASONING_EFFORT
 
     try:
