@@ -1,7 +1,7 @@
 from django.urls import path
 from .views import chart_today, dashboard, chart_archives, chart_detail, stats_overview
 
-from . import desktop, workspace, show_management, eligibility, presenter_management, station_management
+from . import desktop, workspace, show_management, eligibility, presenter_management, station_management, matching_intelligence
 
 urlpatterns = [
     path("desktop/status", desktop.status),
@@ -39,6 +39,8 @@ urlpatterns = [
     path("workspace/incoming", workspace.incoming),
     path("workspace/source-analytics", workspace.source_analytics),
     path("workspace/health", workspace.health),
+    path("workspace/intelligence", matching_intelligence.intelligence),
+    path("workspace/intelligence/save", matching_intelligence.save_intelligence),
     path("workspace/retry", workspace.retry_failed),
     path("workspace/audit", workspace.audit),
     path("workspace/publish", workspace.publish),

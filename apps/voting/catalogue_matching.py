@@ -223,6 +223,10 @@ def artist_similarity(submitted, canonical, aliases=()):
 
 
 def ranked_candidates(station, artist, title, limit=16, *, exhaustive=False):
+    from .matching_controls import options_for_station
+    options = options_for_station(station)
+    min_artist = options["retrieval_min_artist"]
+    min_title = options["retrieval_min_title"]
     artist, title = normalise(artist), normalise(title)
     if artist == "unknown artist":
         title = strip_vote_prefix(title)
@@ -272,7 +276,7 @@ def ranked_candidates(station, artist, title, limit=16, *, exhaustive=False):
                 # discard extra words or guess from a short fuzzy title.
                 candidates = [
                     ((aa + tt) / 2, aa, tt)
-                    for aa, tt in scores if aa >= 0.68 and tt >= 0.66
+                    for aa, tt in scores if aa >= min_artist and tt >= min_title
                 ]
                 only_title_score = title_similarity(title, t, aliases["title"])
                 title_only = (
@@ -313,7 +317,7 @@ def ranked_candidates(station, artist, title, limit=16, *, exhaustive=False):
                 ))
             plausible = [
                 (a, title_score) for a, title_score in interpretations
-                if a >= 0.68 and title_score >= 0.66
+                if a >= min_artist and title_score >= min_title
             ]
             if not plausible:
                 continue

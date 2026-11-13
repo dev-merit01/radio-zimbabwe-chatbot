@@ -26,8 +26,10 @@ class Command(BaseCommand):
             raise CommandError(
                 "Production workers require PostgreSQL. Use --allow-sqlite for local single-worker development."
             )
-        call_command("audit_chart_routing", stdout=self.stdout)
-        call_command("retry_catalogue_votes", stdout=self.stdout)
+        if options["queue"] in ("all", "intake"):
+            call_command("audit_chart_routing", stdout=self.stdout)
+        if options["queue"] in ("all", "matching"):
+            call_command("retry_catalogue_votes", stdout=self.stdout)
         # Optional bounded startup backfill, only for matching workers.
         # An embedding outage must never interrupt intake or vote counting.
         from django.conf import settings

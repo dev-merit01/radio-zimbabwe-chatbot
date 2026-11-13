@@ -55,6 +55,7 @@
     archives: "Chart archives",
     activity: "Activity log",
     connections: "Connections",
+    intelligence: "AI matching intelligence",
   };
   async function api(path, data, signal) {
     const response = await fetch("/api/" + path, {
@@ -829,8 +830,53 @@
         </div><aside class="admin-aside">
         <section class="admin-station-focus"><span class="studio-kicker">CURRENT WORKSPACE</span><h2>${esc(selected?.name)}</h2><p>These controls apply to this station.</p></section>
         ${panel("Voting & publication", `<div class="admin-action-list"><button data-page="review"><strong>Review music <span>→</span></strong><small>Edit, verify, reject or merge songs.</small></button><button data-action="publish"><strong>Publish selected chart <span>→</span></strong><small>Publish a permanent Top 20 or Top 50.</small></button><button data-page="shows"><strong>Manage chart shows <span>→</span></strong><small>Choose the year-end chart show before publishing.</small></button><button data-page="shows"><strong>Review suspected spam <span>→</span></strong><small>Flagged votes across the selected station: ${num(selected?.spam || 0)}.</small></button><button data-action="station-multiplier"><strong>Station vote multiplier <span>→</span></strong><small>Configure weighted points for the selected station (×1–×10).</small></button><button data-page="archives"><strong>Chart archives <span>→</span></strong><small>Revisit and export saved editions.</small></button></div>`)}
-        ${panel("Station operations", `<div class="admin-action-list"><button data-action="station-password"><strong>Station password <span>→</span></strong><small>Manage access when switching stations.</small></button><button data-page="connections"><strong>Connections & queues <span>→</span></strong><small>Check providers and retry failed jobs.</small></button><button data-page="activity"><strong>Activity history <span>→</span></strong><small>Review recorded administrative actions.</small></button></div>`)}
+        ${panel("Station operations", `<div class="admin-action-list"><button data-action="station-password"><strong>Station password <span>→</span></strong><small>Manage access when switching stations.</small></button><button data-page="connections"><strong>Connections & queues <span>→</span></strong><small>Check providers and retry failed jobs.</small></button><button data-page="intelligence"><strong>AI Matching Intelligence <span>→</span></strong><small>Adjust AI settings and review verification diagnostics.</small></button><button data-page="activity"><strong>Activity history <span>→</span></strong><small>Review recorded administrative actions.</small></button></div>`)}
         </aside></div>`;
+      } else if (page === "intelligence") {
+        const d = await read("workspace/intelligence");
+        const cfg = d.config;
+        const metric = (key) => d.metrics[key] == null ? "—" : num(d.metrics[key]);
+        const score = (value) => value == null ? "—" : (value * 100).toFixed(1) + "%";
+        html =
+          panel("Matching intelligence controls",
+            '<p class="hint">These settings apply to the selected station. Candidate thresholds only influence which songs are considered. AI confirmation, song identity, chart codes, voting hours and final safety checks stay mandatory.</p>' +
+            '<div id="intelligence-form" class="settings-section">' +
+            showSelectField("OpenAI model", "model_override",
+              d.model_options.map((option) => [option.value, option.label]), cfg.model_override) +
+            '<label class="field">Candidate shortlist (5–24)' +
+              '<input type="number" name="shortlist_limit" min="5" max="24" step="1" required value="' + esc(cfg.shortlist_limit) + '"></label>' +
+            '<label class="field">Artist retrieval threshold (0.55–0.80)' +
+              '<input type="number" name="retrieval_min_artist" min="0.55" max="0.80" step="0.01" required value="' + esc(cfg.retrieval_min_artist) + '"></label>' +
+            '<label class="field">Song-title retrieval threshold (0.55–0.80)' +
+              '<input type="number" name="retrieval_min_title" min="0.55" max="0.80" step="0.01" required value="' + esc(cfg.retrieval_min_title) + '"></label>' +
+            showSelectField("Reuse previously AI-verified phrases", "cache_mode",
+              [["inherit", "Use Railway default"], ["on", "Enabled (verified-only)"], ["off", "Disabled"]], cfg.cache_mode) +
+            '<button type="button" class="button primary" data-action="save-intelligence">Save intelligence settings</button>' +
+            '</div>') +
+          panel("Last seven days",
+            '<div class="metrics">' +
+              [["Processed", "total"], ["Approved", "approved"], ["Human review", "review"],
+               ["Awaiting retry", "retry"], ["Successful AI calls", "api_success"], ["AI call errors", "api_error"]]
+                 .map(([label, key]) =>
+                   '<div class="metric"><span>' + esc(label) + '</span><strong>' + metric(key) + '</strong></div>').join("") +
+            '</div><p class="hint">Average OpenAI time: ' +
+              (d.metrics.avg_api_ms == null ? "—" : num(d.metrics.avg_api_ms) + " ms") +
+              ' · Average matching queue wait: ' +
+              (d.metrics.avg_queue_ms == null ? "—" : num(d.metrics.avg_queue_ms) + " ms") + '</p>') +
+          panel("Recent verification decisions",
+            '<p class="hint">' + esc(d.note) + '</p>' +
+            (d.items.length ? table(
+              ["When", "Trace / vote", "Method", "Candidates", "Fuzzy / artist / title", "API", "Decision"],
+              d.items.map((item) => '<tr><td>' + esc(new Date(item.at).toLocaleString()) +
+                '</td><td title="' + esc(item.trace_id) + '">' + esc(item.trace_id.slice(0, 8)) +
+                ' · #' + esc(item.vote_id) + '</td><td>' + esc(item.method) +
+                (item.model ? '<small> · ' + esc(item.model) + '</small>' : '') +
+                '</td><td>' + num(item.candidate_count) +
+                '</td><td>' + score(item.fuzzy) + ' / ' + score(item.artist) + ' / ' + score(item.title) +
+                '</td><td>' + esc(item.api_status) +
+                (item.api_ms == null ? '' : ' · ' + num(item.api_ms) + 'ms') +
+                '</td><td>' + esc(item.decision + " (" + item.reason + ")") + '</td></tr>'),
+              true) : empty));
       } else if (page === "activity") {
         const d = await read("workspace/audit?page=" + pagination);
         html = panel(
@@ -865,7 +911,7 @@
         );
       }
       if (current !== generation) return;
-      if (permissions.is_admin && ["activity", "connections"].includes(page)) {
+      if (permissions.is_admin && ["activity", "connections", "intelligence"].includes(page)) {
         html = '<div class="workspace-tools"><button class="button secondary" data-page="administration">← Admin control</button></div>' + html;
       }
       if (["overview", "incoming", "archives"].includes(page) && !showsData.is_presenter) {
@@ -993,12 +1039,13 @@
       presenters: "Assign each presenter to exactly one station and chart show.",
       administration: "Manage accounts and oversee voting across every station.",
       activity: "A record of catalogue changes and chart publications.",
+      intelligence: "Tune matching, inspect AI calls and monitor verification accuracy.",
       connections: "Provider setup, background workers and processing queues.",
     }[page];
     document
       .querySelectorAll("[data-page]")
       .forEach((b) => {
-        const active = b.dataset.page === page || (b.classList.contains("nav-item") && b.dataset.page === "administration" && ["activity", "connections"].includes(page));
+        const active = b.dataset.page === page || (b.classList.contains("nav-item") && b.dataset.page === "administration" && ["activity", "connections", "intelligence"].includes(page));
         b.classList.toggle("active", active);
         if (b.classList.contains("nav-item")) {
           if (active) b.setAttribute("aria-current", "page");
@@ -1203,6 +1250,37 @@
     if (!b) return;
     const action = b.dataset.action,
       id = b.dataset.id;
+    if (action === "save-intelligence") {
+      const form = $("intelligence-form");
+      if (!form || !online) return;
+      const get = (name) => form.querySelector('[name="' + name + '"]')?.value;
+      const candidate = Number(get("shortlist_limit"));
+      const artist = Number(get("retrieval_min_artist"));
+      const title = Number(get("retrieval_min_title"));
+      if (!Number.isInteger(candidate) || candidate < 5 || candidate > 24 ||
+          !Number.isFinite(artist) || !Number.isFinite(title) ||
+          artist < 0.55 || artist > 0.80 || title < 0.55 || title > 0.80) {
+        toast("Check shortlist and retrieval thresholds before saving.");
+        return;
+      }
+      b.disabled = true;
+      try {
+        await api("workspace/intelligence/save", {
+          model_override: get("model_override"),
+          shortlist_limit: candidate,
+          retrieval_min_artist: artist,
+          retrieval_min_title: title,
+          cache_mode: get("cache_mode"),
+        });
+        toast("AI matching settings saved for this station.");
+        await render();
+      } catch (error) {
+        toast(error.message);
+      } finally {
+        b.disabled = false;
+      }
+      return;
+    }
     if (action === "featured-add") {
       const list = $("featured-artist-list");
       if (list) {

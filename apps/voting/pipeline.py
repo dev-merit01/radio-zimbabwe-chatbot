@@ -206,6 +206,7 @@ def process_vote(vote):
                     {"id": song.id, "canonical_name": song.canonical_name}
                     for song in shortlist
                 ],
+                station=station,
             )
             if str(result.get("reasoning", "")).startswith(
                 ("LLM error:", "LLM response parsing error:")
@@ -315,6 +316,42 @@ def unresolved_mapping(mapping):
     ).exists()
 
 
+
+def record_matching_diagnostic(vote, ranked, result, *, cached=False, decision, reason, matched_song=None):
+    """Keep operational evidence separate from raw message text and API prompts."""
+    from django.utils import timezone
+    from .models import VoteMatchingDiagnostic
+
+    top = ranked[0] if ranked else None
+    previous_attempts = (
+        VoteMatchingDiagnostic.objects.filter(vote_id=vote.pk)
+        .values_list("attempts", flat=True).first() or 0
+    )
+    age = timezone.now() - vote.created_at
+    called = result.get("_api_called") is True
+    VoteMatchingDiagnostic.objects.update_or_create(
+        vote_id=vote.pk,
+        defaults={
+            "station": vote.station,
+            "verification_method": "cache" if cached else ("openai" if called else "unverified"),
+            "model_used": str(result.get("_model_used", ""))[:80] if called else "",
+            "api_status": str(result.get("_api_status", "unknown"))[:16] if called else "not_called",
+            "api_latency_ms": result.get("_api_latency_ms") if called else None,
+            "queue_wait_ms": max(0, round(age.total_seconds() * 1000)),
+            "candidate_count": min(len(ranked), 65535),
+            "fuzzy_score": top[0] if top else None,
+            "artist_score": top[1] if top else None,
+            "title_score": top[2] if top else None,
+            # Vector-only retrieval is only a hint; do not invent a similarity.
+            "vector_score": None,
+            "decision": decision,
+            "decision_reason": reason,
+            "matched_song": matched_song,
+            "attempts": min(65535, previous_attempts + 1),
+        },
+    )
+
+
 def process_vote_with_ai(vote):
     """Verify EVERY queued valid vote with OpenAI before publishing any tally.
 
@@ -335,11 +372,16 @@ def process_vote_with_ai(vote):
         return
 
     station = vote.station
+    from .matching_controls import options_for_station
+    control = options_for_station(station)
     mapping = MatchKeyMapping.objects.select_related("cleaned_song").filter(
         station=station, match_key=vote.match_key,
         cleaned_song__station=station,
     ).first()
-    ranked = ranked_candidates(station, vote.artist_normalized, vote.song_normalized)
+    ranked = ranked_candidates(
+        station, vote.artist_normalized, vote.song_normalized,
+        limit=control["shortlist_limit"],
+    )
     shortlist = [row[3] for row in ranked]
     if (mapping and mapping.cleaned_song.status == "verified"
             and mapping.cleaned_song_id not in {song.pk for song in shortlist}):
@@ -379,9 +421,12 @@ def process_vote_with_ai(vote):
             "reasoning": "Verified phrase cache; current catalogue uniqueness checked",
         }
     else:
-        result = match_vote_with_llm(vote.artist_raw, vote.song_raw, candidates)
+        result = match_vote_with_llm(vote.artist_raw, vote.song_raw, candidates, station=station)
     reason = str(result.get("reasoning", ""))
     if reason.startswith(("LLM error:", "LLM response parsing error:")):
+        record_matching_diagnostic(
+            vote, ranked, result, decision="retry", reason="provider_unavailable",
+        )
         raise RuntimeError("AI verification unavailable")
 
     chosen_id = result.get("matched_song_id")
@@ -505,6 +550,14 @@ def process_vote_with_ai(vote):
             remember_verified_spelling(current, chosen)
         current.ai_status = "approved" if approved else "review"
         current.save(update_fields=["ai_status"])
+        record_matching_diagnostic(
+            current, ranked, result, cached=bool(cached_song),
+            decision=current.ai_status,
+            reason=("approved" if approved else
+                    "safety_gate" if result.get("matched") is True else
+                    "no_candidate" if not ranked else "model_no_match"),
+            matched_song=chosen if approved else None,
+        )
         LLMDecisionLog.objects.create(
             station=station, input_text=vote.raw_input,
             input_type="cached_verified_vote" if cached_song else "raw_vote",
