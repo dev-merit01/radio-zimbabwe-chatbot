@@ -5,7 +5,7 @@ from django.contrib.auth import get_user_model
 from django.test import TestCase, override_settings
 
 from apps.charts.routing import route_vote
-from apps.voting.models import ChartShow, RawVote, StationVotingConfig
+from apps.voting.models import ChartShow, InboundEvent, RawVote, StationVotingConfig
 
 
 @override_settings(SECURE_SSL_REDIRECT=False)
@@ -95,3 +95,55 @@ class CodeEnforcementRolloutTests(TestCase):
         )
         self.assertIsNone(other)
         self.assertEqual(reason, "missing_or_unknown_code")
+
+    def test_staff_cannot_record_historical_vote_if_codes_exist(self):
+        """Manual intake must obey the same fail-closed station code policy."""
+        user = get_user_model().objects.create_superuser(
+            username="manual-code-review",
+            password="Manual-Code-Test-Only!923",
+        )
+        self.client.force_login(user)
+        # Even an accidentally disabled flag cannot re-enable historical intake.
+        StationVotingConfig.objects.filter(station="radio_zimbabwe").update(
+            require_codes=False,
+        )
+        response = self.client.post(
+            "/api/workspace/votes",
+            json.dumps({
+                "listener": "test-listener",
+                "text": "Jnr Spragga - Daka",
+                "request_id": "00000000-0000-4000-8000-000000000007",
+            }),
+            content_type="application/json",
+        )
+        self.assertEqual(response.status_code, 400, response.content)
+        self.assertIn("Select an active chart show", response.json()["error"])
+        self.assertFalse(InboundEvent.objects.filter(provider="manual").exists())
+
+    def test_bad_archive_export_identifier_is_rejected_cleanly(self):
+        user = get_user_model().objects.create_superuser(
+            username="archive-export-review",
+            password="Archive-Export-Test-Only!923",
+        )
+        self.client.force_login(user)
+        for archive_id in ("invalid", "-1", "0"):
+            with self.subTest(archive_id=archive_id):
+                response = self.client.get(
+                    "/api/workspace/export", {"archive": archive_id},
+                )
+                self.assertEqual(response.status_code, 400, response.content)
+                self.assertEqual(
+                    response.json()["error"], "Invalid archived chart ID.",
+                )
+
+    @override_settings(AI_ALL_VOTES=True, AUTO_AI_MATCH=False)
+    def test_admin_health_reports_all_votes_ai_mode(self):
+        user = get_user_model().objects.create_superuser(
+            username="ai-health-review",
+            password="Ai-Health-Test-Only!923",
+        )
+        self.client.force_login(user)
+        response = self.client.get("/api/workspace/health")
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertTrue(response.json()["ai_enabled"])
+        self.assertTrue(response.json()["ai_all_votes"])
