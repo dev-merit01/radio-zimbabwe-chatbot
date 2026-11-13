@@ -1,4 +1,5 @@
 import re
+import uuid
 from django.conf import settings
 from django.db import models
 from django.utils import timezone
@@ -742,6 +743,53 @@ class SongAlias(models.Model):
         if not self.song_id or self.song.station != self.station:
             raise ValueError("Aliases must belong to a song in the same station.")
         super().save(*args, **kwargs)
+
+
+
+class MatchingControl(models.Model):
+    """Per-station Admin controls; never bypass eligibility or AI safety gates."""
+
+    station = models.CharField(max_length=32, unique=True)
+    model_override = models.CharField(max_length=80, blank=True, default="")
+    shortlist_limit = models.PositiveSmallIntegerField(default=16)
+    cache_mode = models.CharField(
+        max_length=8, default="inherit",
+        choices=[("inherit", "System default"), ("on", "Enabled"), ("off", "Disabled")],
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+
+class VoteMatchingDiagnostic(models.Model):
+    """Structured, privacy-preserving matching trace (no raw prompts or phone numbers)."""
+
+    vote = models.OneToOneField(
+        "RawVote", on_delete=models.CASCADE, related_name="matching_diagnostic",
+    )
+    station = models.CharField(max_length=32, db_index=True)
+    trace_id = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    verification_method = models.CharField(max_length=20, default="unknown")
+    model_used = models.CharField(max_length=80, blank=True)
+    api_status = models.CharField(max_length=16, default="not_called")
+    api_latency_ms = models.PositiveIntegerField(null=True, blank=True)
+    queue_wait_ms = models.PositiveIntegerField(null=True, blank=True)
+    candidate_count = models.PositiveSmallIntegerField(default=0)
+    fuzzy_score = models.FloatField(null=True, blank=True)
+    artist_score = models.FloatField(null=True, blank=True)
+    title_score = models.FloatField(null=True, blank=True)
+    vector_score = models.FloatField(null=True, blank=True)
+    decision = models.CharField(max_length=16, default="retry")
+    decision_reason = models.CharField(max_length=64, blank=True)
+    attempts = models.PositiveSmallIntegerField(default=1)
+    matched_song = models.ForeignKey(
+        "CleanedSong", on_delete=models.SET_NULL, null=True, blank=True,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["station", "-created_at"], name="vote_match_diag_station_idx"),
+        ]
 
 
 class MatchKeyMapping(models.Model):
