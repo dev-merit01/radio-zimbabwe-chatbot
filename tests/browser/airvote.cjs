@@ -44,6 +44,32 @@ const assert = require('node:assert/strict');
     }
     await login('ui-operator', 'local-browser-test-only');
     await switchTo('national_fm');
+    await navigate('intelligence');
+    await page.setViewportSize({width: 375, height: 812});
+    const scorecards = page.locator('.intelligence-stat');
+    assert.equal(await scorecards.count(), 6, 'All intelligence metrics must render.');
+    const cardLayout = await scorecards.evaluateAll(nodes => nodes.map(node => {
+      const rect = node.getBoundingClientRect();
+      const label = node.querySelector('.intelligence-stat-label')?.getBoundingClientRect();
+      const value = node.querySelector('.intelligence-stat-value')?.getBoundingClientRect();
+      return {height: rect.height, left: rect.left, right: rect.right,
+        separated: Boolean(label && value && value.top >= label.bottom)};
+    }));
+    assert.ok(cardLayout.every(card =>
+      card.height <= 160 && card.left >= 0 && card.right <= 375 && card.separated
+    ), 'Mobile statistics must fit without oversized/overlapping cards.');
+    await page.locator('#station-voting-form input[name="station_daily_limit"]').fill('6');
+    await page.locator('#station-voting-form select[name="repeat_song_policy"]').selectOption('block');
+    await page.getByRole('button', {name: 'Save station voting rules'}).click();
+    await page.getByText('Station voting rules updated.').waitFor();
+    let votingRules = await page.request.get(base + '/api/workspace/intelligence');
+    assert.equal((await votingRules.json()).vote_policy.station_daily_limit, 6);
+    // Restore the fixture's original permissive per-show policy for later tests.
+    await page.locator('#station-voting-form input[name="station_daily_limit"]').fill('');
+    await page.locator('#station-voting-form select[name="repeat_song_policy"]').selectOption('inherit');
+    await page.getByRole('button', {name: 'Save station voting rules'}).click();
+    await page.getByText('Station voting rules updated.').waitFor();
+    await page.setViewportSize({width: 1360, height: 900});
     await navigate('connections');
     await page.getByRole('button', {name: 'Set station password', exact: true}).click();
     await page.locator('#modal input[name="password"]').fill('Station-browser-572!');
