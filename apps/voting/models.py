@@ -752,6 +752,8 @@ class MatchingControl(models.Model):
     station = models.CharField(max_length=32, unique=True)
     model_override = models.CharField(max_length=80, blank=True, default="")
     shortlist_limit = models.PositiveSmallIntegerField(default=16)
+    retrieval_min_artist = models.FloatField(default=0.68)
+    retrieval_min_title = models.FloatField(default=0.66)
     cache_mode = models.CharField(
         max_length=8, default="inherit",
         choices=[("inherit", "System default"), ("on", "Enabled"), ("off", "Disabled")],
