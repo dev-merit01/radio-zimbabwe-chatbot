@@ -5,7 +5,7 @@ from django.test import TestCase, override_settings
 
 from apps.voting.models import (
     CleanedSong, CleanedSongTally, MatchKeyMapping, RawVote, RawSongTally,
-    LLMDecisionLog,
+    LLMDecisionLog, VoteMatchingDiagnostic,
 )
 from apps.voting.pipeline import process_vote, review_song, rebuild_tallies
 from apps.voting.services import VotingService
@@ -43,6 +43,24 @@ class EveryVoteAiTests(TestCase):
         self.assertEqual(RawVote.objects.get(pk=vote.pk).ai_status, "approved")
         self.assertEqual(CleanedSongTally.objects.get(cleaned_song=song).count, 1)
         self.assertTrue(LLMDecisionLog.objects.get().was_applied)
+
+    def test_trace_records_actual_openai_request_without_raw_prompt(self):
+        song = self.song()
+        vote = self.vote()
+        with patch(
+            "apps.voting.ai.call_openai_api",
+            return_value=(
+                '{"matched":true,"matched_song_id":' + str(song.pk) +
+                ',"confidence":"high","decision":"MATCH","reasoning":"Verified"}'
+            ),
+        ):
+            process_vote(vote)
+        diagnostic = VoteMatchingDiagnostic.objects.get(vote=vote)
+        self.assertEqual(diagnostic.decision, "approved")
+        self.assertEqual(diagnostic.verification_method, "openai")
+        self.assertEqual(diagnostic.api_status, "success")
+        self.assertGreaterEqual(diagnostic.api_latency_ms, 0)
+        self.assertEqual(diagnostic.matched_song, song)
 
     def test_existing_mapping_does_not_bypass_ai_or_count_unapproved_vote(self):
         song = self.song()
