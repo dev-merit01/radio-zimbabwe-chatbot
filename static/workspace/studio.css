@@ -2909,3 +2909,109 @@ dialog:has(.show-form) {
   .airvote-workspace .metric { padding: 12px; }
   .airvote-workspace .metric-value { font-size: 22px; }
 }
+
+
+/* AI Intelligence: compact, accessible scorecards independent of global .metric.
+   The former markup inherited overview-card sizing and inline text collisions. */
+.airvote-workspace .intelligence-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin: 16px 0 18px;
+  min-width: 0;
+}
+.airvote-workspace .intelligence-stat {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+  min-height: 104px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 16px;
+  background: var(--paper);
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.airvote-workspace .intelligence-stat:first-child {
+  color: #fff;
+  background: #1154b0;
+  border-color: #1154b0;
+}
+.airvote-workspace .intelligence-stat-label {
+  display: block;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.4;
+  font-weight: 600;
+}
+.airvote-workspace .intelligence-stat-value {
+  display: block;
+  color: var(--ink);
+  font-size: clamp(26px, 2.7vw, 35px);
+  font-weight: 750;
+  line-height: 1.1;
+  letter-spacing: -.025em;
+  font-variant-numeric: tabular-nums;
+}
+.airvote-workspace .intelligence-stat:first-child .intelligence-stat-label,
+.airvote-workspace .intelligence-stat:first-child .intelligence-stat-value {
+  color: #fff;
+}
+.airvote-workspace .intelligence-form {
+  max-width: 700px;
+  display: grid;
+  gap: 14px;
+  padding: 12px 2px 6px;
+}
+.airvote-workspace .intelligence-form .field {
+  min-width: 0;
+  margin: 0;
+}
+.airvote-workspace .intelligence-form :is(input, select) {
+  box-sizing: border-box;
+  display: block;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+}
+.airvote-workspace .intelligence-form .button {
+  width: fit-content;
+  max-width: 100%;
+  white-space: normal;
+  text-align: center;
+}
+.airvote-workspace .intelligence-timings {
+  margin-top: 12px;
+  overflow-wrap: anywhere;
+}
+html[data-theme="dark"] .airvote-workspace .intelligence-stat:not(:first-child) {
+  background: var(--paper);
+  border-color: var(--line);
+}
+html[data-theme="dark"] .airvote-workspace .intelligence-stat:first-child {
+  background: #215da6;
+  border-color: #397ecb;
+}
+@media (max-width: 700px) {
+  .airvote-workspace .intelligence-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+  .airvote-workspace .intelligence-stat {
+    min-height: 90px;
+    padding: 13px 14px;
+    gap: 8px;
+  }
+  .airvote-workspace .intelligence-stat-label {
+    font-size: 12px;
+  }
+  .airvote-workspace .intelligence-stat-value {
+    font-size: clamp(24px, 6vw, 31px);
+  }
+  .airvote-workspace .intelligence-form .button {
+    width: 100%;
+  }
+}
