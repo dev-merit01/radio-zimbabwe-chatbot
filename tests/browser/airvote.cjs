@@ -50,6 +50,15 @@ const assert = require('node:assert/strict');
     await page.locator('#modal-submit').click();
     await page.locator('#modal').waitFor({state: 'hidden'});
     await navigate('incoming');
+    // The formerly code-free manual vote fixture is no longer valid when
+    // a station has coded chart programmes. Select its open N20 programme.
+    const showsResponse = await page.request.get(base + '/api/workspace/shows');
+    assert.equal(showsResponse.status(), 200);
+    const shows = (await showsResponse.json()).shows;
+    const activeShow = shows.find(show => show.code === 'N20');
+    assert.ok(activeShow, 'Seeded National FM N20 chart must be present.');
+    await page.locator('#chart-show-select').selectOption(String(activeShow.id));
+    await page.locator('#page-content[aria-busy="false"]').waitFor();
     await page.getByRole('button', {name: 'Record vote', exact: true}).click();
     await page.getByLabel('Listener reference', {exact: true}).fill('ui-local-listener');
     await page.getByLabel('Artist - Song', {exact: true}).fill('River Artist - Morning Song');
