@@ -1,6 +1,19 @@
 "use strict";
 (() => {
   const $ = (id) => document.getElementById(id);
+  // CSP forbids inline onerror handlers. Restore a missing station logo
+  // from its local asset without allowing an endless broken-image loop.
+  for (const logo of document.querySelectorAll("img[data-logo-fallback]")) {
+    const fallback = logo.dataset.logoFallback;
+    const useFallback = () => {
+      logo.removeEventListener("error", useFallback);
+      if (fallback && logo.getAttribute("src") !== fallback) {
+        logo.src = fallback;
+      }
+    };
+    logo.addEventListener("error", useFallback);
+    if (logo.complete && logo.naturalWidth === 0) useFallback();
+  }
   const esc = (v) =>
     String(v ?? "").replace(
       /[&<>"']/g,
