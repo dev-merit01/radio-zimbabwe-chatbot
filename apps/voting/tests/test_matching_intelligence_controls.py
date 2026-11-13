@@ -99,6 +99,37 @@ class AdminMatchingIntelligenceTests(TestCase):
             self.assertEqual(outgoing["model"], "gpt-4o-mini")
             self.assertNotIn("reasoning_effort", outgoing)
 
+    def test_multiple_openai_models_are_available_in_admin(self):
+        response = self.client.get("/api/workspace/intelligence")
+        choices = {row["value"] for row in response.json()["model_options"]}
+        self.assertGreaterEqual(len(choices), 8)
+        self.assertTrue({
+            "gpt-6-luna", "gpt-6.1-terra", "gpt-6.1-sol",
+            "gpt-4.1-mini", "gpt-4o-mini",
+        }.issubset(choices))
+        data = {
+            "model_override": "gpt-6.1-terra", "shortlist_limit": 16,
+            "retrieval_min_artist": 0.68, "retrieval_min_title": 0.66,
+            "cache_mode": "inherit",
+        }
+        saved = self.client.post(
+            "/api/workspace/intelligence/save", json.dumps(data),
+            content_type="application/json",
+        )
+        self.assertEqual(saved.status_code, 200, saved.content)
+        self.assertEqual(saved.json()["config"]["model"], "gpt-6.1-terra")
+
+    @override_settings(OPENAI_API_KEY="fake-test-key")
+    def test_gpt_4_1_model_does_not_send_unsupported_reasoning_effort(self):
+        from apps.voting.ai import call_openai_api
+        with patch("apps.voting.ai.requests.post") as sender:
+            sender.return_value.json.return_value = {
+                "choices": [{"message": {"content": '{"ok": true}'}}],
+            }
+            sender.return_value.raise_for_status.return_value = None
+            call_openai_api("system", "user", model="gpt-4.1-mini")
+            self.assertNotIn("reasoning_effort", sender.call_args.kwargs["json"])
+
     def test_default_station_controls_do_not_impact_other_stations(self):
         MatchingControl.objects.create(
             station="radio_zimbabwe", model_override="gpt-4o-mini",

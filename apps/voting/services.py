@@ -355,8 +355,10 @@ class VotingService:
         match_key = create_match_key(artist, title)
         display_name = make_display_name(artist, title)
         today = vote_date or timezone.localdate()
-        limit = (settings.VOTING_DAILY_LIMIT
-                 if chart_show.kind == "legacy" else chart_show.daily_limit)
+        show_limit = (
+            settings.VOTING_DAILY_LIMIT
+            if chart_show.kind == "legacy" else chart_show.daily_limit
+        )
         # Lock the voter row before counting: different requests for one voter cannot
         # both use the final slot. Production requires PostgreSQL row locking.
         with transaction.atomic():
@@ -369,22 +371,44 @@ class VotingService:
                 channel=self.channel, user_ref=self.user_ref, station=self.station
             )
             user = User.objects.select_for_update().get(pk=user.pk)
-            votes = RawVote.objects.filter(
-                station=self.station, vote_date=today, chart_show=chart_show,
+            from .station_vote_policy import voting_rules_for_station
+
+            policy = voting_rules_for_station(self.station)
+            # Compute BOTH station-wide and programme limits under the station
+            # lock. A listener cannot evade an active station cap by switching
+            # chart shows, WhatsApp/SMS, or concurrent submissions.
+            station_votes = RawVote.objects.filter(
+                station=self.station, vote_date=today,
             )
             if self.voter_fingerprint:
-                # One daily allowance for the same verified phone across
-                # online, WhatsApp and future SMS voting channels.
-                votes = votes.filter(voter_fingerprint=self.voter_fingerprint)
+                station_votes = station_votes.filter(
+                    voter_fingerprint=self.voter_fingerprint
+                )
             else:
-                votes = votes.filter(user=user)
-            if not settings.ALLOW_REPEAT_SONG:
-                if self._already_voted(votes, match_key, artist, title):
+                station_votes = station_votes.filter(user=user)
+            show_votes = station_votes.filter(chart_show=chart_show)
+            if not policy["allow_repeat_song"]:
+                prior_votes = (
+                    station_votes if policy["repeat_scope"] == "station"
+                    else show_votes
+                )
+                if self._already_voted(prior_votes, match_key, artist, title):
                     return "⚠️ You already voted for this song today. Please choose another song."
-            count = votes.count()
-            if count >= limit:
+            show_count = show_votes.count()
+            if show_count >= show_limit:
+                # Preserve the long-standing legacy message for existing clients.
+                if chart_show.kind == "legacy":
+                    return (
+                        f"🚫 You have used all {show_limit} votes for today. Come back tomorrow!"
+                    )
                 return (
-                    f"🚫 You have used all {limit} votes for today. Come back tomorrow!"
+                    f"🚫 You have used all {show_limit} votes for this chart show today."
+                )
+            station_limit = policy["station_daily_limit"]
+            station_count = station_votes.count() if station_limit is not None else None
+            if station_limit is not None and station_count >= station_limit:
+                return (
+                    f"🚫 You have used all {station_limit} votes for this station today."
                 )
             vote = RawVote.objects.create(
                 user=user,
@@ -412,7 +436,9 @@ class VotingService:
                 )
                 RawSongTally.objects.filter(pk=tally.pk).update(count=F("count") + 1)
             VoteJob.objects.create(vote=vote)
-        remaining = limit - count - 1
+        remaining = show_limit - show_count - 1
+        if station_limit is not None:
+            remaining = min(remaining, station_limit - station_count - 1)
         return f"✅ Submission received! Song verification is required before it counts on the chart.\n\n🎵 {display_name}\n\nYou have {remaining} vote{'s' if remaining != 1 else ''} remaining today."
 
     def _already_voted(self, votes, match_key, artist, title):
@@ -461,19 +487,36 @@ class VotingService:
                 duplicates |= Q(match_key=canonical_key)
         return votes.filter(duplicates).exists()
 
-    @staticmethod
-    def _welcome_message():
-        from django.conf import settings
+    def _welcome_message(self):
+        from .station_vote_policy import voting_rules_for_station
 
-        return f"🎶 Welcome to AirVote!\n\nSend: Artist - Song\nExample: Winky D - Ijipita\n\nUp to {settings.VOTING_DAILY_LIMIT} votes per day."
+        policy = voting_rules_for_station(self.station)
+        limit = policy["station_daily_limit"]
+        limit_text = (
+            f"Up to {limit} votes per station per day."
+            if limit is not None
+            else "Daily voting limits depend on the chart show."
+        )
+        return (
+            "🎶 Welcome to AirVote!\n\nSend: Artist - Song\n"
+            f"Example: Winky D - Ijipita\n\n{limit_text}"
+        )
 
-    @staticmethod
-    def _help_message():
-        from django.conf import settings
+    def _help_message(self):
+        from .station_vote_policy import voting_rules_for_station
 
-        policy = (
+        policy = voting_rules_for_station(self.station)
+        repeat = (
             "Repeat songs are allowed."
-            if settings.ALLOW_REPEAT_SONG
+            if policy["allow_repeat_song"]
             else "Choose a different song for each vote."
         )
-        return f"📋 How to vote:\n\nSend: Artist - Song\n{settings.VOTING_DAILY_LIMIT} votes per day. {policy}\nVotes reset at midnight, Africa/Harare."
+        limit = policy["station_daily_limit"]
+        limit_text = (
+            f"Station limit: {limit} votes per day."
+            if limit is not None else "Daily limits vary by chart show."
+        )
+        return (
+            "📋 How to vote:\n\nSend: Artist - Song\n"
+            f"{limit_text} {repeat}\nVotes reset at midnight, Africa/Harare."
+        )
