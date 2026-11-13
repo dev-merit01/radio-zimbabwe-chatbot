@@ -396,6 +396,11 @@ class VotingService:
                     return "⚠️ You already voted for this song today. Please choose another song."
             show_count = show_votes.count()
             if show_count >= show_limit:
+                # Preserve the long-standing legacy message for existing clients.
+                if chart_show.kind == "legacy":
+                    return (
+                        f"🚫 You have used all {show_limit} votes for today. Come back tomorrow!"
+                    )
                 return (
                     f"🚫 You have used all {show_limit} votes for this chart show today."
                 )
