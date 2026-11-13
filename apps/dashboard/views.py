@@ -463,6 +463,6 @@ def dashboard(request):
         request,
         "dashboard/workspace.html",
         {
-            "page_title": "Radio Zimbabwe Charts",
+            "page_title": "AirVote Voting Studio",
         },
     )

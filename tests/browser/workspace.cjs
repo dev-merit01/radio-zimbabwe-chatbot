@@ -30,6 +30,18 @@ const assert = require("node:assert/strict");
     .getByText("Connected", { exact: true })
     .waitFor();
   assert.equal(await page.locator(".metric").count(), 4);
+  // A strict Content Security Policy blocks inline error handlers. The
+  // station logo must still recover if a remote or configured image fails.
+  const stationLogo = page.locator("img[data-logo-fallback]").first();
+  const fallbackLogo = await stationLogo.getAttribute("data-logo-fallback");
+  assert.ok(fallbackLogo, "A local station-logo fallback must be available");
+  assert.equal(await stationLogo.getAttribute("onerror"), null);
+  await stationLogo.evaluate(img => { img.src = "/static/missing-station-logo.png"; });
+  await page.waitForFunction(() => {
+    const img = document.querySelector("img[data-logo-fallback]");
+    return img && img.getAttribute("src") === img.dataset.logoFallback;
+  });
+  assert.equal(await stationLogo.getAttribute("src"), fallbackLogo);
   // Both themes must work without changing navigation or voting state.
   assert.equal(await page.locator("html").getAttribute("data-theme"), "light");
   assert.equal(
