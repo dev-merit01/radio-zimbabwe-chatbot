@@ -840,9 +840,10 @@
         html =
           panel("Matching intelligence controls",
             '<p class="hint">These settings apply to the selected station. Candidate thresholds only influence which songs are considered. AI confirmation, song identity, chart codes, voting hours and final safety checks stay mandatory.</p>' +
-            '<div id="intelligence-form" class="settings-section">' +
+            '<div id="intelligence-form" class="settings-section intelligence-form">' +
             showSelectField("OpenAI model", "model_override",
               d.model_options.map((option) => [option.value, option.label]), cfg.model_override) +
+            '<p class="hint">Available models depend on your OpenAI API account. Advanced models can cost more. If the selected model is unavailable, submissions remain queued for retry rather than being counted incorrectly.</p>' +
             '<label class="field">Candidate shortlist (5–24)' +
               '<input type="number" name="shortlist_limit" min="5" max="24" step="1" required value="' + esc(cfg.shortlist_limit) + '"></label>' +
             '<label class="field">Artist retrieval threshold (0.55–0.80)' +
@@ -853,13 +854,31 @@
               [["inherit", "Use Railway default"], ["on", "Enabled (verified-only)"], ["off", "Disabled"]], cfg.cache_mode) +
             '<button type="button" class="button primary" data-action="save-intelligence">Save intelligence settings</button>' +
             '</div>') +
+          panel("Station voting rules",
+            '<p class="hint">Set rules for this station only. A station-wide cap counts submissions across all its chart shows and supported channels. Individual chart-show daily limits remain active.</p>' +
+            '<div id="station-voting-form" class="settings-section intelligence-form">' +
+            '<label class="field">Maximum votes per listener per day at this station' +
+            '<input type="number" name="station_daily_limit" min="1" max="100" step="1" inputmode="numeric" placeholder="No additional station-wide cap" value="' +
+            esc(d.vote_policy.station_daily_limit ?? "") + '"></label>' +
+            '<p class="hint">Leave blank to keep the existing per-chart-show daily limit only.</p>' +
+            showSelectField("Voting for the same song more than once in a day", "repeat_song_policy",
+              [["inherit", "Use existing system rules"],
+               ["block", "Prevent repeats across all chart shows at this station"],
+               ["allow", "Allow repeat votes (within daily limits)"]],
+              d.vote_policy.repeat_song_policy) +
+            '<p class="hint">Blocking repeats checks previously submitted songs and confirmed aliases, including votes still awaiting verification. Changing these rules does not rewrite historical votes or published charts.</p>' +
+            '<button type="button" class="button primary" data-action="save-station-voting">Save station voting rules</button>' +
+            '</div>') +
           panel("Last seven days",
-            '<div class="metrics">' +
+            '<p class="hint intelligence-intro">These figures cover verification activity recorded since the diagnostics upgrade. Earlier votes are not backfilled.</p>' +
+            '<div class="intelligence-stats" role="list">' +
               [["Processed", "total"], ["Approved", "approved"], ["Human review", "review"],
                ["Awaiting retry", "retry"], ["Successful AI calls", "api_success"], ["AI call errors", "api_error"]]
                  .map(([label, key]) =>
-                   '<div class="metric"><span>' + esc(label) + '</span><strong>' + metric(key) + '</strong></div>').join("") +
-            '</div><p class="hint">Average OpenAI time: ' +
+                   '<div class="intelligence-stat" role="listitem"><span class="intelligence-stat-label">' +
+                   esc(label) + '</span><strong class="intelligence-stat-value">' + metric(key) +
+                   '</strong></div>').join("") +
+            '</div><p class="hint intelligence-timings">Average OpenAI time: ' +
               (d.metrics.avg_api_ms == null ? "—" : num(d.metrics.avg_api_ms) + " ms") +
               ' · Average matching queue wait: ' +
               (d.metrics.avg_queue_ms == null ? "—" : num(d.metrics.avg_queue_ms) + " ms") + '</p>') +
@@ -1250,6 +1269,31 @@
     if (!b) return;
     const action = b.dataset.action,
       id = b.dataset.id;
+    if (action === "save-station-voting") {
+      const form = $("station-voting-form");
+      if (!form || !online) return;
+      const raw = form.querySelector('[name="station_daily_limit"]')?.value.trim();
+      const limit = raw === "" ? null : Number(raw);
+      const policy = form.querySelector('[name="repeat_song_policy"]')?.value;
+      if (limit !== null && (!Number.isInteger(limit) || limit < 1 || limit > 100)) {
+        toast("Station daily limit must be from 1 to 100, or blank.");
+        return;
+      }
+      b.disabled = true;
+      try {
+        await api("workspace/intelligence/voting-policy", {
+          station_daily_limit: limit,
+          repeat_song_policy: policy,
+        });
+        toast("Station voting rules updated.");
+        await render();
+      } catch (error) {
+        toast(error.message);
+      } finally {
+        b.disabled = false;
+      }
+      return;
+    }
     if (action === "save-intelligence") {
       const form = $("intelligence-form");
       if (!form || !online) return;
