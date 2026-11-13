@@ -1,6 +1,7 @@
 """Read-only, bounded AI matching. All mutations belong to pipeline.py."""
 import json
 import logging
+import time
 import requests
 from typing import List, Dict
 
@@ -54,7 +55,7 @@ def get_openai_api_key() -> str:
     return api_key
 
 
-def call_openai_api(system_prompt: str, user_prompt: str, *, response_format=None) -> str:
+def call_openai_api(system_prompt: str, user_prompt: str, *, response_format=None, model=None) -> str:
     """
     Call the configured OpenAI chat model and return JSON response text.
 
@@ -73,7 +74,7 @@ def call_openai_api(system_prompt: str, user_prompt: str, *, response_format=Non
     }
 
     payload = {
-        "model": settings.OPENAI_MODEL,
+        "model": model or settings.OPENAI_MODEL,
         "max_completion_tokens": 320,
         "messages": [
             {"role": "system", "content": system_prompt},
@@ -209,7 +210,7 @@ def format_songs_for_prompt(songs: List[Dict]) -> str:
     return "\n".join(lines)
 
 
-def match_vote_with_llm(artist: str, title: str, verified_songs: List[Dict]) -> Dict:
+def match_vote_with_llm(artist: str, title: str, verified_songs: List[Dict], *, station=None) -> Dict:
     """
     Use the configured OpenAI model to match a vote against verified songs.
 
@@ -221,6 +222,9 @@ def match_vote_with_llm(artist: str, title: str, verified_songs: List[Dict]) -> 
     Returns:
         Dict with matched, matched_song_id, matched_song_name, confidence, reasoning
     """
+    from .matching_controls import options_for_station
+    model = options_for_station(station)["model"] if station else settings.OPENAI_MODEL
+    started = time.monotonic()
     vote_text = f"{artist} - {title}"
     songs_text = format_songs_for_prompt(verified_songs)
 
@@ -235,7 +239,7 @@ invent missing catalogue entries, and return JSON only."""
     try:
         response_text = call_openai_api(
             MATCHING_SYSTEM_PROMPT, user_prompt,
-            response_format=MATCH_RESPONSE_FORMAT,
+            response_format=MATCH_RESPONSE_FORMAT, model=model,
         )
 
         # Parse JSON response
@@ -283,6 +287,10 @@ invent missing catalogue entries, and return JSON only."""
             "matched_song_name": result.get("matched_song_name"),
             "confidence": confidence,
             "reasoning": str(result.get("reasoning", "No reasoning provided"))[:500],
+            "_api_called": True,
+            "_api_status": "success",
+            "_api_latency_ms": max(0, round((time.monotonic() - started) * 1000)),
+            "_model_used": model,
         }
 
     except (json.JSONDecodeError, ValueError) as e:
@@ -292,7 +300,11 @@ invent missing catalogue entries, and return JSON only."""
             "matched_song_id": None,
             "matched_song_name": None,
             "confidence": "none",
-            "reasoning": f"LLM response parsing error: {str(e)}",
+            "reasoning": f"LLM response parsing error: {type(e).__name__}",
+            "_api_called": True,
+            "_api_status": "parse_error",
+            "_api_latency_ms": max(0, round((time.monotonic() - started) * 1000)),
+            "_model_used": model,
         }
     except Exception as e:
         logger.warning("AI matching failed (%s)", type(e).__name__)
@@ -302,4 +314,8 @@ invent missing catalogue entries, and return JSON only."""
             "matched_song_name": None,
             "confidence": "none",
             "reasoning": f"LLM error: {type(e).__name__}",
+            "_api_called": True,
+            "_api_status": "error",
+            "_api_latency_ms": max(0, round((time.monotonic() - started) * 1000)),
+            "_model_used": model,
         }
