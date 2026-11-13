@@ -206,6 +206,7 @@ def process_vote(vote):
                     {"id": song.id, "canonical_name": song.canonical_name}
                     for song in shortlist
                 ],
+                station=station,
             )
             if str(result.get("reasoning", "")).startswith(
                 ("LLM error:", "LLM response parsing error:")
