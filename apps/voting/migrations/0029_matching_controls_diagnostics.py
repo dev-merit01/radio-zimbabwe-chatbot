@@ -15,6 +15,8 @@ class Migration(migrations.Migration):
                 ("station", models.CharField(max_length=32, unique=True)),
                 ("model_override", models.CharField(blank=True, default="", max_length=80)),
                 ("shortlist_limit", models.PositiveSmallIntegerField(default=16)),
+                ("retrieval_min_artist", models.FloatField(default=0.68)),
+                ("retrieval_min_title", models.FloatField(default=0.66)),
                 ("cache_mode", models.CharField(choices=[("inherit", "System default"), ("on", "Enabled"), ("off", "Disabled")], default="inherit", max_length=8)),
                 ("updated_at", models.DateTimeField(auto_now=True)),
             ],
