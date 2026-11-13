@@ -14,10 +14,11 @@ from .catalogue_matching import (
     automatic_candidate, normalise, ranked_candidates, variants,
 )
 from .models import VerifiedVoteCache
+from .matching_controls import options_for_station
 
 
 def reusable_song(vote):
-    if not getattr(settings, "AI_MATCH_CACHE_ENABLED", False):
+    if not options_for_station(vote.station)["cache_enabled"]:
         return None
     spelling = normalise(vote.raw_input)
     if not spelling or len(spelling) > 512:
