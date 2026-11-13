@@ -52,7 +52,8 @@ def counts_for_show(show, start, end):
     votes = votes.filter(song_id__isnull=False)
     if eligible_song_ids is not None:
         votes = votes.filter(song_id__in=eligible_song_ids)
-    if settings.ALLOW_REPEAT_SONG:
+    from apps.voting.station_vote_policy import voting_rules_for_station
+    if voting_rules_for_station(show.station)["allow_repeat_song"]:
         rows = votes.order_by().values("song_id").annotate(n=Count("id"))
     else:
         # A typo can arrive before the first AI job completes. Defend against
