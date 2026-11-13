@@ -12,6 +12,8 @@ def options_for_station(station):
     return {
         "model": model,
         "shortlist_limit": limit,
+        "retrieval_min_artist": row.retrieval_min_artist if row else 0.68,
+        "retrieval_min_title": row.retrieval_min_title if row else 0.66,
         "cache_enabled": (
             bool(getattr(settings, "AI_MATCH_CACHE_ENABLED", False))
             if mode == "inherit" else mode == "on"
