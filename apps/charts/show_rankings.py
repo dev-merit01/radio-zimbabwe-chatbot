@@ -1,7 +1,6 @@
 """Show-specific counts from individually approved votes, not station-wide tallies."""
 from collections import Counter
 
-from django.conf import settings
 from django.db.models import Count, OuterRef, Subquery
 
 from apps.voting.models import (
