@@ -40,6 +40,9 @@ class PublicVotingGatewayTests(TestCase):
             manual_open=True, is_enabled=True, eligibility_enforced=True,
             daily_limit=3,
         )
+        StationVotingConfig.objects.update_or_create(
+            station="national_fm", defaults={"public_web_enabled": True}
+        )
         self.song = CleanedSong.objects.create(
             station="national_fm", artist="Example Performer",
             title="The Example Song", canonical_name="Example Performer - The Example Song",
