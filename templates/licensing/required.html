@@ -9,6 +9,6 @@
 <p>This station's licence status is <strong>{{ licence.state }}</strong>. Contact your organisation's AirVote administrator or Kuiper Data Labs to renew or activate access.</p>
 {% if licence.expires_on %}<p>Licence expiry: {{ licence.expires_on }}</p>{% endif %}
 <p>Existing incoming votes are preserved. Staff chart management and publication require an active licence.</p>
-<p><a href="https://www.kuiperdatalabs.co.zw" rel="noopener">Visit Kuiper Data Labs</a></p>
+<p><a href="/licensing/activate/">Activate a signed licence</a> · <a href="https://www.kuiperdatalabs.co.zw" rel="noopener">Kuiper Data Labs</a></p>
 <form method="post" action="/accounts/logout/">{% csrf_token %}<button type="submit">Sign out</button></form>
 </section></main></body></html>

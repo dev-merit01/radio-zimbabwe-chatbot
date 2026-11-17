@@ -2,9 +2,11 @@ from django.urls import path
 from .views import chart_today, dashboard, chart_archives, chart_detail, stats_overview
 
 from . import desktop, workspace, show_management, eligibility, presenter_management, station_management, matching_intelligence
+from apps.licensing import views as licensing
 
 urlpatterns = [
     path("desktop/status", desktop.status),
+    path("licensing/status", licensing.status),
     path("workspace/eligibility", eligibility.list_editions),
     path("workspace/eligibility/create", eligibility.create_edition),
     path("workspace/eligibility/candidate", eligibility.edit_candidate),

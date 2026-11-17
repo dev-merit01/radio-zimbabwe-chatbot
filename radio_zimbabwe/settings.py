@@ -56,6 +56,7 @@ INSTALLED_APPS = [
     "apps.spotify",
     "apps.dashboard",
     "apps.accounts",
+    "apps.licensing",
 ]
 
 MIDDLEWARE = [
@@ -67,6 +68,7 @@ MIDDLEWARE = [
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "radio_zimbabwe.middleware.WorkspaceSecurityMiddleware",
+    "apps.licensing.middleware.StationLicenceMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
@@ -262,3 +264,7 @@ LOCAL_WEBHOOK_HOSTS = env.list("LOCAL_WEBHOOK_HOSTS", default=[])
 
 # Railway probes over its internal HTTP network; this endpoint exposes no data.
 SECURE_REDIRECT_EXEMPT = [r"^healthz/$"]
+
+# Commercial licensing is activated only after all stations receive signed grants.
+AIRVOTE_LICENSING_ENFORCED = env.bool("AIRVOTE_LICENSING_ENFORCED", default=False)
+AIRVOTE_LICENCE_PUBLIC_KEY = env.str("AIRVOTE_LICENCE_PUBLIC_KEY", default="")

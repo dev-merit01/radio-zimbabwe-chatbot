@@ -10,6 +10,7 @@ admin.site.index_title = "Administration"
 urlpatterns = [
     path("healthz/", readiness),
     path('admin/', admin.site.urls),
+    path("licensing/", include("apps.licensing.urls")),
     path('accounts/', include('apps.accounts.urls')),
     path('api/', include('apps.dashboard.api_urls')),
     path('webhook/', include('apps.bot.webhook_urls')),
