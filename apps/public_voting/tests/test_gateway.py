@@ -158,7 +158,7 @@ class PublicVotingGatewayTests(TestCase):
         other = admit_web_vote(self.payload(song_id=self.outsider.pk))
         self.assertEqual(other["reason"], "song_not_eligible")
         cross = admit_web_vote(self.payload(station="power_fm"))
-        self.assertEqual(cross["reason"], "voting_closed")
+        self.assertEqual(cross["reason"], "station_unavailable")
         self.assertEqual(RawVote.objects.count(), 1)
 
     def test_station_web_voting_can_be_disabled_immediately_from_airvote(self):
