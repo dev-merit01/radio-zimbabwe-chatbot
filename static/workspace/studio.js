@@ -683,6 +683,8 @@
               esc(show.code) + ' Artist - Song</strong></p>') +
             '<div class="show-card-actions">' +
               btn("View results", "show-select", show.id) +
+              (!historical && show.public_vote_url ?
+                btn("Copy online voting link", "show-copy-link", show.id) : "") +
               (showsData.is_admin && !historical && !archived
                 ? btn("Edit settings", "show-edit", show.id) +
                   btn("Duplicate", "show-duplicate", show.id) +
@@ -1506,6 +1508,20 @@
             (fields) => api("workspace/shows/save",
               showPayload(fields, edit ? Number(id) : null)));
       syncShowFormVisibility();
+      return;
+    }
+    if (action === "show-copy-link") {
+      const show = showsCache.find((item) => item.id === Number(id));
+      if (!show?.public_vote_url) { toast("Configure the portal URL first."); return; }
+      try {
+        await navigator.clipboard.writeText(show.public_vote_url);
+        toast("Secure voting link copied.");
+      } catch {
+        modal("Share this programme's voting link",
+          '<p class="hint">Share this URL or its QR code with listeners. The portal never lists chart rankings.</p>' +
+          '<label class="field">Voting URL<input type="url" readonly value="' +
+          esc(show.public_vote_url) + '"></label>', null);
+      }
       return;
     }
     if (action === "show-archive") {
