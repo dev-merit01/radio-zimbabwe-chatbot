@@ -2,7 +2,7 @@
 
 import base64
 import binascii
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 import json
 import uuid
 
@@ -13,7 +13,7 @@ from django.utils import timezone
 
 ISSUER = "kuiperdatalabs.co.zw"
 AUDIENCE = "airvote"
-PLANS = frozenset({"trial", "annual", "enterprise", "perpetual"})
+PLANS = frozenset({"trial", "annual", "enterprise"})
 
 
 class LicenceError(ValueError):
@@ -56,11 +56,14 @@ def decode_and_verify(token, public_key):
         if (payload["issuer"] != ISSUER or payload["audience"] != AUDIENCE
                 or type(station) is not str or not 1 <= len(station) <= 32
                 or type(customer) is not str or not 1 <= len(customer) <= 160
-                or plan not in PLANS):
+                or type(plan) is not str or plan not in PLANS):
             raise ValueError("Unsupported claims")
         if type(payload["grace_days"]) is not int or not 0 <= payload["grace_days"] <= 7:
             raise ValueError("Invalid grace")
         uuid.UUID(payload["licence_id"])
+        issued_at = datetime.fromisoformat(payload["issued_at"])
+        if issued_at.tzinfo is None or issued_at.utcoffset() is None:
+            raise ValueError("Invalid issue timezone")
         start = date.fromisoformat(payload["starts_on"])
         expiry = date.fromisoformat(payload["expires_on"])
         if expiry < start:

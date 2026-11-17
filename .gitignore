@@ -40,3 +40,8 @@ src-tauri/gen/
 .local-voting/
 
 .env.providers
+
+# Commercial licensing secrets / issued tokens
+/private-issuer/
+*.lic
+*.pem

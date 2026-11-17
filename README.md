@@ -96,3 +96,14 @@ See [station accounts and chart editions](docs/STATIONS_AND_CHARTS.md) for accou
 
 See [the Railway deployment guide](docs/RAILWAY.md) for the web service, durable
 vote worker, PostgreSQL, Redis, environment variables and production cutover.
+
+## Commercial licensing
+
+AirVote supports Kuiper Data Labs-issued Ed25519-signed, per-station licences.
+Licence verification runs on the central server, while voting ingestion remains
+protected from accidental licence-related interruption. Licence enforcement is
+disabled by default pending controlled activation. Consult
+[commercial licensing operations](docs/COMMERCIAL_LICENSING.md) before enabling.
+
+This repository includes a proprietary software notice in LICENSE. Third-party
+open-source components remain governed by their individual licence terms.

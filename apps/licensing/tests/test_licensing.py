@@ -37,6 +37,7 @@ class AirVoteLicensingTests(TestCase):
             "starts_on": (self.today - timedelta(days=30)).isoformat(),
             "expires_on": (self.today + timedelta(days=expiry_days)).isoformat(),
             "grace_days": grace_days,
+            "issued_at": timezone.now().isoformat(),
         }
         raw = json.dumps(claims, separators=(",", ":"), sort_keys=True).encode()
         return "AV1." + _b64(raw) + "." + _b64(self.private.sign(raw))

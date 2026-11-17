@@ -22,7 +22,7 @@ import uuid
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
-PLANS = ("trial", "annual", "enterprise", "perpetual")
+PLANS = ("trial", "annual", "enterprise")
 STATION = re.compile(r"^[a-z0-9][a-z0-9_-]{0,31}$")
 
 

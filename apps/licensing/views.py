@@ -1,6 +1,7 @@
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
+from datetime import datetime
 from django.shortcuts import render
 from django.views.decorators.http import require_http_methods
 from apps.accounts.models import station_exists
@@ -41,8 +42,9 @@ def activate(request):
             current = StationLicence.objects.select_for_update().filter(
                 station=claims["station"]
             ).first()
-            if current and current.revoked_at and current.signed_token == token:
-                raise LicenceError("This licence has been revoked. Obtain a new one.")
+            if current and current.revoked_at:
+                if datetime.fromisoformat(claims["issued_at"]) <= current.revoked_at:
+                    raise LicenceError("This licence has been revoked. Obtain a newly issued one.")
             StationLicence.objects.update_or_create(
                 station=claims["station"],
                 defaults={"signed_token": token, "revoked_at": None, "revocation_reason": ""},

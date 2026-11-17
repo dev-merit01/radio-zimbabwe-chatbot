@@ -1,5 +1,6 @@
 """Install a vendor-signed station licence without any signing secrets on the server."""
 from pathlib import Path
+from datetime import datetime
 
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
@@ -30,8 +31,9 @@ class Command(BaseCommand):
             raise CommandError("Create the licensed station before installing its licence.")
         with transaction.atomic():
             record = StationLicence.objects.select_for_update().filter(station=station).first()
-            if record and record.revoked_at and record.signed_token == token:
-                raise CommandError("This licence has been revoked. Request a new signed licence.")
+            if record and record.revoked_at:
+                if datetime.fromisoformat(claims["issued_at"]) <= record.revoked_at:
+                    raise CommandError("Licence predates revocation. Obtain a newly issued licence.")
             StationLicence.objects.update_or_create(
                 station=station,
                 defaults={"signed_token": token, "revoked_at": None, "revocation_reason": ""},
