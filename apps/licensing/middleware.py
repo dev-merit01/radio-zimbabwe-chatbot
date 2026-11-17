@@ -17,7 +17,7 @@ class StationLicenceMiddleware:
 
     def __call__(self, request):
         path = request.path
-        guarded = path == "/" or (path.startswith("/api/") and
+        guarded = path == "/" or path.startswith("/admin/") or (path.startswith("/api/") and
                                   path not in ("/api/desktop/status", "/api/licensing/status"))
         if (getattr(settings, "AIRVOTE_LICENSING_ENFORCED", False)
                 and guarded and request.user.is_authenticated):

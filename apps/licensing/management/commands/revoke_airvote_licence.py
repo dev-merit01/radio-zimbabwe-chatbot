@@ -10,7 +10,7 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser):
         parser.add_argument("station")
-        parser.add_argument("--reason", required=True, max_length=200)
+        parser.add_argument("--reason", required=True)
 
     def handle(self, *args, **options):
         updated = StationLicence.objects.filter(station=options["station"]).update(

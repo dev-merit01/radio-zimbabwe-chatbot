@@ -1,10 +1,8 @@
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
-from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.shortcuts import render
 from django.views.decorators.http import require_http_methods
-from django.utils import timezone
 from apps.accounts.models import station_exists
 from .models import StationLicence
 from .verification import LicenceError, decode_and_verify

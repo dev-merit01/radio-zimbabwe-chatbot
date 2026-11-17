@@ -34,7 +34,7 @@ class AirVoteLicensingTests(TestCase):
             "issuer": "kuiperdatalabs.co.zw", "audience": "airvote",
             "licence_id": str(uuid.uuid4()), "station": station,
             "customer": "Demo Broadcaster", "plan": "annual",
-            "starts_on": (self.today - timedelta(days=1)).isoformat(),
+            "starts_on": (self.today - timedelta(days=30)).isoformat(),
             "expires_on": (self.today + timedelta(days=expiry_days)).isoformat(),
             "grace_days": grace_days,
         }
@@ -103,5 +103,5 @@ class AirVoteLicensingTests(TestCase):
             record.revoked_at = timezone.now()
             record.save(update_fields=["revoked_at"])
             response = self.client.post("/licensing/activate/", {"licence_token": token})
-            self.assertContains(response, "revoked")
+            self.assertContains(response, "revoked", status_code=400)
             self.assertIsNotNone(StationLicence.objects.get(station="radio_zimbabwe").revoked_at)
