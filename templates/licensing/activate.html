@@ -1,0 +1,17 @@
+{% load static %}<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Activate a licence | AirVote</title>
+<link rel="stylesheet" href="{% static 'workspace/studio.css' %}"></head>
+<body class="studio-auth"><main class="welcome-entry"><section class="entry-panel">
+<p class="studio-kicker">AIRVOTE | KUIPER DATA LABS</p>
+<h1>Activate station licence</h1>
+<p>Paste a valid licence issued by Kuiper Data Labs. The signed licence cannot be changed or extended by station administrators.</p>
+{% if error %}<p role="alert">{{ error }}</p>{% endif %}
+{% if success %}<p role="status">{{ success }}</p><p><a href="/">Return to AirVote</a></p>{% endif %}
+<form method="post" action="">{% csrf_token %}
+<label for="licence_token">Signed licence</label>
+<textarea id="licence_token" name="licence_token" rows="5" maxlength="8192" required autocomplete="off" spellcheck="false"></textarea>
+<button type="submit">Activate licence</button>
+</form>
+<p><a href="https://www.kuiperdatalabs.co.zw" rel="noopener">Kuiper Data Labs</a></p>
+</section></main></body></html>
