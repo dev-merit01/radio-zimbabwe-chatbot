@@ -21,4 +21,4 @@ class WebVoteReceipt(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
-        indexes = [models.Index(fields=["station", "-created_at"])]
+        indexes = [models.Index(fields=["station", "-created_at"], name="public_voti_station_6aa2d4_idx")]
