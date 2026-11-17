@@ -161,6 +161,22 @@ class PublicVotingGatewayTests(TestCase):
         self.assertEqual(cross["reason"], "voting_closed")
         self.assertEqual(RawVote.objects.count(), 1)
 
+    def test_station_web_voting_can_be_disabled_immediately_from_airvote(self):
+        from apps.public_voting.views import permitted_station
+
+        self.assertTrue(permitted_station("national_fm"))
+        config = StationVotingConfig.objects.get(station="national_fm")
+        config.public_web_enabled = False
+        config.save(update_fields=["public_web_enabled"])
+        self.assertFalse(permitted_station("national_fm"))
+        self.assertEqual(
+            self.signed_get("/api/voting-bridge/resolve/national_fm/PV2026").status_code,
+            404,
+        )
+        blocked = admit_web_vote(self.payload())
+        self.assertEqual(blocked["reason"], "station_unavailable")
+        self.assertEqual(RawVote.objects.count(), 0)
+
     def test_stale_and_closed_votes_never_reach_the_main_vote_table(self):
         expired = self.payload()
         expired["received_at"] = (timezone.now() - timedelta(days=5)).isoformat()
