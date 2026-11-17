@@ -1,4 +1,4 @@
-"""Enforce station licences at the central server, not the Windows UI.
+"""Enforce commercial licences at the central server, not the Windows UI.
 
 No webhook/worker pathways are intercepted: live votes remain durable during
 a licence dispute or renewal. Publication and staff APIs are gated.
@@ -19,14 +19,15 @@ class StationLicenceMiddleware:
         path = request.path
         guarded = path == "/" or path.startswith("/admin/") or (path.startswith("/api/") and
                                   path not in ("/api/desktop/status", "/api/licensing/status"))
-        if (getattr(settings, "AIRVOTE_LICENSING_ENFORCED", False)
-                and guarded and request.user.is_authenticated):
+        enforced = (getattr(settings, "AIRVOTE_COMPANY_LICENSING_ENFORCED", False)
+                    or getattr(settings, "AIRVOTE_LICENSING_ENFORCED", False))
+        if enforced and guarded and request.user.is_authenticated:
             station = get_active_station(request)
             state = licence_status(station)
             if not state["permitted"]:
                 if path.startswith("/api/"):
                     return JsonResponse(
-                        {"error": "A valid AirVote station licence is required.",
+                        {"error": "A valid AirVote company licence is required.",
                          "code": "LICENCE_REQUIRED", "licence": state},
                         status=402,
                     )

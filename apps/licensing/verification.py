@@ -74,7 +74,7 @@ def decode_and_verify(token, public_key):
     return payload
 
 
-def licence_status(station, *, today=None):
+def legacy_station_licence_status(station, *, today=None):
     """Fail closed on unknown, tampered, revoked and expired station licences."""
     from .models import StationLicence
 
@@ -117,3 +117,12 @@ def licence_status(station, *, today=None):
     if today <= grace_until:
         return {**result, "state": "grace", "permitted": True}
     return {**result, "state": "expired"}
+
+
+
+def licence_status(station, *, today=None):
+    """Compatibility entrypoint; company scope replaces station scope at cutover."""
+    if getattr(settings, "AIRVOTE_COMPANY_LICENSING_ENFORCED", False):
+        from .company_verification import company_status_for_station
+        return company_status_for_station(station, today=today)
+    return legacy_station_licence_status(station, today=today)

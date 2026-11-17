@@ -84,7 +84,7 @@ class StationLicence(models.Model):
 
     class Meta:
         ordering = ["station"]
-        verbose_name = "Legacy station licence"
+        verbose_name = "Station licence"
 
     def __str__(self):
         return self.station
