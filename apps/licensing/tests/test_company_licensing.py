@@ -183,3 +183,52 @@ class CompanyWideLicensingTests(TestCase):
             self.assertEqual(CompanyStation.objects.get(station_slug=slug).company, self.company)
             self.assertTrue(licence_status(slug)["permitted"])
             self.assertFalse(CompanyLicence.objects.exists())
+
+
+    def test_company_admin_can_create_company_and_assign_new_station(self):
+        with override_settings(
+            AIRVOTE_LICENCE_PUBLIC_KEY=self.public,
+            AIRVOTE_COMPANY_BOOTSTRAP_LICENCES={
+                "existing-airvote": self.token()
+            },
+        ):
+            new_company = self.client.post(
+                "/api/workspace/companies/create",
+                json.dumps({"name": "Regional Broadcasting Network"}),
+                content_type="application/json",
+            )
+            self.assertEqual(new_company.status_code, 201, new_company.content)
+            slug = new_company.json()["company"]["slug"]
+            self.assertEqual(slug, "regional-broadcasting-network")
+            station = self.client.post(
+                "/api/workspace/stations/create",
+                json.dumps({"name": "Regional News Radio", "company_slug": slug,
+                            "bird_number": ""}),
+                content_type="application/json",
+            )
+            self.assertEqual(station.status_code, 201, station.content)
+            station_slug = station.json()["station"]["slug"]
+            self.assertEqual(licence_status(station_slug)["state"], "unlicensed")
+            company_token = self.token(company=slug)
+            activated = self.client.post(
+                "/licensing/activate/", {"licence_token": company_token},
+            )
+            self.assertEqual(activated.status_code, 200, activated.content)
+            self.assertTrue(licence_status(station_slug)["permitted"])
+            self.assertEqual(CompanyLicence.objects.count(), 1)
+            self.assertTrue(licence_status("national_fm")["permitted"])
+
+    def test_presenters_cannot_create_or_reassign_companies(self):
+        presenter = get_user_model().objects.create_user(
+            username="company-presenter", password="UnitTestCompanyPresenterOnly99!",
+        )
+        self.client.force_login(presenter)
+        forbidden = self.client.post(
+            "/api/workspace/companies/create",
+            json.dumps({"name": "Unapproved Broadcaster"}),
+            content_type="application/json",
+        )
+        self.assertEqual(forbidden.status_code, 403)
+        self.assertFalse(BroadcastCompany.objects.filter(
+            slug="unapproved-broadcaster"
+        ).exists())
