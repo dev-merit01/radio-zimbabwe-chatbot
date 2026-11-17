@@ -57,6 +57,7 @@ INSTALLED_APPS = [
     "apps.dashboard",
     "apps.accounts",
     "apps.licensing",
+    "apps.public_voting",
 ]
 
 MIDDLEWARE = [
@@ -276,3 +277,9 @@ AIRVOTE_BOOTSTRAP_LICENCES = env.json("AIRVOTE_BOOTSTRAP_LICENCES", default={})
 # New company-wide licence rollout. Until enabled, old station grants remain valid.
 AIRVOTE_COMPANY_LICENSING_ENFORCED = env.bool("AIRVOTE_COMPANY_LICENSING_ENFORCED", default=False)
 AIRVOTE_COMPANY_BOOTSTRAP_LICENCES = env.json("AIRVOTE_COMPANY_BOOTSTRAP_LICENCES", default={})
+
+# Optional public-voting integration; fail closed until both sides are configured.
+AIRVOTE_PUBLIC_VOTING_URL = env.str("AIRVOTE_PUBLIC_VOTING_URL", default="")
+AIRVOTE_WEB_BRIDGE_SECRET = env.str("AIRVOTE_WEB_BRIDGE_SECRET", default="")
+AIRVOTE_WEB_PULL_SECRET = env.str("AIRVOTE_WEB_PULL_SECRET", default="")
+AIRVOTE_WEB_HOLDING_URL = env.str("AIRVOTE_WEB_HOLDING_URL", default="")
