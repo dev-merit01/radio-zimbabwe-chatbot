@@ -278,8 +278,20 @@ async function submit() {
     receiptPanel.scrollIntoView({ behavior: "smooth", block: "center" });
     refreshHuman();
     void pollReceipt(result.receipt_id, result.receipt_secret);
-  } catch (err) { message(err.message); refreshHuman(); }
-  finally { state.sending = false; updateButton(); }
+  } catch (err) {
+    message(err.message);
+    if (err.message.includes("Please sign in with Google again.")) {
+      state.googleToken = "";
+      byId("googleState").textContent = "Please sign in again to refresh your secure session.";
+      byId("googleState").classList.remove("authenticated");
+      try {
+        state.site = await api("/api/site");
+        byId("googleLogin").replaceChildren();
+        loadGoogle();
+      } catch { /* The listener can safely retry after reloading. */ }
+    }
+    refreshHuman();
+  } finally { state.sending = false; updateButton(); }
 }
 async function init() {
   byId("currentYear").textContent = String(new Date().getFullYear());
