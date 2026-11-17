@@ -200,6 +200,15 @@ async function submitVote(request, env) {
 
 async function receipt(request, env, id) {
   if (!safeUUID(id)) return error("Receipt not found.", 404);
+  const remoteIp = request.headers.get("CF-Connecting-IP");
+  if (!remoteIp || remoteIp.length > 64 || !env.VOTER_HASH_KEY || env.VOTER_HASH_KEY.length < 32) {
+    return error("Receipt verification unavailable.", 503);
+  }
+  const ipHash = await hmacHex(env.VOTER_HASH_KEY,
+    "receipt-ip-v1|" + localDay(new Date()) + "|" + remoteIp);
+  if (!(await accountRateLimit(env, "receipt:" + ipHash, 240))) {
+    return error("Too many receipt checks. Please try later.", 429);
+  }
   const bearer = request.headers.get("Authorization") || "";
   if (!/^Bearer [a-f0-9]{64}$/.test(bearer)) return reject();
   const secretHash = await sha256Hex(bearer.slice(7));
