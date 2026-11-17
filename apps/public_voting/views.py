@@ -32,6 +32,11 @@ def voting_link(show):
 def permitted_station(station):
     if not station_exists(station, active_only=True):
         return False
+    from apps.voting.models import StationVotingConfig
+    if not StationVotingConfig.objects.filter(
+        station=station, public_web_enabled=True
+    ).exists():
+        return False
     if getattr(settings, "AIRVOTE_COMPANY_LICENSING_ENFORCED", False):
         return bool(company_status_for_station(station)["permitted"])
     return True
