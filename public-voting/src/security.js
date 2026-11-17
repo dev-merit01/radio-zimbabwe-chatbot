@@ -107,7 +107,7 @@ export async function verifyGoogle(token, clientId) {
     "RSASSA-PKCS1-v1_5", key, base64urlBytes(parts[2]), signed,
   );
   if (!verified) throw new Error("Invalid Google signature.");
-  return claims.sub;
+  return { sub: claims.sub, nonce: claims.nonce || "" };
 }
 
 export async function verifyTurnstile(token, secret, expectedHostname, request) {
