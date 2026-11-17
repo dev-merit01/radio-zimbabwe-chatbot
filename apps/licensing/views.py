@@ -30,12 +30,16 @@ def activate(request):
         from django.http import HttpResponseForbidden
         return HttpResponseForbidden("Only the AirVote administrator may activate licences.")
     if request.method == "GET":
-        return render(request, "licensing/activate.html")
+        return render(request, "licensing/activate.html", {
+            "installation_id": settings.AIRVOTE_LICENCE_INSTALLATION_ID,
+        })
     token = request.POST.get("licence_token", "").strip()
     try:
         if not settings.AIRVOTE_LICENCE_PUBLIC_KEY:
             raise LicenceError("The public verification key is not configured.")
         claims = decode_and_verify(token, settings.AIRVOTE_LICENCE_PUBLIC_KEY)
+        if claims["installation_id"] != settings.AIRVOTE_LICENCE_INSTALLATION_ID:
+            raise LicenceError("This licence belongs to a different AirVote installation.")
         if not station_exists(claims["station"]):
             raise LicenceError("This station must be created first.")
         with transaction.atomic():

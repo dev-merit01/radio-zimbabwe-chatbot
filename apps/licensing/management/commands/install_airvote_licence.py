@@ -27,6 +27,8 @@ class Command(BaseCommand):
         except (OSError, UnicodeError, LicenceError) as exc:
             raise CommandError("Licence file is unreadable or invalid.") from exc
         station = claims["station"]
+        if claims["installation_id"] != settings.AIRVOTE_LICENCE_INSTALLATION_ID:
+            raise CommandError("This licence belongs to a different AirVote installation.")
         if not station_exists(station):
             raise CommandError("Create the licensed station before installing its licence.")
         with transaction.atomic():

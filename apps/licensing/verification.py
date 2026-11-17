@@ -61,6 +61,7 @@ def decode_and_verify(token, public_key):
         if type(payload["grace_days"]) is not int or not 0 <= payload["grace_days"] <= 7:
             raise ValueError("Invalid grace")
         uuid.UUID(payload["licence_id"])
+        uuid.UUID(payload["installation_id"])
         issued_at = datetime.fromisoformat(payload["issued_at"])
         if issued_at.tzinfo is None or issued_at.utcoffset() is None:
             raise ValueError("Invalid issue timezone")
@@ -82,20 +83,28 @@ def licence_status(station, *, today=None):
               "customer": None, "plan": None, "expires_on": None,
               "grace_until": None}
     record = StationLicence.objects.filter(station=station).first()
-    if record is None:
+    # Controlled rollout: signed grants for the seven existing stations are
+    # provided through configuration without adding fake purchase records.
+    # Explicit DB records (including revocations) always take precedence.
+    bootstrap = getattr(settings, "AIRVOTE_BOOTSTRAP_LICENCES", {})
+    token = record.signed_token if record else (
+        bootstrap.get(station) if isinstance(bootstrap, dict) else None
+    )
+    if not token:
         return result
     key = getattr(settings, "AIRVOTE_LICENCE_PUBLIC_KEY", "")
-    if not key:
+    instance = getattr(settings, "AIRVOTE_LICENCE_INSTALLATION_ID", "")
+    if not key or not instance:
         return {**result, "state": "misconfigured"}
     try:
-        claims = decode_and_verify(record.signed_token, key)
+        claims = decode_and_verify(token, key)
     except LicenceError:
         return {**result, "state": "invalid"}
-    if claims["station"] != station:
+    if claims["station"] != station or claims["installation_id"] != instance:
         return {**result, "state": "invalid"}
     result.update(customer=claims["customer"], plan=claims["plan"],
                   expires_on=claims["expires_on"])
-    if record.revoked_at is not None:
+    if record is not None and record.revoked_at is not None:
         return {**result, "state": "revoked"}
     begins = date.fromisoformat(claims["starts_on"])
     expires = date.fromisoformat(claims["expires_on"])

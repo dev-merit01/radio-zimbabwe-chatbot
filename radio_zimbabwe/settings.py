@@ -268,3 +268,8 @@ SECURE_REDIRECT_EXEMPT = [r"^healthz/$"]
 # Commercial licensing is activated only after all stations receive signed grants.
 AIRVOTE_LICENSING_ENFORCED = env.bool("AIRVOTE_LICENSING_ENFORCED", default=False)
 AIRVOTE_LICENCE_PUBLIC_KEY = env.str("AIRVOTE_LICENCE_PUBLIC_KEY", default="")
+# Unique identifier for this hosted customer installation; included in every signed grant.
+AIRVOTE_LICENCE_INSTALLATION_ID = env.str("AIRVOTE_LICENCE_INSTALLATION_ID", default="")
+# Signed transitional licences for stations already in use during the first rollout.
+# Never put the private signing key or the signing-key password here.
+AIRVOTE_BOOTSTRAP_LICENCES = env.json("AIRVOTE_BOOTSTRAP_LICENCES", default={})

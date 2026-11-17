@@ -11,12 +11,16 @@ from django.utils import timezone
 
 from apps.licensing.models import StationLicence
 from apps.licensing.verification import LicenceError, decode_and_verify, licence_status
+from django.core.management import call_command
+
+TEST_INSTALLATION_ID = "3e0bc65e-3dc3-4ff7-95e9-a497c3e67608"
 
 
 def _b64(data):
     return base64.urlsafe_b64encode(data).decode().rstrip("=")
 
 
+@override_settings(AIRVOTE_LICENCE_INSTALLATION_ID=TEST_INSTALLATION_ID)
 class AirVoteLicensingTests(TestCase):
     def setUp(self):
         self.private = Ed25519PrivateKey.generate()
@@ -33,6 +37,7 @@ class AirVoteLicensingTests(TestCase):
         claims = {
             "issuer": "kuiperdatalabs.co.zw", "audience": "airvote",
             "licence_id": str(uuid.uuid4()), "station": station,
+            "installation_id": TEST_INSTALLATION_ID,
             "customer": "Demo Broadcaster", "plan": "annual",
             "starts_on": (self.today - timedelta(days=30)).isoformat(),
             "expires_on": (self.today + timedelta(days=expiry_days)).isoformat(),
@@ -106,3 +111,41 @@ class AirVoteLicensingTests(TestCase):
             response = self.client.post("/licensing/activate/", {"licence_token": token})
             self.assertContains(response, "revoked", status_code=400)
             self.assertIsNotNone(StationLicence.objects.get(station="radio_zimbabwe").revoked_at)
+
+
+    def test_signed_bootstrap_licences_are_scoped_to_existing_stations(self):
+        token = self.token("national_fm")
+        with override_settings(
+            AIRVOTE_LICENCE_PUBLIC_KEY=self.public,
+            AIRVOTE_BOOTSTRAP_LICENCES={"national_fm": token},
+            AIRVOTE_LICENSING_ENFORCED=True,
+            SECURE_SSL_REDIRECT=False,
+        ):
+            self.assertEqual(licence_status("national_fm")["state"], "active")
+            self.assertFalse(licence_status("unknown_station")["permitted"])
+            self.assertFalse(licence_status("power_fm")["permitted"])
+            self.assertEqual(licence_status("radio_zimbabwe")["state"], "unlicensed")
+            self.assertEqual(self.client.get("/").status_code, 402)
+
+    def test_revocation_of_bootstrap_grant_blocks_signed_fallback(self):
+        token = self.token("national_fm")
+        with override_settings(
+            AIRVOTE_LICENCE_PUBLIC_KEY=self.public,
+            AIRVOTE_BOOTSTRAP_LICENCES={"national_fm": token},
+        ):
+            self.assertTrue(licence_status("national_fm")["permitted"])
+            call_command("revoke_airvote_licence", "national_fm", reason="Test revocation")
+            self.assertEqual(licence_status("national_fm")["state"], "revoked")
+            self.assertTrue(StationLicence.objects.filter(station="national_fm").exists())
+
+    def test_cross_installation_licence_does_not_activate(self):
+        with override_settings(
+            AIRVOTE_LICENCE_PUBLIC_KEY=self.public,
+            AIRVOTE_LICENCE_INSTALLATION_ID="47b0d625-0eef-486b-98ba-d8a8b5945955",
+            SECURE_SSL_REDIRECT=False,
+        ):
+            token = self.token()
+            response = self.client.post("/licensing/activate/", {"licence_token": token})
+            self.assertEqual(response.status_code, 400)
+            self.assertIn("different AirVote installation", response.content.decode())
+            self.assertEqual(licence_status("radio_zimbabwe")["state"], "unlicensed")
