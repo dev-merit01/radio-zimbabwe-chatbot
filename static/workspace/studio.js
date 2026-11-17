@@ -874,6 +874,11 @@
                ["allow", "Allow repeat votes (within daily limits)"]],
               d.vote_policy.repeat_song_policy) +
             '<p class="hint">Blocking repeats checks previously submitted songs and confirmed aliases, including votes still awaiting verification. Changing these rules does not rewrite historical votes or published charts.</p>' +
+            showSelectField("Public website voting for this station", "public_web_enabled",
+              [["false", "Disabled (WhatsApp and SMS continue normally)"],
+               ["true", "Enabled (only active shows with approved songs)"]],
+              String(Boolean(d.vote_policy.public_web_enabled))) +
+            '<p class="hint">Online voting is off by default. This control also respects each programme’s own voting hours, eligible songs and daily limits. Disabling it blocks new website submissions only.</p>' +
             '<button type="button" class="button primary" data-action="save-station-voting">Save station voting rules</button>' +
             '</div>') +
           panel("Last seven days",
@@ -1290,6 +1295,7 @@
       const raw = form.querySelector('[name="station_daily_limit"]')?.value.trim();
       const limit = raw === "" ? null : Number(raw);
       const policy = form.querySelector('[name="repeat_song_policy"]')?.value;
+      const publicWeb = form.querySelector('[name="public_web_enabled"]')?.value === "true";
       if (limit !== null && (!Number.isInteger(limit) || limit < 1 || limit > 100)) {
         toast("Station daily limit must be from 1 to 100, or blank.");
         return;
@@ -1299,6 +1305,7 @@
         await api("workspace/intelligence/voting-policy", {
           station_daily_limit: limit,
           repeat_song_policy: policy,
+          public_web_enabled: publicWeb,
         });
         toast("Station voting rules updated.");
         await render();
