@@ -4,7 +4,8 @@
 Examples:
     python scripts/airvote_licence_issuer.py create-keys --directory ./private-issuer
     python scripts/airvote_licence_issuer.py issue --key ./private-issuer/airvote-private.pem \
-      --station national_fm --customer "Example Broadcaster" --plan annual \
+      --station national_fm --installation-id YOUR-INSTALLATION-UUID \
+      --customer "Example Broadcaster" --plan annual \
       --expires 2027-11-17 --output ./national-fm.lic
 
 The issuer never transmits licences or stores its private key on the server.
@@ -72,6 +73,10 @@ def issue(args):
         raise SystemExit("Use ISO dates YYYY-MM-DD.") from exc
     if ends < begins:
         raise SystemExit("Expiry cannot precede the start date.")
+    try:
+        installation_id = str(uuid.UUID(args.installation_id))
+    except (ValueError, AttributeError) as exc:
+        raise SystemExit("Enter a valid AirVote installation UUID.") from exc
     password = getpass.getpass("Signing-key password: ")
     private = serialization.load_pem_private_key(
         Path(args.key).read_bytes(), password=password.encode()
@@ -81,6 +86,7 @@ def issue(args):
     payload = {
         "issuer": "kuiperdatalabs.co.zw", "audience": "airvote",
         "licence_id": str(uuid.uuid4()), "station": args.station,
+        "installation_id": installation_id,
         "customer": args.customer.strip(), "plan": args.plan,
         "starts_on": begins.isoformat(), "expires_on": ends.isoformat(),
         "grace_days": args.grace_days,
@@ -103,6 +109,7 @@ def main():
     licence = sub.add_parser("issue")
     licence.add_argument("--key", required=True)
     licence.add_argument("--station", required=True)
+    licence.add_argument("--installation-id", required=True)
     licence.add_argument("--customer", required=True)
     licence.add_argument("--plan", required=True, choices=PLANS)
     licence.add_argument("--start")

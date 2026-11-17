@@ -4,7 +4,7 @@ Developer and licensor: Kuiper Data Labs | https://www.kuiperdatalabs.co.zw
 
 ## Implementation and safety
 
-AirVote uses one Ed25519-signed licence per station. A signed licence specifies
+AirVote uses one Ed25519-signed licence per station and installation UUID. A signed licence specifies
 the customer, plan, station slug, start date, expiry and grace period.
 The private signing key must remain encrypted and offline under Kuiper control.
 Railway receives only the base64 PUBLIC verification key.
@@ -25,7 +25,7 @@ Railway only after reviewing the deployment and access controls.
 
 ## Issue a signed annual station licence
 
-    python scripts/airvote_licence_issuer.py issue --key ./private-issuer/airvote-private.pem --station national_fm --customer 'EXAMPLE Broadcaster' --plan annual --start 2026-11-18 --expires 2027-11-17 --grace-days 3 --output example.lic
+    python scripts/airvote_licence_issuer.py issue --key ./private-issuer/airvote-private.pem --installation-id YOUR-INSTALLATION-UUID --station national_fm --customer 'EXAMPLE Broadcaster' --plan annual --start 2026-11-18 --expires 2027-11-17 --grace-days 3 --output example.lic
 
 Check the signed customer Order Form before issuing a real file. The issuing
 script also supports trial and enterprise plans. Multi-station agreements
@@ -66,3 +66,15 @@ These must be built and tested before being advertised or put in contracts.
 
 Customer contracts must use the End User Licence Agreement, commercial Order
 Form, Data Processing Addendum and Support Schedule, subject to legal review.
+
+## Optional non-disruptive licence enforcement for existing stations
+
+Each customer deployment sets AIRVOTE_LICENCE_INSTALLATION_ID to a persistent
+unique UUID and AIRVOTE_LICENCE_PUBLIC_KEY to the vendor PUBLIC verification key.
+AIRVOTE_BOOTSTRAP_LICENCES is an optional JSON map of existing station slugs to
+signed transitional AV1 tokens. The map is only for stations already in use;
+new stations must receive a new signed licence and be activated. A local
+database licence overrides the transitional map, including a revocation.
+Do not include the private signing key or password in this configuration.
+Before enabling enforcement, confirm every active station is represented by a
+valid signed licence and has enough time to renew before expiry.
