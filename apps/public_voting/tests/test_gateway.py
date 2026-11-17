@@ -1,7 +1,6 @@
 """Private bridge, live AirVote configuration and retry-safe PostgreSQL admission."""
 import hashlib
 import hmac
-import json
 import time
 import uuid
 from datetime import timedelta
