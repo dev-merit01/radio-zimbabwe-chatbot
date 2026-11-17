@@ -590,7 +590,9 @@
           '<div class="network-intro"><div><h2>Station management</h2>' +
           '<p>One company-wide AirVote licence covers all stations belonging to that broadcaster. ' +
           'Stations retain independent votes, programme codes and presenter permissions.</p>' +
-          '</div>' + btn("+ Add station", "network-station-new") + '</div>' +
+          '</div><div class="network-station-actions">' +
+          btn("+ Add company", "network-company-new") +
+          btn("+ Add station", "network-station-new") + '</div></div>' +
           '<div class="network-metrics">' +
           '<div><span>Registered stations</span><strong>' + num(d.stations.length) + '</strong></div>' +
           '<div><span>Active stations</span><strong>' + num(active) + '</strong></div>' +
@@ -1604,6 +1606,16 @@
     }
     if (action === "network-manage") {
       navigate("stations");
+      return;
+    }
+    if (action === "network-company-new") {
+      modal("Register broadcasting company",
+        '<div class="network-station-form">' +
+        field("Company legal name", "name", "", "text") +
+        '<p class="hint">AirVote creates a permanent company identifier. Kuiper Data Labs issues ONE signed company licence covering all its stations.</p></div>',
+        async (fields) => {
+          await api("workspace/companies/create", { name: fields.get("name") });
+        });
       return;
     }
     if (action === "network-station-new") {
