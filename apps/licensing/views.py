@@ -10,7 +10,9 @@ from django.views.decorators.http import require_GET, require_http_methods
 
 from apps.accounts.context_processors import get_active_station
 from .company_verification import company_licence_status, decode_company_licence
-from .models import BroadcastCompany, CompanyLicence
+from .models import BroadcastCompany, CompanyLicence, StationLicence
+from apps.accounts.models import station_exists
+from .verification import decode_and_verify
 from .verification import LicenceError, licence_status
 
 
@@ -41,6 +43,9 @@ def activate(request):
     try:
         if not settings.AIRVOTE_LICENCE_PUBLIC_KEY:
             raise LicenceError("The company's public verification key is not configured.")
+        # Retain legacy AV1 activation only until the final company cutover.
+        if token.startswith("AV1.") and not settings.AIRVOTE_COMPANY_LICENSING_ENFORCED:
+            return _activate_legacy_station(request, token, context)
         claims = decode_company_licence(token, settings.AIRVOTE_LICENCE_PUBLIC_KEY)
         if claims["installation_id"] != settings.AIRVOTE_LICENCE_INSTALLATION_ID:
             raise LicenceError("This licence was issued for a different AirVote installation.")
@@ -67,4 +72,32 @@ def activate(request):
     except LicenceError as exc:
         context["error"] = str(exc)
         return render(request, "licensing/activate.html", context, status=400)
+    return render(request, "licensing/activate.html", context)
+
+
+def _activate_legacy_station(request, token, context):
+    """Rollback-safe AV1 importer. Disabled completely under company enforcement."""
+    try:
+        claims = decode_and_verify(token, settings.AIRVOTE_LICENCE_PUBLIC_KEY)
+        if claims["installation_id"] != settings.AIRVOTE_LICENCE_INSTALLATION_ID:
+            raise LicenceError("This licence belongs to a different AirVote installation.")
+        station = claims["station"]
+        if not station_exists(station):
+            raise LicenceError("Create the licensed station before activation.")
+        with transaction.atomic():
+            current = StationLicence.objects.select_for_update().filter(station=station).first()
+            if current and current.revoked_at is not None:
+                if datetime.fromisoformat(claims["issued_at"]) <= current.revoked_at:
+                    raise LicenceError("This legacy licence has been revoked.")
+            StationLicence.objects.update_or_create(
+                station=station,
+                defaults={"signed_token": token, "revoked_at": None, "revocation_reason": ""},
+            )
+    except LicenceError as exc:
+        context["error"] = str(exc)
+        return render(request, "licensing/activate.html", context, status=400)
+    context["success"] = (
+        f"Legacy station licence installed for {station} during migration. "
+        "Convert to a company licence before final cutover."
+    )
     return render(request, "licensing/activate.html", context)

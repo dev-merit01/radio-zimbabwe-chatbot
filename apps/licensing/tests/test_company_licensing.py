@@ -59,7 +59,7 @@ class CompanyWideLicensingTests(TestCase):
         self.today = timezone.now().date()
 
     def token(self, *, company="existing-airvote", installation=INSTALLATION,
-              end_offset=30, start_offset=-1, grace=3):
+              end_offset=30, start_offset=-30, grace=3):
         claims = {
             "issuer": "kuiperdatalabs.co.zw", "audience": "airvote-company",
             "licence_id": str(uuid.uuid4()), "company": company,
