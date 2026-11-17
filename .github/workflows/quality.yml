@@ -52,6 +52,8 @@ jobs:
       - run: npm run desktop:check
       - run: npx playwright install --with-deps chromium
       - run: npm run test:desktop-ui
+      - name: Public voting mobile and desktop browser acceptance
+        run: node tests/browser/public-voting.cjs
       - run: python manage.py migrate --noinput
       - run: python manage.py shell < tests/browser/seed.py
       - name: Browser workflows
