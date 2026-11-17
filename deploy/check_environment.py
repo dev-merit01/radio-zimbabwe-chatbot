@@ -61,6 +61,38 @@ def validate():
     ):
         errors.append("Enforced licensing requires signing public key and installation UUID")
 
+    # Validate signed AV2 company transition licences without a DB connection.
+    # A malformed or expired company token must never silently lock staff out.
+    company_bootstrap = getattr(settings, "AIRVOTE_COMPANY_BOOTSTRAP_LICENCES", {})
+    if not isinstance(company_bootstrap, dict):
+        errors.append("AIRVOTE_COMPANY_BOOTSTRAP_LICENCES must be a JSON object")
+    elif company_bootstrap:
+        from apps.licensing.company_verification import decode_company_licence
+        from apps.licensing.verification import LicenceError
+        from datetime import date, timedelta
+
+        key = settings.AIRVOTE_LICENCE_PUBLIC_KEY
+        installation = settings.AIRVOTE_LICENCE_INSTALLATION_ID
+        if not key or not installation:
+            errors.append("Company licence grants require public key and installation ID")
+        else:
+            for company, token in company_bootstrap.items():
+                try:
+                    claims = decode_company_licence(token, key)
+                    if (claims["company"] != company or
+                            claims["installation_id"] != installation):
+                        errors.append(f"Company licence for {company} mismatches this deployment")
+                    elif (date.fromisoformat(claims["expires_on"]) +
+                          timedelta(days=claims["grace_days"])) < date.today():
+                        errors.append(f"Company licence for {company} has expired")
+                except (LicenceError, ValueError, TypeError):
+                    errors.append(f"Invalid signed company licence for {company}")
+    if settings.AIRVOTE_COMPANY_LICENSING_ENFORCED and (
+        not settings.AIRVOTE_LICENCE_PUBLIC_KEY or
+        not settings.AIRVOTE_LICENCE_INSTALLATION_ID
+    ):
+        errors.append("Company licensing requires public verification key and installation ID")
+
     if not settings.SECURE_SSL_REDIRECT or not getattr(settings, "SECURE_PROXY_SSL_HEADER", None):
         errors.append("Enable SECURE_SSL_REDIRECT and TRUST_PROXY behind Railway HTTPS")
     if errors:
