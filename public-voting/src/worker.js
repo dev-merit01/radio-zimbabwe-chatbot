@@ -63,13 +63,32 @@ async function requestBody(request, max = 8192) {
   return data;
 }
 
-async function accountRateLimit(env, voterKey) {
+async function issueGoogleNonce(env) {
+  if (!env.VOTER_HASH_KEY || env.VOTER_HASH_KEY.length < 32) return "";
+  const stamp = Math.floor(Date.now() / 1000);
+  const challenge = crypto.randomUUID() + "." + stamp;
+  const mac = await hmacHex(env.VOTER_HASH_KEY, "google-nonce-v1|" + challenge);
+  return challenge + "." + mac;
+}
+
+async function validGoogleNonce(env, nonce) {
+  if (typeof nonce !== "string" ||
+      !/^[a-f0-9-]{36}\\.\\d{10,11}\\.[a-f0-9]{64}$/.test(nonce)) return false;
+  const parts = nonce.split(".");
+  if (Math.abs(Math.floor(Date.now() / 1000) - Number(parts[1])) > 600) return false;
+  const expected = await hmacHex(env.VOTER_HASH_KEY, "google-nonce-v1|" + parts[0] + "." + parts[1]);
+  let diff = 0;
+  for (let i = 0; i < 64; i++) diff |= expected.charCodeAt(i) ^ parts[2].charCodeAt(i);
+  return diff === 0;
+}
+
+async function accountRateLimit(env, voterKey, maxAttempts = 30) {
   const windowStart = Math.floor(Date.now() / RATE_WINDOW);
   const result = await env.VOTES.prepare(
     "INSERT INTO request_limits (voter_key, window_start, attempts) VALUES (?, ?, 1) " +
     "ON CONFLICT(voter_key, window_start) DO UPDATE SET attempts = attempts + 1 RETURNING attempts",
   ).bind(voterKey, windowStart).first();
-  return result && result.attempts <= 30;
+  return result && result.attempts <= maxAttempts;
 }
 
 async function preliminaryLimits(env, config, voterKey, day, songId) {
@@ -109,6 +128,17 @@ async function submitVote(request, env) {
   if (request.headers.get("Origin") !== new URL(request.url).origin) {
     return error("Please vote from the official voting website.", 403);
   }
+  const remoteIp = request.headers.get("CF-Connecting-IP");
+  if (typeof remoteIp !== "string" || !remoteIp || remoteIp.length > 64) {
+    return error("Secure network verification unavailable.", 503);
+  }
+  // Hash the client IP with a changing day scope: no plaintext IP in storage.
+  // This limits unauthenticated verification floods before Google or Turnstile.
+  const ipKey = await hmacHex(env.VOTER_HASH_KEY,
+    "rate-ip-v1|" + localDay(new Date()) + "|" + remoteIp);
+  if (!(await accountRateLimit(env, "ip:" + ipKey, 90))) {
+    return error("Too many requests from this network. Try again later.", 429);
+  }
   let data;
   try { data = await requestBody(request); }
   catch { return error("Invalid submission."); }
@@ -119,8 +149,13 @@ async function submitVote(request, env) {
     return error("Invalid submission.");
   }
   let account;
-  try { account = await verifyGoogle(data.google_credential, env.GOOGLE_CLIENT_ID); }
-  catch { return error("Please sign in with Google again.", 401); }
+  try {
+    account = await verifyGoogle(data.google_credential, env.GOOGLE_CLIENT_ID);
+    if (account.nonce !== data.google_nonce ||
+        !(await validGoogleNonce(env, data.google_nonce))) {
+      throw new Error("Google sign-in challenge expired.");
+    }
+  } catch { return error("Please sign in with Google again.", 401); }
   let config;
   try { config = await loadCampaign(env, data.campaign); }
   catch { return error("Voting is temporarily unavailable.", 503); }
@@ -133,7 +168,7 @@ async function submitVote(request, env) {
     data.turnstile_token, env.TURNSTILE_SECRET, hostname, request,
   ); } catch { /* Fail closed if the provider is unavailable. */ }
   if (!human) return error("Security verification expired. Please try again.", 403);
-  const voterKey = await hmacHex(env.VOTER_HASH_KEY, "airvote-v1|" + config.station.id + "|" + account);
+  const voterKey = await hmacHex(env.VOTER_HASH_KEY, "airvote-v1|" + config.station.id + "|" + account.sub);
   if (!(await accountRateLimit(env, voterKey))) return error("Too many attempts. Please try later.", 429);
   const day = localDay(new Date(), config.timezone || "Africa/Harare");
   const policyError = await preliminaryLimits(env, config, voterKey, day, data.song_id);
@@ -236,6 +271,7 @@ async function route(request, env) {
   const { pathname, searchParams } = url;
   if (request.method === "GET" && pathname === "/api/site") return json({
     google_client_id: env.GOOGLE_CLIENT_ID || "",
+    google_nonce: await issueGoogleNonce(env),
     turnstile_site_key: env.TURNSTILE_SITE_KEY || "",
     ready: Boolean(backendReady(env) && env.GOOGLE_CLIENT_ID && env.TURNSTILE_SECRET &&
       env.VOTER_HASH_KEY?.length >= 32 && env.VOTES),
