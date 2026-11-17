@@ -132,6 +132,9 @@ def save_station_voting_policy(request):
     station = get_active_station(request)
     limit = data.get("station_daily_limit")
     policy = data.get("repeat_song_policy")
+    public_web = data.get("public_web_enabled")
+    if public_web is not None and type(public_web) is not bool:
+        return JsonResponse({"error": "Online voting must be enabled or disabled."}, status=400)
     if limit is not None and (type(limit) is not int or not 1 <= limit <= 100):
         return JsonResponse(
             {"error": "Station-wide daily limit must be 1–100, or no extra limit."},
@@ -148,16 +151,20 @@ def save_station_voting_policy(request):
         before = {
             "station_daily_limit": config.station_daily_limit,
             "repeat_song_policy": config.repeat_song_policy,
+            "public_web_enabled": config.public_web_enabled,
         }
         config.station_daily_limit = limit
         config.repeat_song_policy = policy
+        if public_web is not None:
+            config.public_web_enabled = public_web
         config.save(update_fields=[
-            "station_daily_limit", "repeat_song_policy", "updated_at",
+            "station_daily_limit", "repeat_song_policy", "public_web_enabled", "updated_at",
         ])
         ReviewAudit.objects.create(
             station=station, actor=request.user, action="station_vote_policy",
             details={"before": before, "after": {
                 "station_daily_limit": limit, "repeat_song_policy": policy,
+                "public_web_enabled": config.public_web_enabled,
             }},
         )
     return JsonResponse({"ok": True, "vote_policy": voting_rules_for_station(station)})

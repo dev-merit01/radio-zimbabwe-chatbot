@@ -214,6 +214,8 @@ class StationVotingConfig(models.Model):
     require_codes = models.BooleanField(default=False)
     # Applies to chart points only, never the number of authentic listener votes.
     vote_multiplier = models.PositiveSmallIntegerField(default=1)
+    # Opt-in public web voting; existing WhatsApp/SMS remain unaffected.
+    public_web_enabled = models.BooleanField(default=False)
     # Optional station-wide cap in addition to the chart show's daily limit.
     station_daily_limit = models.PositiveSmallIntegerField(null=True, blank=True, default=None)
     repeat_song_policy = models.CharField(

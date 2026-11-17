@@ -1,0 +1,26 @@
+{
+  "$schema": "https://unpkg.com/wrangler/config-schema.json",
+  "name": "airvote-public-voting",
+  "main": "src/worker.js",
+  "compatibility_date": "2026-11-16",
+  "workers_dev": true,
+  "assets": {
+    "directory": "./public",
+    "binding": "ASSETS",
+    "run_worker_first": ["/", "/index.html", "/api/*", "/internal/*", "/vote/*"],
+    "not_found_handling": "404-page"
+  },
+  "d1_databases": [
+    {
+      "binding": "VOTES",
+      "database_name": "airvote-public-votes",
+      "database_id": "REPLACE_WITH_D1_DATABASE_ID"
+    }
+  ],
+  "triggers": { "crons": ["17 * * * *"] },
+  "vars": {
+    "BACKEND_URL": "https://airvote.up.railway.app",
+    "GOOGLE_CLIENT_ID": "",
+    "TURNSTILE_SITE_KEY": ""
+  }
+}

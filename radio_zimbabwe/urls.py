@@ -9,6 +9,7 @@ admin.site.index_title = "Administration"
 
 urlpatterns = [
     path("healthz/", readiness),
+    path("api/voting-bridge/", include("apps.public_voting.urls")),
     path('admin/', admin.site.urls),
     path("licensing/", include("apps.licensing.urls")),
     path('accounts/', include('apps.accounts.urls')),

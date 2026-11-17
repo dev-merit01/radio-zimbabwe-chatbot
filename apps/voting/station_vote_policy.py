@@ -15,6 +15,7 @@ def voting_rules_for_station(station):
         policy = "inherit"
     station_limit = row.station_daily_limit if row else None
     return {
+        "public_web_enabled": bool(row.public_web_enabled) if row else False,
         "station_daily_limit": station_limit,
         "repeat_song_policy": policy,
         "allow_repeat_song": (

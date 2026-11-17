@@ -25,7 +25,9 @@ from .workspace import api_access
 
 
 def serialize(show):
+    from apps.public_voting.views import voting_link
     return {
+        "public_vote_url": voting_link(show),
         "id": show.pk, "station": show.station, "name": show.name,
         "presenter_name": show.presenter_name,
         "broadcast_start": show.broadcast_start.strftime("%H:%M") if show.broadcast_start else "",

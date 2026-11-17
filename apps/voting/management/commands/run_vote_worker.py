@@ -60,6 +60,8 @@ class Command(BaseCommand):
             if options["queue"] == "all"
             else [queues[options["queue"]]]
         )
+        from apps.public_voting.puller import is_configured, poll_once
+        next_web_poll = 0.0
         self.stdout.write("Version 2 worker running. Ctrl+C to stop.")
         try:
             while True:
@@ -68,6 +70,14 @@ class Command(BaseCommand):
                     defaults={"last_seen": timezone.now(), "queue": options["queue"]},
                 )
                 work = False
+                if options["queue"] in ("all", "intake") and is_configured() and time.monotonic() >= next_web_poll:
+                    next_web_poll = time.monotonic() + 5
+                    try:
+                        if poll_once():
+                            work = True
+                    except Exception as exc:
+                        # Never interrupt WhatsApp/SMS intake when Cloudflare is unavailable.
+                        self.stderr.write(f"Public gateway pull retrying: {type(exc).__name__}")
                 for model in selected:
                     for _ in range(1):
                         if not run_one(model):
