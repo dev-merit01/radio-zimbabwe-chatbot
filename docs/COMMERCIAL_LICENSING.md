@@ -1,80 +1,92 @@
-# AirVote commercial licensing — operator guide
+# AirVote company-wide licensing | Kuiper Data Labs
 
-Developer and licensor: Kuiper Data Labs | https://www.kuiperdatalabs.co.zw
+**Commercial rule: ONE licence per broadcasting company, NOT per radio station.**
 
-## Implementation and safety
+A broadcasting organisation holds a single vendor-signed AV2 commercial licence
+that covers all stations explicitly assigned to that organisation. For example,
+a broadcaster operating five radio stations needs ONE company licence. Each
+station still has its own chart shows, presenter roles, vote-routing codes and
+anti-spam policy. No per-station activation, purchase or renewal is required.
 
-AirVote uses one Ed25519-signed licence per station and installation UUID. A signed licence specifies
-the customer, plan, station slug, start date, expiry and grace period.
-The private signing key must remain encrypted and offline under Kuiper control.
-Railway receives only the base64 PUBLIC verification key.
-Workspaces and administration are restricted when the feature is enabled and
-a station has no valid licence. Incoming webhook votes and background workers
-are not interrupted, preserving listener votes while licensing is resolved.
+Official developer and licensor: https://www.kuiperdatalabs.co.zw
 
-## Create a signing key on a private Kuiper computer
+## Model
 
-Install project requirements, then:
+- BroadcastCompany: legal customer / broadcasting group.
+- CompanyStation: one-to-many station ownership; a station belongs to only
+  one company. Only the AirVote administrator can change this association.
+- CompanyLicence: at most one current company licence. Cryptographically
+  signed AV2 token identifies company, installation, licence ID, plan, customer
+  and validity dates. The signing private key NEVER enters Railway.
+- AV1 StationLicence records are retained for history and safe legacy rollback.
+  They do not control access once company licensing is enabled.
+- Company status is checked server-side for all protected staff API, dashboard
+  and administration requests; vote intake and processing are preserved.
 
-    python scripts/airvote_licence_issuer.py create-keys --directory ./private-issuer
+## Existing AirVote transition
 
-Back up the encrypted private key and its password separately; never share,
-commit or upload them. The generated airvote-public.txt contains the base64
-PUBLIC verification key. Copy that text to AIRVOTE_LICENCE_PUBLIC_KEY on
-Railway only after reviewing the deployment and access controls.
+The migration places existing stations in one transitional company
+slug: existing-airvote. The name is deliberately provisional until the
+customer's legal name is confirmed. New stations explicitly belong to a
+company and inherit its valid licence automatically.
 
-## Issue a signed annual station licence
+Old station enforcement remains active during migration by default.
+Only after a valid AV2 company licence has been installed and tested may
+AIRVOTE_COMPANY_LICENSING_ENFORCED=true be set. It takes precedence over the
+legacy AIRVOTE_LICENSING_ENFORCED flag; do not accidentally re-enable AV1
+enforcement during the final cutover.
 
-    python scripts/airvote_licence_issuer.py issue --key ./private-issuer/airvote-private.pem --installation-id YOUR-INSTALLATION-UUID --station national_fm --customer 'EXAMPLE Broadcaster' --plan annual --start 2026-11-18 --expires 2027-11-17 --grace-days 3 --output example.lic
+## Issue one company licence
 
-Check the signed customer Order Form before issuing a real file. The issuing
-script also supports trial and enterprise plans. Multi-station agreements
-require a separate signed licence per station; the token is not transferable.
+On a Kuiper-owned private computer with the existing encrypted Ed25519
+signing key and private passphrase:
 
-## Safe first rollout
+    python scripts/airvote_licence_issuer.py issue \
+      --key /safe/airvote-private-encrypted.pem \
+      --installation-id YOUR-INSTALLATION-UUID \
+      --company existing-airvote \
+      --customer "Broadcasting Company Name" \
+      --plan enterprise --start 2026-11-17 --expires 2027-11-17 \
+      --grace-days 7 --output broadcaster-company.lic
 
-1. Require passing CI, legal approval and a tested PostgreSQL backup.
-2. Resolve any unrelated staged changes in Railway before deployment.
-3. Deploy reviewed code with AIRVOTE_LICENSING_ENFORCED=false.
-4. Apply Django migrations and configure AIRVOTE_LICENCE_PUBLIC_KEY (PUBLIC only).
-5. Install each station token using the authenticated /licensing/activate/
-   screen, or run: python manage.py install_airvote_licence /path/station.lic
-6. Confirm /api/licensing/status for each station shows permitted=true.
-7. Test expiry, grace, revocation, chart APIs and uninterrupted webhook intake
-   on staging. Enable AIRVOTE_LICENSING_ENFORCED=true in production only
-   when all active customer stations have valid grants.
-8. To roll back enforcement, turn the flag off. Preserve all vote and licence data.
+The same encrypted key and PUBLIC verification key are reused to avoid
+interrupting existing licenced stations. The issuer no longer creates
+individual station grants.
 
-## Operations
+## Activate and renew
 
-To renew, issue and install a new signed token. Never edit signed expiry
-claims in PostgreSQL. To revoke locally, use:
+An authorised AirVote administrator can visit /licensing/activate/ and
+paste the AV2 company licence. Alternatively install it on the server:
 
-    python manage.py revoke_airvote_licence national_fm --reason 'Contract ended'
+    python manage.py install_airvote_licence /secure/broadcaster-company.lic
 
-The system refuses reinstallation of licences issued at or before revocation.
-Valid states: active, grace, expired, revoked, unlicensed, not_started,
-invalid and misconfigured. The station certificate alone does not activate
-AirVote: only the signed AV1 token activates it.
+The token covers every station owned by the licensed company. Renewal
+requires only one newly issued company token. To revoke all company
+access (without deleting historical votes):
 
-## Current limitations
+    python manage.py revoke_airvote_licence existing-airvote \
+      --reason "Agreement terminated"
 
-This first station-based release does NOT enforce individual Windows machine
-installation limits, named-seat counts, online self-service purchases,
-automated billing, email renewal reminders or remote central revocation.
-These must be built and tested before being advertised or put in contracts.
+The company cannot reinstate revoked tokens issued before revocation.
+The one current CompanyLicence record overrides any transitional token.
 
-Customer contracts must use the End User Licence Agreement, commercial Order
-Form, Data Processing Addendum and Support Schedule, subject to legal review.
+## Environment
 
-## Optional non-disruptive licence enforcement for existing stations
+AIRVOTE_LICENCE_PUBLIC_KEY: public Ed25519 verification key, never private
+AIRVOTE_LICENCE_INSTALLATION_ID: persistent installation UUID
+AIRVOTE_COMPANY_BOOTSTRAP_LICENCES: optional JSON mapping company slug
+  to one signed AV2 transitional company token
+AIRVOTE_COMPANY_LICENSING_ENFORCED: true after provisioning and validation
 
-Each customer deployment sets AIRVOTE_LICENCE_INSTALLATION_ID to a persistent
-unique UUID and AIRVOTE_LICENCE_PUBLIC_KEY to the vendor PUBLIC verification key.
-AIRVOTE_BOOTSTRAP_LICENCES is an optional JSON map of existing station slugs to
-signed transitional AV1 tokens. The map is only for stations already in use;
-new stations must receive a new signed licence and be activated. A local
-database licence overrides the transitional map, including a revocation.
-Do not include the private signing key or password in this configuration.
-Before enabling enforcement, confirm every active station is represented by a
-valid signed licence and has enough time to renew before expiry.
+Old AIRVOTE_BOOTSTRAP_LICENCES and AIRVOTE_LICENSING_ENFORCED are used only
+for safe rollback to the previous AV1 implementation.
+
+Never apply unrelated staged Railway changes during the cutover. Back up
+and test the PostgreSQL migration first. Validate all existing stations,
+a newly added station, revoked/expired company licence, unchanged voting
+webhooks, presenter permissions and chart rankings.
+
+This is per-company licensing within a hosted AirVote installation. It
+does not yet manage online payments, computer seat counts, purchase orders
+or remote licensor-hosted revocation. Commercial contracts and local
+licensing law require professional review.

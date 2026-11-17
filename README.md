@@ -99,7 +99,8 @@ vote worker, PostgreSQL, Redis, environment variables and production cutover.
 
 ## Commercial licensing
 
-AirVote supports Kuiper Data Labs-issued Ed25519-signed, per-station licences.
+AirVote supports Kuiper Data Labs-issued Ed25519-signed, company-wide licences.
+One broadcasting company licence covers all its registered radio stations.
 Licence verification runs on the central server, while voting ingestion remains
 protected from accidental licence-related interruption. Licence enforcement is
 disabled by default pending controlled activation. Consult

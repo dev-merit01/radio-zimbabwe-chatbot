@@ -15,6 +15,8 @@ from django.http import JsonResponse
 from django.views.decorators.http import require_GET, require_POST
 
 from apps.accounts.models import BroadcastStation
+from apps.licensing.models import BroadcastCompany, CompanyStation
+from apps.licensing.company_verification import company_licence_status
 from apps.charts.routing import legacy_show
 from apps.voting.models import ChartShow, ReviewAudit, StationVotingConfig
 from .workspace import api_access
@@ -84,12 +86,36 @@ def _legacy_number(station):
     return ""
 
 
+
+def _company_from_payload(payload, *, current=None):
+    """Never silently transfer a station to a different company."""
+    slug = payload.get("company_slug")
+    if slug in (None, ""):
+        if current is not None:
+            return current
+        active = list(BroadcastCompany.objects.filter(is_active=True).order_by("slug")[:2])
+        if len(active) != 1:
+            raise ValueError("Choose the broadcasting company that owns this station.")
+        return active[0]
+    if not isinstance(slug, str):
+        raise ValueError("Select a valid broadcasting company.")
+    company = BroadcastCompany.objects.filter(slug=slug, is_active=True).first()
+    if company is None:
+        raise ValueError("Broadcasting company not found or suspended.")
+    return company
+
+
 def _station_json(row, counts=None):
     counts = counts or {}
     legacy = _legacy_number(row.slug)
     effective = row.bird_number or legacy
+    ownership = CompanyStation.objects.select_related("company").filter(
+        station_slug=row.slug
+    ).first()
     return {
         "slug": row.slug, "name": row.name,
+        "company_slug": ownership.company_id if ownership else None,
+        "company_name": ownership.company.name if ownership else None,
         "is_active": row.is_active,
         "bird_number": row.bird_number or "",
         "effective_bird_number": effective,
@@ -112,8 +138,15 @@ def list_stations(request):
         ).values("station").annotate(n=Count("id")).values_list("station", "n")
     )
     rows = BroadcastStation.objects.order_by("name", "slug")
+    companies = BroadcastCompany.objects.order_by("name", "slug")
     return JsonResponse({
         "stations": [_station_json(row, counts) for row in rows],
+        "companies": [
+            {"slug": company.slug, "name": company.name,
+             "is_active": company.is_active,
+             "licence_state": company_licence_status(company.slug)["state"]}
+            for company in companies
+        ],
         "selected_station": request.session.get("switched_station")
         or getattr(getattr(request.user, "profile", None), "station", "radio_zimbabwe"),
     })
@@ -151,6 +184,7 @@ def create_station(request):
         )
     logo = _validated_logo(payload.get("logo_url"))
     with transaction.atomic():
+        company = _company_from_payload(payload)
         if BroadcastStation.objects.filter(name__iexact=name).exists():
             raise ValueError("A station already uses this name.")
         number = _validated_number(payload.get("bird_number"), slug)
@@ -163,6 +197,7 @@ def create_station(request):
             )
         except IntegrityError as exc:
             raise ValueError("A station with this ID or number already exists.") from exc
+        CompanyStation.objects.create(station_slug=slug, company=company)
         # New stations require programme codes from day one. Code-free votes
         # cannot enter an unrelated historical chart accidentally.
         StationVotingConfig.objects.get_or_create(
@@ -172,6 +207,7 @@ def create_station(request):
         ReviewAudit.objects.create(
             station=slug, actor=request.user, action="station_created",
             details={"station": slug, "name": name,
+                     "company": company.slug,
                      "bird_number_configured": bool(number)},
         )
     return JsonResponse({"ok": True, "station": _station_json(row)}, status=201)
@@ -193,6 +229,9 @@ def update_station(request):
         row = BroadcastStation.objects.select_for_update().filter(slug=slug).first()
         if row is None:
             return JsonResponse({"error": "Station not found."}, status=404)
+        ownership = CompanyStation.objects.select_for_update().filter(station_slug=slug).first()
+        owner = BroadcastCompany.objects.filter(slug=ownership.company_id).first() if ownership else None
+        company = _company_from_payload(payload, current=owner)
         if BroadcastStation.objects.filter(name__iexact=name).exclude(slug=slug).exists():
             raise ValueError("Another station already uses this name.")
         number = _validated_number(payload.get("bird_number"), slug)
@@ -210,7 +249,13 @@ def update_station(request):
                     "Disable all active chart shows before disabling "
                     "this station. Its votes and archives will be preserved."
                 )
+        if enabled and settings.AIRVOTE_COMPANY_LICENSING_ENFORCED:
+            company_status = company_licence_status(company.slug)
+            if not company_status["permitted"]:
+                raise ValueError("Activate this company's AirVote licence before enabling the station.")
         changed = {
+            "company": [owner.slug if owner else None, company.slug]
+                if owner != company else None,
             "name": [row.name, name] if row.name != name else None,
             "active": [row.is_active, enabled] if row.is_active != enabled else None,
             "bird_number": row.bird_number != number,
@@ -226,6 +271,9 @@ def update_station(request):
             ])
         except IntegrityError as exc:
             raise ValueError("Station name or number conflicts with another station.") from exc
+        CompanyStation.objects.update_or_create(
+            station_slug=slug, defaults={"company": company},
+        )
         ReviewAudit.objects.create(
             station=slug, actor=request.user, action="station_updated",
             details={k: v for k, v in changed.items() if v is not None},
