@@ -151,6 +151,7 @@ function loadGoogle() {
     }
     window.google.accounts.id.initialize({
       client_id: state.site.google_client_id,
+      nonce: state.site.google_nonce,
       callback: response => {
         state.googleToken = response.credential || "";
         byId("googleState").textContent = state.googleToken ? "Google account verified" : "Not signed in";
@@ -260,6 +261,7 @@ async function submit() {
     request_id: id, campaign: state.campaign.campaign,
     song_id: state.selectedSong.id,
     google_credential: state.googleToken,
+    google_nonce: state.site.google_nonce,
     turnstile_token: state.humanToken,
   };
   try {
