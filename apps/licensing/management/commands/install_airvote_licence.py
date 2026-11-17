@@ -1,46 +1,46 @@
-"""Install a vendor-signed station licence without any signing secrets on the server."""
-from pathlib import Path
+"""Install one Kuiper-issued AV2 company licence. Keep signing keys OFF Railway."""
 from datetime import datetime
+from pathlib import Path
 
 from django.conf import settings
 from django.core.management.base import BaseCommand, CommandError
 from django.db import transaction
 
-from apps.accounts.models import station_exists
-from apps.licensing.models import StationLicence
-from apps.licensing.verification import LicenceError, decode_and_verify
+from apps.licensing.company_verification import decode_company_licence
+from apps.licensing.models import BroadcastCompany, CompanyLicence
+from apps.licensing.verification import LicenceError
 
 
 class Command(BaseCommand):
-    help = "Install a signed Kuiper Data Labs .lic file for one AirVote station."
+    help = "Install a signed company-wide AirVote commercial licence file."
 
     def add_arguments(self, parser):
         parser.add_argument("licence_file", type=Path)
 
     def handle(self, *args, **options):
-        key = settings.AIRVOTE_LICENCE_PUBLIC_KEY
-        if not key:
-            raise CommandError("AIRVOTE_LICENCE_PUBLIC_KEY must be configured first.")
+        if not settings.AIRVOTE_LICENCE_PUBLIC_KEY or not settings.AIRVOTE_LICENCE_INSTALLATION_ID:
+            raise CommandError("Configure the public signing key and installation ID.")
         try:
             token = options["licence_file"].read_text(encoding="utf-8").strip()
-            claims = decode_and_verify(token, key)
+            claims = decode_company_licence(token, settings.AIRVOTE_LICENCE_PUBLIC_KEY)
         except (OSError, UnicodeError, LicenceError) as exc:
-            raise CommandError("Licence file is unreadable or invalid.") from exc
-        station = claims["station"]
+            raise CommandError("Company licence is unreadable or invalid.") from exc
         if claims["installation_id"] != settings.AIRVOTE_LICENCE_INSTALLATION_ID:
-            raise CommandError("This licence belongs to a different AirVote installation.")
-        if not station_exists(station):
-            raise CommandError("Create the licensed station before installing its licence.")
+            raise CommandError("This company licence belongs to a different installation.")
         with transaction.atomic():
-            record = StationLicence.objects.select_for_update().filter(station=station).first()
-            if record and record.revoked_at:
-                if datetime.fromisoformat(claims["issued_at"]) <= record.revoked_at:
-                    raise CommandError("Licence predates revocation. Obtain a newly issued licence.")
-            StationLicence.objects.update_or_create(
-                station=station,
+            company = BroadcastCompany.objects.select_for_update().filter(
+                slug=claims["company"]
+            ).first()
+            if company is None:
+                raise CommandError("Create the broadcasting company before installation.")
+            current = CompanyLicence.objects.select_for_update().filter(company=company).first()
+            if current and current.revoked_at is not None:
+                if datetime.fromisoformat(claims["issued_at"]) <= current.revoked_at:
+                    raise CommandError("Licence predates company revocation.")
+            CompanyLicence.objects.update_or_create(
+                company=company,
                 defaults={"signed_token": token, "revoked_at": None, "revocation_reason": ""},
             )
         self.stdout.write(self.style.SUCCESS(
-            f"Licence installed for {station}: {claims['customer']} ({claims['plan']}), "
-            f"valid through {claims['expires_on']} UTC."
+            f"Licence installed for {company.name}: {claims['plan']} through {claims['expires_on']}."
         ))

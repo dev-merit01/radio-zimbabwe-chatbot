@@ -553,6 +553,7 @@
         const d = await read("workspace/stations");
         if (current !== generation) return;
         window.airvoteNetworkStations = d.stations;
+        window.airvoteNetworkCompanies = d.companies || [];
         const active = d.stations.filter((station) => station.is_active).length;
         const stationCards = d.stations.map((station) => {
           const selected = station.slug === overview.station;
@@ -576,6 +577,8 @@
               '</strong><small>' + esc(connection) + '</small></p>' +
               '<p><span>Chart shows</span><strong>' + num(station.chart_shows) +
               '</strong></p>' +
+              '<p><span>Licensed company</span><strong>' +
+              esc(station.company_name || "Unassigned") + '</strong></p>' +
               '</div>' +
             '<div class="network-station-actions">' +
               (selected ? '<span class="network-selected">Current workspace</span>' :
@@ -585,9 +588,11 @@
         }).join("");
         html = '<div class="network-page">' +
           '<div class="network-intro"><div><h2>Station management</h2>' +
-          '<p>Configure additional radio stations without installing another system. ' +
-          'Each station has independent votes, programme codes and presenter permissions.</p>' +
-          '</div>' + btn("+ Add station", "network-station-new") + '</div>' +
+          '<p>One company-wide AirVote licence covers all stations belonging to that broadcaster. ' +
+          'Stations retain independent votes, programme codes and presenter permissions.</p>' +
+          '</div><div class="network-station-actions">' +
+          btn("+ Add company", "network-company-new") +
+          btn("+ Add station", "network-station-new") + '</div></div>' +
           '<div class="network-metrics">' +
           '<div><span>Registered stations</span><strong>' + num(d.stations.length) + '</strong></div>' +
           '<div><span>Active stations</span><strong>' + num(active) + '</strong></div>' +
@@ -1130,6 +1135,14 @@
       '<input name="bird_number" inputmode="tel" maxlength="20" autocomplete="off" value="' +
       esc(station.bird_number || station.effective_bird_number || "") +
       '" placeholder="263790000000"></label>';
+    const ownerships = (window.airvoteNetworkCompanies || [])
+      .filter((company) => company.is_active)
+      .map((company) => [company.slug, company.name]);
+    const company = ownerships.length
+      ? showSelectField("Broadcasting company (one licence covers all its stations)",
+          "company_slug", ownerships,
+          station.company_slug || ownerships[0][0])
+      : '<p class="hint">Create an active broadcasting company in AirVote administration before adding stations.</p>';
     const logo = '<label class="field">Station logo HTTPS image URL (optional)' +
       '<input name="logo_url" type="url" maxlength="500" value="' +
       esc(station.logo_url || "") + '" placeholder="https://example.org/station-logo.png"></label>';
@@ -1141,7 +1154,7 @@
     return '<div class="network-station-form">' +
       (existing ? '<p class="network-permanent-id"><strong>Permanent ID:</strong> ' +
         esc(station.slug) + ' <small>(cannot be changed)</small></p>' : "") +
-      name + number + logo + status +
+      name + company + number + logo + status +
       '<p class="hint">The Bird number identifies the station; voting codes then identify each chart show. A number already reserved for another station cannot be reassigned here. Existing Railway-configured numbers remain connected until that configuration is retired.</p>' +
       '</div>';
   }
@@ -1595,11 +1608,22 @@
       navigate("stations");
       return;
     }
+    if (action === "network-company-new") {
+      modal("Register broadcasting company",
+        '<div class="network-station-form">' +
+        field("Company legal name", "name", "", "text") +
+        '<p class="hint">AirVote creates a permanent company identifier. Kuiper Data Labs issues ONE signed company licence covering all its stations.</p></div>',
+        async (fields) => {
+          await api("workspace/companies/create", { name: fields.get("name") });
+        });
+      return;
+    }
     if (action === "network-station-new") {
       modal("Create a radio station", stationFormFields(),
         async (fields) => {
           const result = await api("workspace/stations/create", {
             name: fields.get("name"),
+            company_slug: fields.get("company_slug") || "",
             bird_number: fields.get("bird_number") || "",
             logo_url: fields.get("logo_url") || "",
           });
@@ -1621,6 +1645,7 @@
         async (fields) => {
           const result = await api("workspace/stations/update", {
             slug: station.slug, name: fields.get("name"),
+            company_slug: fields.get("company_slug") || station.company_slug,
             bird_number: fields.get("bird_number") || "",
             logo_url: fields.get("logo_url") || "",
             is_active: fields.get("station_active") === "true",

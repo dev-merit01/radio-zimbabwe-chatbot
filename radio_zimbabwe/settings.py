@@ -273,3 +273,6 @@ AIRVOTE_LICENCE_INSTALLATION_ID = env.str("AIRVOTE_LICENCE_INSTALLATION_ID", def
 # Signed transitional licences for stations already in use during the first rollout.
 # Never put the private signing key or the signing-key password here.
 AIRVOTE_BOOTSTRAP_LICENCES = env.json("AIRVOTE_BOOTSTRAP_LICENCES", default={})
+# New company-wide licence rollout. Until enabled, old station grants remain valid.
+AIRVOTE_COMPANY_LICENSING_ENFORCED = env.bool("AIRVOTE_COMPANY_LICENSING_ENFORCED", default=False)
+AIRVOTE_COMPANY_BOOTSTRAP_LICENCES = env.json("AIRVOTE_COMPANY_BOOTSTRAP_LICENCES", default={})

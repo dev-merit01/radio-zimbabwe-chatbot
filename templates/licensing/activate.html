@@ -4,8 +4,9 @@
 <link rel="stylesheet" href="{% static 'workspace/studio.css' %}"></head>
 <body class="studio-auth"><main class="welcome-entry"><section class="entry-panel">
 <p class="studio-kicker">AIRVOTE | KUIPER DATA LABS</p>
-<h1>Activate station licence</h1>
-<p>Paste a valid licence issued by Kuiper Data Labs. The signed licence cannot be changed or extended by station administrators.</p>
+<h1>Activate company licence</h1>
+<p>Paste one signed company licence issued by Kuiper Data Labs. It covers every station assigned to that broadcasting company. Station-specific licences are no longer issued.</p>
+{% if companies %}<p>Companies registered: {% for company in companies %}<strong>{{ company.name }}</strong> ({{ company.slug }}){% if not forloop.last %}, {% endif %}{% endfor %}.</p>{% endif %}
 {% if installation_id %}<p>Installation ID: <code>{{ installation_id }}</code>. Include this identifier when requesting a new licence.</p>{% endif %}
 {% if error %}<p role="alert">{{ error }}</p>{% endif %}
 {% if success %}<p role="status">{{ success }}</p><p><a href="/">Return to AirVote</a></p>{% endif %}

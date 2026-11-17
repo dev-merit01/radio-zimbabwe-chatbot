@@ -4,7 +4,7 @@
 Examples:
     python scripts/airvote_licence_issuer.py create-keys --directory ./private-issuer
     python scripts/airvote_licence_issuer.py issue --key ./private-issuer/airvote-private.pem \
-      --station national_fm --installation-id YOUR-INSTALLATION-UUID \
+      --company existing-airvote --installation-id YOUR-INSTALLATION-UUID \
       --customer "Example Broadcaster" --plan annual \
       --expires 2027-11-17 --output ./national-fm.lic
 
@@ -62,42 +62,38 @@ def create_keys(args):
 
 
 def issue(args):
-    if not STATION.fullmatch(args.station):
-        raise SystemExit("Station must be an AirVote slug (1–32 lowercase characters).")
+    """A single AV2 licence covers all stations assigned to the named company."""
+    if not re.fullmatch(r"[a-z][a-z0-9_-]{2,47}", args.company):
+        raise SystemExit("Company ID must be a 3–48 character lowercase slug.")
     if not 1 <= len(args.customer.strip()) <= 160:
-        raise SystemExit("Customer name must be between 1 and 160 characters.")
-    try:
-        begins = date.fromisoformat(args.start or date.today().isoformat())
-        ends = date.fromisoformat(args.expires)
-    except ValueError as exc:
-        raise SystemExit("Use ISO dates YYYY-MM-DD.") from exc
-    if ends < begins:
-        raise SystemExit("Expiry cannot precede the start date.")
+        raise SystemExit("Customer name must be 1–160 characters.")
     try:
         installation_id = str(uuid.UUID(args.installation_id))
+        begins = date.fromisoformat(args.start or date.today().isoformat())
+        ends = date.fromisoformat(args.expires)
     except (ValueError, AttributeError) as exc:
-        raise SystemExit("Enter a valid AirVote installation UUID.") from exc
+        raise SystemExit("Provide a valid installation UUID and ISO dates.") from exc
+    if ends < begins:
+        raise SystemExit("Expiry cannot precede start.")
     password = getpass.getpass("Signing-key password: ")
     private = serialization.load_pem_private_key(
         Path(args.key).read_bytes(), password=password.encode()
     )
     if not isinstance(private, Ed25519PrivateKey):
-        raise SystemExit("Expected an Ed25519 private key.")
+        raise SystemExit("Expected an Ed25519 key.")
     payload = {
-        "issuer": "kuiperdatalabs.co.zw", "audience": "airvote",
-        "licence_id": str(uuid.uuid4()), "station": args.station,
-        "installation_id": installation_id,
-        "customer": args.customer.strip(), "plan": args.plan,
+        "issuer": "kuiperdatalabs.co.zw", "audience": "airvote-company",
+        "licence_id": str(uuid.uuid4()), "installation_id": installation_id,
+        "company": args.company, "customer": args.customer.strip(), "plan": args.plan,
         "starts_on": begins.isoformat(), "expires_on": ends.isoformat(),
-        "grace_days": args.grace_days,
-        "issued_at": datetime.now(timezone.utc).isoformat(),
+        "grace_days": args.grace_days, "issued_at": datetime.now(timezone.utc).isoformat(),
     }
-    raw = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
-    token = f"AV1.{b64(raw)}.{b64(private.sign(raw))}"
+    raw = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode()
+    token = f"AV2.{b64(raw)}.{b64(private.sign(raw))}"
     protected_write(args.output, (token + "\n").encode("ascii"))
-    print(f"Issued {args.plan} licence {payload['licence_id']} for {args.station}.")
-    print(f"Customer: {payload['customer']}; start: {begins}; expires: {ends}.")
-    print(f"Signed licence saved in {args.output}. Do not email the private signing key.")
+    print(f"Issued ONE company-wide {args.plan} licence for {args.customer}.")
+    print(f"Company: {args.company}; expires: {ends}; saved to {args.output}.")
+    print("All AirVote stations assigned to this company share this licence.")
 
 
 def main():
@@ -108,7 +104,7 @@ def main():
     keys.set_defaults(run=create_keys)
     licence = sub.add_parser("issue")
     licence.add_argument("--key", required=True)
-    licence.add_argument("--station", required=True)
+    licence.add_argument("--company", required=True)
     licence.add_argument("--installation-id", required=True)
     licence.add_argument("--customer", required=True)
     licence.add_argument("--plan", required=True, choices=PLANS)
