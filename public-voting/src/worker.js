@@ -73,7 +73,7 @@ async function issueGoogleNonce(env) {
 
 async function validGoogleNonce(env, nonce) {
   if (typeof nonce !== "string" ||
-      !/^[a-f0-9-]{36}\\.\\d{10,11}\\.[a-f0-9]{64}$/.test(nonce)) return false;
+      !/^[a-f0-9-]{36}\.\d{10,11}\.[a-f0-9]{64}$/.test(nonce)) return false;
   const parts = nonce.split(".");
   if (Math.abs(Math.floor(Date.now() / 1000) - Number(parts[1])) > 600) return false;
   const expected = await hmacHex(env.VOTER_HASH_KEY, "google-nonce-v1|" + parts[0] + "." + parts[1]);
