@@ -112,3 +112,18 @@ def station_label(slug):
     return BroadcastStation.objects.filter(slug=slug).values_list(
         "name", flat=True
     ).first() or dict(Station.choices).get(slug, slug)
+
+
+class StaffAccess(models.Model):
+    class Role(models.TextChoices):
+        PRESENTER = "presenter", "Presenter"
+        MANAGER = "manager", "Station manager"
+        DIRECTOR = "director", "Director"
+        ADMIN = "admin", "Admin"
+
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE,
+                                related_name="staff_access")
+    role = models.CharField(max_length=12, choices=Role.choices)
+    stations = models.ManyToManyField(BroadcastStation, blank=True)
+    network_access = models.BooleanField(default=False)
+    privileges = models.JSONField(default=list)

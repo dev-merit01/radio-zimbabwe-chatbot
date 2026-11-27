@@ -28,7 +28,7 @@ def list_presenters(request):
     )[:200]
     available = get_user_model().objects.filter(
         is_superuser=False, profile__station=station,
-        presenter_assignment__isnull=True,
+        presenter_assignment__isnull=True, staff_access__isnull=True,
     ).order_by("username")[:150]
     return JsonResponse({
         "station": station,
@@ -113,6 +113,8 @@ def assign_presenter(request):
             pk=user_id, is_superuser=False, is_staff=False,
             profile__station=station,
         ).first()
+        if user and hasattr(user, "staff_access"):
+            raise ValueError("Manage role-based assignments in Staff accounts.")
         if not user:
             return JsonResponse({"error": "Station account not found."}, status=404)
         existing = PresenterAssignment.objects.filter(user=user).first()

@@ -17,7 +17,19 @@ class WorkspaceSecurityMiddleware:
             from apps.accounts.models import station_exists
 
             profile = getattr(request.user, "profile", None)
-            if not profile or not station_exists(profile.station, active_only=True):
+            from apps.accounts.staff_policy import Role, access_for
+            grant = access_for(request.user)
+            scoped_staff = grant and grant.role != Role.PRESENTER
+            if scoped_staff:
+                from django.shortcuts import redirect
+                if request.path_info == "/":
+                    return redirect("accounts:staff_home")
+                if request.path_info not in {
+                    "/accounts/staff/", "/accounts/staff/accounts/", "/accounts/logout/",
+                    "/accounts/login/", "/api/desktop/status", "/healthz/",
+                }:
+                    return HttpResponseForbidden("This page is restricted.")
+            if not scoped_staff and (not profile or not station_exists(profile.station, active_only=True)):
                 if request.path.startswith("/api/"):
                     return JsonResponse(
                         {"error": "Ask an administrator to assign your station."},

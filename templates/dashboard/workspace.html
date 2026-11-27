@@ -32,6 +32,7 @@
 <button class="nav-item" data-page="administration"><svg><use href="#i-settings"/></svg>Admin control</button>
 <button class="nav-item" data-page="intelligence"><svg><use href="#i-settings"/></svg>AI Intelligence</button>
 <button class="nav-item" data-page="stations"><svg><use href="#i-grid"/></svg>Manage stations</button>
+<a class="nav-item" href="{% url 'accounts:staff_accounts' %}"><svg><use href="#i-grid"/></svg>Staff accounts</a>
 <button class="nav-item" data-page="presenters"><svg><use href="#i-grid"/></svg>Presenter accounts</button>{% endif %}
 </nav>
 <div class="sidebar-bottom"><div class="profile"><a class="avatar" href="{% url 'accounts:profile' %}" aria-label="Your account">{{ request.user.username|first|upper }}</a><div><a href="{% url 'accounts:profile' %}" title="Your profile"><strong>{{ request.user.first_name|default:request.user.username }}</strong></a><span>{% if request.user.is_superuser %}Administrator{% elif presenter_chart_show_name %}Presenter · {{ presenter_chart_show_name }}{% else %}Awaiting chart-show assignment{% endif %}</span></div><form method="post" action="{% url 'accounts:logout' %}">{% csrf_token %}<button class="signout" title="Sign out" aria-label="Sign out">↗</button></form></div></div>

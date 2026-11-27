@@ -71,7 +71,20 @@ def login_view(request):
 
                 chosen = form.cleaned_data.get("chart_show")
                 show = None
-                if not user.is_superuser:
+                from .staff_policy import Role, access_for
+                grant = access_for(user)
+                if grant and not user.is_superuser:
+                    if grant.role != Role.PRESENTER:
+                        cache.delete(throttle)
+                        login(request, user)
+                        return redirect("accounts:staff_home")
+                    from .permissions import presenter_show
+                    show = presenter_show(user)
+                    if show and (show.is_archived or not station_exists(show.station, active_only=True)):
+                        show = None
+                    if show is None:
+                        form.add_error("chart_show", "Ask your administrator to assign an active programme.")
+                elif not user.is_superuser:
                     if not chosen:
                         form.add_error("chart_show", "Choose the chart show you are presenting.")
                     else:
