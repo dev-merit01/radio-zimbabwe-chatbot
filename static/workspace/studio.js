@@ -869,7 +869,7 @@
               [["inherit", "Use existing system rules"], ["block", "Block repeat votes"], ["allow", "Allow repeats within daily limits"]],
               d.vote_policy.repeat_song_policy) +
             '<p class="hint">Repeat checks include confirmed aliases and votes awaiting verification.</p>' +
-            '<div class="intelligence-actions"><button type="button" class="button primary" data-action="save-station-voting">Save voting rules</button></div></div>') +
+            '<div class="intelligence-actions"><button type="button" class="button primary" data-action="save-station-voting">Save station voting rules</button></div></div>') +
           '</div>' +
           panel("Last seven days",
             '<p class="hint intelligence-intro">These figures cover verification activity recorded since the diagnostics upgrade. Earlier votes are not backfilled.</p>' +
