@@ -1,5 +1,5 @@
 {% load static %}<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{{ branding_station_name }} · AirVote</title><script src="{% static 'workspace/theme.js' %}?v=theme-20261111"></script><link rel="stylesheet" href="{% static 'workspace/studio.css' %}?v=station-voting-20261113"><link rel="stylesheet" href="{% static 'workspace/theme.css' %}?v=theme-20261111"><link rel="stylesheet" href="{% static 'workspace/polish.css' %}?v=matching-ui-20261127"><script defer src="{% static 'workspace/studio.js' %}?v=matching-ui-20261127"></script></head>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{{ branding_station_name }} · AirVote</title><script src="{% static 'workspace/theme.js' %}?v=theme-20261111"></script><link rel="stylesheet" href="{% static 'workspace/studio.css' %}?v=station-voting-20261113"><link rel="stylesheet" href="{% static 'workspace/theme.css' %}?v=theme-20261111"><link rel="stylesheet" href="{% static 'workspace/polish.css' %}?v=staff-accounts-20261127"><script defer src="{% static 'workspace/studio.js' %}?v=matching-ui-20261127"></script></head>
 <body class="airvote-workspace">
 <svg class="svg-defs" aria-hidden="true"><defs>
 <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></symbol>
@@ -32,6 +32,7 @@
 <button class="nav-item" data-page="administration"><svg><use href="#i-settings"/></svg>Admin control</button>
 <button class="nav-item" data-page="intelligence"><svg><use href="#i-settings"/></svg>AI Intelligence</button>
 <button class="nav-item" data-page="stations"><svg><use href="#i-grid"/></svg>Manage stations</button>
+<a class="nav-item" href="{% url 'accounts:staff_accounts' %}"><svg><use href="#i-grid"/></svg>Staff accounts</a>
 <button class="nav-item" data-page="presenters"><svg><use href="#i-grid"/></svg>Presenter accounts</button>{% endif %}
 </nav>
 <div class="sidebar-bottom"><div class="profile"><a class="avatar" href="{% url 'accounts:profile' %}" aria-label="Your account">{{ request.user.username|first|upper }}</a><div><a href="{% url 'accounts:profile' %}" title="Your profile"><strong>{{ request.user.first_name|default:request.user.username }}</strong></a><span>{% if request.user.is_superuser %}Administrator{% elif presenter_chart_show_name %}Presenter · {{ presenter_chart_show_name }}{% else %}Awaiting chart-show assignment{% endif %}</span></div><form method="post" action="{% url 'accounts:logout' %}">{% csrf_token %}<button class="signout" title="Sign out" aria-label="Sign out">↗</button></form></div></div>

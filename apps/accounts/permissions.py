@@ -29,6 +29,13 @@ def request_presenter_show(request):
     if (not getattr(user, "is_authenticated", False)
             or getattr(user, "is_superuser", False)):
         return None
+    from .staff_policy import access_for, Role
+    grant = access_for(user)
+    if grant:
+        if grant.role != Role.PRESENTER:
+            return None
+        show = presenter_show(user)
+        return show if show and not show.is_archived and show.station == user.profile.station else None
     session = getattr(request, "session", None)
     if session is not None and SESSION_CHART_SHOW_KEY in session:
         show_id = session.get(SESSION_CHART_SHOW_KEY)

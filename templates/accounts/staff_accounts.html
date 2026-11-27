@@ -1,0 +1,13 @@
+{% extends "accounts/staff_base.html" %}
+{% block title %}Staff accounts{% endblock %}
+{% block content %}
+<a href="/">← Workspace</a><h1>Staff accounts</h1>
+<div class="layout"><section><h2>{% if target %}Edit {{ target.user.username }}{% else %}Create an account{% endif %}</h2>
+{% if not target %}<form method="get" class="role-picker"><label for="role">Account role</label><select name="role" id="role">{% for value,name in roles %}<option value="{{ value }}" {% if role == value %}selected{% endif %}>{{ name }}</option>{% endfor %}</select><button>Choose role</button></form>{% endif %}
+<form method="post">{% csrf_token %}<h3>{{ role_name }}</h3>
+{% if role == "director" %}<p>Access includes every active station and its future chart shows.</p>{% elif role == "manager" %}<p>Select one station. This manager can see all its chart shows.</p>{% elif role == "presenter" %}<p>This presenter signs in directly to the assigned programme.</p>{% endif %}
+{{ form.as_p }}
+<button class="primary">{% if target %}Save account{% else %}Create {{ role_name|lower }} account{% endif %}</button></form>
+{% if target %}<a href="{% url 'accounts:staff_accounts' %}">Back to account creation</a>{% endif %}</section>
+<section><h2>Managed accounts</h2>{% for row in accounts %}<a class="item" href="?edit={{ row.pk }}"><strong>{{ row.user.username }}</strong><span>{{ row.get_role_display }}{% if not row.user.is_active %} · Disabled{% endif %}</span></a>{% empty %}<p>No managed accounts yet.</p>{% endfor %}</section></div>
+{% endblock %}

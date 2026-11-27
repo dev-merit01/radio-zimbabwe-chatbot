@@ -491,14 +491,23 @@ def review_suspicious_vote(request):
     if action not in ("release", "dismiss"):
         raise ValueError("Choose release or dismiss.")
 
-    station = get_active_station(request)
+    try:
+        state, event_id = resolve_flagged_vote(get_active_station(request), record_id, action, request.user)
+    except SuspectedSpamVote.DoesNotExist:
+        return JsonResponse({"error": "Flagged vote not found."}, status=404)
+    return JsonResponse({"ok": True, "state": state, "event_id": event_id})
+
+
+def resolve_flagged_vote(station, record_id, action, actor):
+    if action not in ("release", "dismiss"):
+        raise ValueError("Choose release or dismiss.")
     with transaction.atomic():
         lock_station(station)
         record = SuspectedSpamVote.objects.select_for_update().filter(
             station=station, pk=record_id, state="pending",
         ).first()
         if record is None:
-            return JsonResponse({"error": "Flagged vote not found."}, status=404)
+            raise SuspectedSpamVote.DoesNotExist
         event_id = None
         if action == "release":
             if record.chart_show and record.chart_show.station != station:
@@ -530,11 +539,11 @@ def review_suspicious_vote(request):
                 raise ValueError("This message has already entered the voting pipeline.")
             event_id = event.pk
         record.state = "released" if action == "release" else "dismissed"
-        record.resolved_by = request.user
+        record.resolved_by = actor
         record.resolved_at = timezone.now()
         record.save(update_fields=["state", "resolved_by", "resolved_at"])
         ReviewAudit.objects.create(
-            station=station, actor=request.user,
+            station=station, actor=actor,
             action="spam_released" if action == "release" else "spam_dismissed",
             details={
                 "flag_id": record.pk, "reason": record.reason,
@@ -542,4 +551,4 @@ def review_suspicious_vote(request):
                 "event_id": event_id,
             },
         )
-    return JsonResponse({"ok": True, "state": record.state, "event_id": event_id})
+    return record.state, event_id
