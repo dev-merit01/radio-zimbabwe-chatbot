@@ -843,37 +843,34 @@
         const metric = (key) => d.metrics[key] == null ? "—" : num(d.metrics[key]);
         const score = (value) => value == null ? "—" : (value * 100).toFixed(1) + "%";
         html =
-          panel("Matching intelligence controls",
-            '<p class="hint">These settings apply to the selected station. Candidate thresholds only influence which songs are considered. AI confirmation, song identity, chart codes, voting hours and final safety checks stay mandatory.</p>' +
-            '<div id="intelligence-form" class="settings-section intelligence-form">' +
+          '<div class="intelligence-page"><div class="intelligence-settings">' +
+          panel("Song matching",
+            '<div id="intelligence-form" class="intelligence-form">' +
             showSelectField("OpenAI model", "model_override",
-              d.model_options.map((option) => [option.value, option.label]), cfg.model_override) +
-            '<p class="hint">Available models depend on your OpenAI API account. Advanced models can cost more. If the selected model is unavailable, submissions remain queued for retry rather than being counted incorrectly.</p>' +
-            '<label class="field">Candidate shortlist (5–24)' +
-              '<input type="number" name="shortlist_limit" min="5" max="24" step="1" required value="' + esc(cfg.shortlist_limit) + '"></label>' +
-            '<label class="field">Artist retrieval threshold (0.55–0.80)' +
-              '<input type="number" name="retrieval_min_artist" min="0.55" max="0.80" step="0.01" required value="' + esc(cfg.retrieval_min_artist) + '"></label>' +
-            '<label class="field">Song-title retrieval threshold (0.55–0.80)' +
-              '<input type="number" name="retrieval_min_title" min="0.55" max="0.80" step="0.01" required value="' + esc(cfg.retrieval_min_title) + '"></label>' +
-            showSelectField("Reuse previously AI-verified phrases", "cache_mode",
-              [["inherit", "Use Railway default"], ["on", "Enabled (verified-only)"], ["off", "Disabled"]], cfg.cache_mode) +
-            '<button type="button" class="button primary" data-action="save-intelligence">Save intelligence settings</button>' +
-            '</div>') +
+              d.model_options.map(option => [option.value, option.label]), cfg.model_override) +
+            '<p class="hint">Model availability and cost depend on your OpenAI account. Failed calls are queued for retry.</p>' +
+            showSelectField("Reuse verified phrases", "cache_mode",
+              [["inherit", "Use Railway default"], ["on", "Enabled"], ["off", "Disabled"]], cfg.cache_mode) +
+            '<fieldset class="candidate-settings"><legend>Candidate selection</legend>' +
+            '<p class="hint">These thresholds determine which songs reach verification.</p>' +
+            '<label class="field">Shortlist size (5–24)<input type="number" name="shortlist_limit" min="5" max="24" required value="' +
+            esc(cfg.shortlist_limit) + '"></label>' +
+            '<div class="threshold-pair">' +
+            [["Artist", "retrieval_min_artist"], ["Song title", "retrieval_min_title"]].map(([label, key]) =>
+              '<label class="field">' + label + ' (0.55–0.80)<input type="number" name="' + key +
+              '" min="0.55" max="0.80" step="0.01" required value="' + esc(cfg[key]) + '"></label>').join("") +
+            '</div></fieldset><div class="intelligence-actions"><button type="button" class="button primary" data-action="save-intelligence">Save matching settings</button></div></div>') +
           panel("Station voting rules",
-            '<p class="hint">Set rules for this station only. A station-wide cap counts submissions across all its chart shows and supported channels. Individual chart-show daily limits remain active.</p>' +
-            '<div id="station-voting-form" class="settings-section intelligence-form">' +
-            '<label class="field">Maximum votes per listener per day at this station' +
-            '<input type="number" name="station_daily_limit" min="1" max="100" step="1" inputmode="numeric" placeholder="No additional station-wide cap" value="' +
+            '<div id="station-voting-form" class="intelligence-form">' +
+            '<label class="field">Daily votes per listener<input type="number" name="station_daily_limit" min="1" max="100" step="1" inputmode="numeric" placeholder="No station-wide cap" value="' +
             esc(d.vote_policy.station_daily_limit ?? "") + '"></label>' +
-            '<p class="hint">Leave blank to keep the existing per-chart-show daily limit only.</p>' +
-            showSelectField("Voting for the same song more than once in a day", "repeat_song_policy",
-              [["inherit", "Use existing system rules"],
-               ["block", "Prevent repeats across all chart shows at this station"],
-               ["allow", "Allow repeat votes (within daily limits)"]],
+            '<p class="hint">Applies across this station’s chart shows and channels. Leave blank to use each show’s own limit.</p>' +
+            showSelectField("Same song, same day", "repeat_song_policy",
+              [["inherit", "Use existing system rules"], ["block", "Block repeat votes"], ["allow", "Allow repeats within daily limits"]],
               d.vote_policy.repeat_song_policy) +
-            '<p class="hint">Blocking repeats checks previously submitted songs and confirmed aliases, including votes still awaiting verification. Changing these rules does not rewrite historical votes or published charts.</p>' +
-            '<button type="button" class="button primary" data-action="save-station-voting">Save station voting rules</button>' +
-            '</div>') +
+            '<p class="hint">Repeat checks include confirmed aliases and votes awaiting verification.</p>' +
+            '<div class="intelligence-actions"><button type="button" class="button primary" data-action="save-station-voting">Save station voting rules</button></div></div>') +
+          '</div>' +
           panel("Last seven days",
             '<p class="hint intelligence-intro">These figures cover verification activity recorded since the diagnostics upgrade. Earlier votes are not backfilled.</p>' +
             '<div class="intelligence-stats" role="list">' +
@@ -900,7 +897,7 @@
                 '</td><td>' + esc(item.api_status) +
                 (item.api_ms == null ? '' : ' · ' + num(item.api_ms) + 'ms') +
                 '</td><td>' + esc(item.decision + " (" + item.reason + ")") + '</td></tr>'),
-              true) : empty));
+              true) : '<p class="hint">Verification decisions will appear here as this station processes votes.</p>')) + '</div>';
       } else if (page === "activity") {
         const d = await read("workspace/audit?page=" + pagination);
         html = panel(
@@ -1049,6 +1046,7 @@
     pagination = 1;
     query = "";
     generation++;
+    $("page-eyebrow").hidden = page === "intelligence";
     $("page-title").textContent = titles[page];
     $("page-description").textContent = {
       overview:
@@ -1063,13 +1061,13 @@
       presenters: "Assign each presenter to exactly one station and chart show.",
       administration: "Manage accounts and oversee voting across every station.",
       activity: "A record of catalogue changes and chart publications.",
-      intelligence: "Tune matching, inspect AI calls and monitor verification accuracy.",
+      intelligence: "Manage song matching and voting rules for the selected station.",
       connections: "Provider setup, background workers and processing queues.",
     }[page];
     document
       .querySelectorAll("[data-page]")
       .forEach((b) => {
-        const active = b.dataset.page === page || (b.classList.contains("nav-item") && b.dataset.page === "administration" && ["activity", "connections", "intelligence"].includes(page));
+        const active = b.dataset.page === page || (b.classList.contains("nav-item") && b.dataset.page === "administration" && ["activity", "connections"].includes(page));
         b.classList.toggle("active", active);
         if (b.classList.contains("nav-item")) {
           if (active) b.setAttribute("aria-current", "page");

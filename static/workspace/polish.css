@@ -226,3 +226,52 @@ html[data-theme="dark"] :is(.airvote-workspace, .studio-auth, .profile-page)
   .airvote-workspace .table-wrap--cards td,
   .airvote-workspace .table-wrap--cards tbody tr:last-child td { grid-template-columns: minmax(0, 1fr); gap: 3px; }
 }
+
+.airvote-workspace .intelligence-page {
+  display: grid;
+  gap: 20px;
+  min-width: 0;
+}
+.airvote-workspace .intelligence-settings {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 330px), 1fr));
+  gap: 18px;
+  align-items: start;
+}
+.airvote-workspace .intelligence-page .panel { margin: 0; min-width: 0; }
+.airvote-workspace .intelligence-page .intelligence-form {
+  max-width: none;
+  padding: clamp(16px, 2vw, 24px);
+  gap: 16px;
+}
+.airvote-workspace .intelligence-form .hint {
+  margin: -8px 0 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+.airvote-workspace .candidate-settings {
+  display: grid;
+  gap: 14px;
+  min-width: 0;
+  margin: 4px 0 0;
+  padding: 15px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+.airvote-workspace .candidate-settings legend {
+  padding: 0 5px;
+  font-weight: 650;
+  color: var(--ink);
+}
+.airvote-workspace .threshold-pair {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 125px), 1fr));
+  gap: 12px;
+}
+.airvote-workspace .intelligence-actions {
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+.airvote-workspace .intelligence-page .intelligence-stats {
+  margin-inline: clamp(15px, 2vw, 24px);
+}
