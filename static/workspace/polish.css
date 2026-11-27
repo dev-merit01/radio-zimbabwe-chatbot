@@ -275,3 +275,13 @@ html[data-theme="dark"] :is(.airvote-workspace, .studio-auth, .profile-page)
 .airvote-workspace .intelligence-page .intelligence-stats {
   margin-inline: clamp(15px, 2vw, 24px);
 }
+
+/* Keep all staff tools reachable in shorter desktop windows. */
+@media (min-width: 701px) {
+  .airvote-workspace .sidebar > nav {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    scrollbar-width: thin;
+  }
+}
