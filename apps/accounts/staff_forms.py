@@ -24,6 +24,7 @@ class StaffAccountForm(forms.Form):
     )
     password = forms.CharField(
         min_length=STAFF_PASSWORD_MIN_LENGTH,
+        help_text=f"At least {STAFF_PASSWORD_MIN_LENGTH} characters.",
         max_length=128,
         strip=False,
         widget=forms.PasswordInput(attrs={"autocomplete": "new-password"}),
@@ -85,9 +86,7 @@ class StaffAccountForm(forms.Form):
         self.initial["selected_shows_only"] = self.requires_specific_shows
         if target:
             self.fields["password"].required = False
-            self.fields[
-                "password"
-            ].help_text = "Leave blank to keep the current password."
+            self.fields["password"].help_text += " Leave blank to keep the current password."
             self.initial.update(
                 role_description=target.role_description,
                 selected_shows_only=target.selected_shows_only,

@@ -35,3 +35,9 @@
 .account-editor .preset-status { display: inline-block; margin-inline: 8px; font-size: .875rem; }
 .privilege-list { margin-top: 10px; }
 .role-grid a[aria-current="page"] strong::after { content: " ✓"; }
+
+.account-password { min-width: 0; }
+.account-password .password-controls { display: flex; align-items: stretch; gap: 6px; }
+.account-editor .password-controls input[name="password"] { min-width: 0; margin-top: 0; }
+.password-controls button { min-width: 4rem; }
+.password-controls input::-ms-reveal { display: none; }

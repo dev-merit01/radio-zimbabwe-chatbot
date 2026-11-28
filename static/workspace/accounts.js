@@ -2,6 +2,15 @@
 (() => {
   const form = document.getElementById("account-editor");
   if (!form) return;
+  const password = form.elements.password;
+  const toggle = document.getElementById("toggle-account-password");
+  toggle.hidden = false;
+  toggle.addEventListener("click", () => {
+    const reveal = password.type === "password";
+    password.type = reveal ? "text" : "password";
+    toggle.textContent = reveal ? "Hide" : "Show";
+    toggle.setAttribute("aria-label", reveal ? "Hide password" : "Show password");
+  });
   const errors = document.getElementById("account-errors");
   if (errors) errors.focus();
   const presetStatus = document.getElementById("preset-status");

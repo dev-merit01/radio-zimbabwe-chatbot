@@ -2,6 +2,7 @@
 
 from django.contrib.auth.password_validation import (
     MinimumLengthValidator,
+    UserAttributeSimilarityValidator,
     get_default_password_validators,
     validate_password,
 )
@@ -16,5 +17,6 @@ def validate_staff_password(password, user=None):
         if type(validator) is MinimumLengthValidator
         else validator
         for validator in get_default_password_validators()
+        if not isinstance(validator, UserAttributeSimilarityValidator)
     ]
     validate_password(password, user, password_validators=validators)

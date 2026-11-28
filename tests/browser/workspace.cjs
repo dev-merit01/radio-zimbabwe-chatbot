@@ -66,6 +66,16 @@ const assert = require("node:assert/strict");
   }));
   assert.ok(icons.every(Boolean), "Each sidebar destination has a defined icon.");
   assert.equal(new Set(icons).size, icons.length, "Sidebar icons are distinct.");
+  await page.getByRole("link", { name: "Create accounts", exact: true }).click();
+  await page.locator('.role-grid a[href="?role=director"]').click();
+  const password = page.getByLabel("Password", { exact: true });
+  assert.equal(await password.getAttribute("type"), "password");
+  await password.fill("Mavhunga@TM");
+  await page.getByRole("button", { name: "Show password" }).click();
+  assert.equal(await password.getAttribute("type"), "text");
+  await page.getByRole("button", { name: "Hide password" }).click();
+  assert.equal(await password.getAttribute("type"), "password");
+  assert.equal(await password.inputValue(), "Mavhunga@TM");
   // The same appearance preference follows staff onto the profile screen.
   await page.goto(new URL("/accounts/profile/", page.url()).href);
   assert.equal(await page.locator("html").getAttribute("data-theme"), "dark");

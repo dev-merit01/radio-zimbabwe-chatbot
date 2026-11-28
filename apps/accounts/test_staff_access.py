@@ -53,6 +53,9 @@ class StaffAccessTests(TestCase):
                 self.assertFalse(get_user_model().objects.filter(username="new_director").exists())
         self.create("director", password="Z9!qv")
 
+    def test_staff_password_can_contain_surname_from_username(self):
+        self.create("director", username="tariro.mavhunga", password="Mavhunga@TM")
+
     def test_station_manager_scope_through_direct_links_and_exports(self):
         self.create("manager", ["export"])
         page = self.client.get(self.home)
