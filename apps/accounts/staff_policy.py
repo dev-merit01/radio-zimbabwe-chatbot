@@ -5,6 +5,7 @@ from .models import BroadcastStation, StaffAccess
 
 Role = StaffAccess.Role
 PRIVILEGES = {
+    "incoming": "View incoming votes",
     "archives": "View published chart archives",
     "eligible": "Prepare and publish eligible song lists",
     "export": "Export chart reports",
@@ -17,7 +18,7 @@ PRIVILEGES = {
 DEFAULTS = {
     Role.PRESENTER: ("eligible", "export", "archives"),
     Role.MANAGER: ("export", "review", "archives"),
-    Role.DIRECTOR: ("export", "archives"),
+    Role.DIRECTOR: ("incoming", "export", "archives"),
     Role.ADMIN: tuple(key for key in PRIVILEGES if key != "eligible"),
 }
 

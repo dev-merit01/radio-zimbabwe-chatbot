@@ -318,7 +318,7 @@ class VotingService:
             phone_fingerprint(user_ref) if channel in {"whatsapp", "sms"} else ""
         )
 
-    def handle_incoming_text(self, text: str, vote_date=None, chart_show=None, submitted_code="") -> str:
+    def handle_incoming_text(self, text: str, vote_date=None, chart_show=None, submitted_code="", receipt=None) -> str:
         """Record a vote in exactly one chart show; AI matching remains station-shared."""
         from django.conf import settings
         from apps.charts.routing import legacy_show
@@ -411,6 +411,7 @@ class VotingService:
                     f"🚫 You have used all {station_limit} votes for this station today."
                 )
             vote = RawVote.objects.create(
+                receipt=receipt,
                 user=user,
                 station=self.station,
                 source=vote_source(self.channel),

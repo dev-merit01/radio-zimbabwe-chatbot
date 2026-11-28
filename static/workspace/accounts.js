@@ -18,7 +18,7 @@
   for (const input of privileges) input.addEventListener("change", () => { presetStatus.textContent = ""; });
   document.getElementById("read-only-account").addEventListener("click", () => {
     for (const input of privileges) {
-      input.checked = input.value === "archives";
+      input.checked = ["archives", "incoming"].includes(input.value);
     }
     presetStatus.textContent = "Read-only privileges selected.";
   });
