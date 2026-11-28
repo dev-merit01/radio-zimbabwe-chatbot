@@ -55,6 +55,7 @@ public final class MainActivity extends Activity {
     private View loadingPanel;
     private View errorPanel;
     private String trustedOrigin;
+    private String retryOrigin;
     private int connectionSequence = 0;
     private boolean connecting = false;
     private boolean pageLoadFailed = false;
@@ -89,9 +90,8 @@ public final class MainActivity extends Activity {
         findViewById(R.id.connect_button).setOnClickListener(v ->
             verifyAndOpen(serverField.getText().toString()));
         findViewById(R.id.retry_button).setOnClickListener(v -> {
-            String saved = getPreferences(MODE_PRIVATE).getString(KEY_SERVER, "");
-            if (saved.isEmpty()) showSetup();
-            else verifyAndOpen(saved);
+            if (retryOrigin == null) showSetup();
+            else verifyAndOpen(retryOrigin);
         });
         findViewById(R.id.change_server_button).setOnClickListener(v -> showSetup());
         ImageButton options = findViewById(R.id.options_button);
@@ -244,6 +244,7 @@ public final class MainActivity extends Activity {
             showSetup();
             return;
         }
+        retryOrigin = nextOrigin;
         int sequence = ++connectionSequence;
         connecting = true;
         loadingMessage.setText(R.string.checking_server);
