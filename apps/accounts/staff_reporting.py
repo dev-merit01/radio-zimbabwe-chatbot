@@ -317,7 +317,8 @@ def dashboard_context(request, stations, shows, show, can_view_feed):
         if station and item.pk != station.pk:
             continue
         programmes = sorted(grouped[item.pk], key=lambda s: (-s.received, s.name))
-        item.logo = item.logo_url or local_station_logo(item.pk)
+        item.logo_fallback = local_station_logo(item.pk)
+        item.logo = item.logo_url or item.logo_fallback
         item.programmes = programmes
         item.received = unrouted[item.pk] + sum(s.received for s in programmes)
         directory.append(item)
@@ -339,6 +340,7 @@ def dashboard_context(request, stations, shows, show, can_view_feed):
     return dict(
         report=True,
         report_station_logo=directory[0].logo if station else "",
+        report_station_logo_fallback=directory[0].logo_fallback if station else "",
         updated=now,
         period=period,
         station_options=station_list,
