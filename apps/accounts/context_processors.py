@@ -11,7 +11,8 @@ _STATION_LOGOS = {
     Station.POWER_FM: "images/power_fm.webp",
     Station.CLASSIC_263: "images/classic_263.svg",
     Station.CENTRAL_RADIO: "images/central_radio.webp",
-    Station.KHULUMANI_FM: "images/khulumani_fm.svg",
+    # Station artwork from Transmedia Zimbabwe’s radio directory.
+    Station.KHULUMANI_FM: "images/khulumani_fm.png",
     Station.LUZIBO_RADIO: "images/luzibo_radio.svg",
 }
 
@@ -20,7 +21,6 @@ _STATION_LOGOS = {
 # National FM, Central Radio and Power FM use the supplied artwork hosted locally.
 _STATION_LOGO_IMAGES = {
     Station.CLASSIC_263: "https://mediabuy.africa/948-large_default/classic-263.jpg",
-    Station.KHULUMANI_FM: "https://mediabuy.africa/557-large_default/khulumani-fm.jpg",
 }
 
 _STATION_NAMES = {

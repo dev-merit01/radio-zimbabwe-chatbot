@@ -23,7 +23,6 @@ class StationBrandingArtworkTests(TestCase):
     def test_non_radio_zimbabwe_stations_have_correct_logo_sources(self):
         expected = {
             Station.CLASSIC_263: "classic-263.jpg",
-            Station.KHULUMANI_FM: "khulumani-fm.jpg",
         }
         for station, ending in expected.items():
             with self.subTest(station=station):
@@ -37,6 +36,7 @@ class StationBrandingArtworkTests(TestCase):
         expected = {
             Station.NATIONAL_FM: "national_fm.webp",
             Station.CENTRAL_RADIO: "central_radio.webp",
+            Station.KHULUMANI_FM: "khulumani_fm.png",
             Station.POWER_FM: "power_fm.webp",
         }
         for station, filename in expected.items():

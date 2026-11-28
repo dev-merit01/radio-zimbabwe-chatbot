@@ -5,7 +5,7 @@ from django.test import TestCase, override_settings
 from django.urls import reverse
 from django.utils import timezone
 
-from apps.accounts.models import StaffAccess
+from apps.accounts.models import BroadcastStation, StaffAccess
 from apps.voting.models import (
     ChartShow,
     CleanedSong,
@@ -119,6 +119,19 @@ class DirectorReportingTests(TestCase):
         self.show.eligibility_enforced = True
         self.show.save()
         self.assertEqual(self.client.get(url).context["counted"], 0)
+
+    def test_station_artwork_in_directory_and_selected_station(self):
+        for slug, filename in (("central_radio", "central_radio.webp"), ("khulumani_fm", "khulumani_fm.png")):
+            with self.subTest(slug=slug):
+                fallback = f"/static/images/{filename}"
+                directory = self.client.get(self.home)
+                self.assertContains(directory, f'src="{fallback}" data-logo-fallback="{fallback}"')
+                override = f"https://example.com/{slug}.png"
+                BroadcastStation.objects.filter(pk=slug).update(logo_url=override)
+                page = self.client.get(self.home, {"station": slug})
+                self.assertContains(page, f'src="{override}" data-logo-fallback="{fallback}"', count=2)
+                fragment = self.client.get(self.home, headers={"X-AirVote-Fragment": "report"})
+                self.assertContains(fragment, f'src="{override}" data-logo-fallback="{fallback}"')
 
     def test_dates_scope_and_revocation(self):
         self.vote(vote_date=timezone.localdate() - timedelta(days=2))
