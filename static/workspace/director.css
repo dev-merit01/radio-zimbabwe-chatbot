@@ -40,7 +40,11 @@ html[data-theme="dark"] .report-shell { --accent: #86bcff; --tint: #233d59; --ti
 .bar-track meter::-webkit-meter-optimum-value { background:var(--accent); border-radius:5px; }
 .bar-track meter::-moz-meter-bar { background:var(--accent); border-radius:5px; }
 .station-row,.vote-row,.rank-row { display:flex; align-items:center; gap:12px; padding:12px 0; border-top:1px solid var(--line); color:var(--ink); }
-.station-row:hover strong { color:var(--accent); text-decoration:underline; }
+.report-shell .station-row:any-link { color:var(--ink); text-decoration:none; }
+.report-shell .station-row:active { background:var(--tint); }
+@media (hover:hover) {
+  .report-shell .station-row:hover { background:var(--tint); }
+}
 .scope-identity { display:flex; align-items:center; gap:12px; min-width:0; }
 .station-row img,.scope-logo { flex:none; width:56px; height:44px; object-fit:contain; padding:4px; border-radius:9px; background:white; border:1px solid var(--line); }
 .station-row > div,.vote-row > div,.rank-row > div { min-width:0; flex:1; display:grid; gap:2px; overflow-wrap:anywhere; }
