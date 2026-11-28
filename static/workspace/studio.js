@@ -199,12 +199,14 @@
     });
   }
   function status(ok) {
+    if (document.body.hasAttribute("data-server-workspace")) return;
     online = ok;
     $("connection").classList.toggle("offline", !ok);
     $("connection").lastElementChild.textContent = ok ? "Connected" : "Offline";
     $("offline-banner").classList.toggle("hidden", ok);
   }
   async function render() {
+    if (document.body.hasAttribute("data-server-workspace")) return;
     // Focus and caret survive the server-filtered list refreshing.
     const active = document.activeElement;
     const focusState = active && ["live-record-search", "eligible-search-input", "archive-year-search"].includes(active.id)
@@ -279,7 +281,7 @@
             `<form id="chart-options" class="toolbar"><label>Period <select name="period"><option value="weekly" ${chartPeriod === "weekly" ? "selected" : ""} ${selectedShow?.kind === "year_end" ? "disabled" : ""}>Weekly chart</option><option value="year_end" ${chartPeriod === "year_end" || selectedShow?.kind === "year_end" ? "selected" : ""}>Annual countdown</option></select></label><label>Chart size <select name="size">${(selectedShow?.kind === "legacy" ? [20, 50] : [selectedShow?.chart_size || 20]).map(size => `<option value="${size}" ${chartSize === size ? "selected" : ""}>Top ${size}</option>`).join("")}</select></label><button class="button secondary">Show chart</button></form><p class="hint chart-period-meta">${esc(data.week_start)} to ${esc(data.week_end)} · Verified votes only${permissions.is_admin ? " · " + (data.vote_multiplier > 1 ? "Weighted scoring ×" + data.vote_multiplier + " (votes remain unchanged)" : "1 vote = 1 point") : ""}</p>` +
               chartMovementSummary(data.top100, data.comparison) +
               chart(data.top100, data.comparison),
-            `<a class="button secondary" href="/api/workspace/export?limit=${chartSize}&period=${chartPeriod}&show_id=${selectedShowId}">Export CSV</a>`,
+            permissions.can_export !== false ? `<a class="button secondary" href="/api/workspace/export?limit=${chartSize}&period=${chartPeriod}&show_id=${selectedShowId}">Export CSV</a>` : "",
           ) +
           '</div><aside class="side-stack"><section class="panel activity-card"><h2>Votes this week</h2><p>Received votes by day for this chart show.</p><canvas id="timeline" width="520" height="250" aria-label="Daily vote counts" role="img"></canvas><p id="timeline-summary" class="sr-only"></p></section>' +
           (permissions.can_review
@@ -626,7 +628,7 @@
                 '</td></tr>'
               )
             ) : '<p class="show-queue-empty">No presenters assigned to this station yet.</p>'),
-            choices.length ? btn("Create presenter account", "presenter-create") : "") +
+            '<a class="button secondary" href="/accounts/staff/accounts/?role=presenter">Create account</a>') +
           panel("Existing station accounts",
             '<p class="hint">Existing station accounts continue to work. The administrator can assign an account to a specific programme without changing its password.</p>' +
             (d.unassigned_accounts.length ? table(
@@ -1037,6 +1039,10 @@
     }
   }
   function navigate(next) {
+    if (document.body.hasAttribute("data-server-workspace")) {
+      location.assign("/?section=" + encodeURIComponent(next));
+      return;
+    }
     clearTimeout(liveSearchTimer);
     clearTimeout(eligibleSearchTimer);
     clearTimeout(proposalSearchTimer);
@@ -1455,21 +1461,6 @@
       selected.classList.add("is-selected");
       return;
     }
-    if (action === "presenter-create") {
-      const options = showsCache.filter((item) =>
-        item.kind !== "legacy" && !item.is_archived
-      ).map((item) => [item.id, item.name]);
-      modal("Create presenter account",
-        field("Presenter username", "username") +
-        '<label class="field">Strong password<input name="password" type="password" required minlength="12" maxlength="128" autocomplete="new-password"></label>' +
-        showSelectField("Assigned chart show", "chart_show_id", options, options[0]?.[0]) +
-        '<p class="hint">The presenter will only access this station and programme. The password is saved securely as a hash.</p>',
-        (fields) => api("workspace/presenters/create", {
-          username: fields.get("username"), password: fields.get("password"),
-          chart_show_id: Number(fields.get("chart_show_id")),
-        }));
-      return;
-    }
     if (action === "presenter-assign" || action === "presenter-reassign") {
       const options = showsCache.filter((item) =>
         item.kind !== "legacy" && !item.is_archived
@@ -1594,7 +1585,7 @@
           `<p class="hint">Voting period: ${esc(d.chart.week_start)} to ${esc(d.chart.week_end)}. Saved ${esc(new Date(d.chart.finalized_at).toLocaleString())}.</p>` +
             chartMovementSummary(d.entries, d.chart.comparison) +
             chart(d.entries, d.chart.comparison) +
-            `<a class="button secondary" href="/api/workspace/export?archive=${id}">Export CSV</a>`,
+            permissions.can_export !== false ? `<a class="button secondary" href="/api/workspace/export?archive=${id}">Export CSV</a>` : "",
           null,
         );
       } catch (err) {
@@ -1990,6 +1981,14 @@
   });
   window.addEventListener("online", render);
   window.addEventListener("offline", () => status(false));
-  render();
+  const initialSection = new URLSearchParams(location.search).get("section");
+  if (!document.body.hasAttribute("data-server-workspace") && initialSection &&
+      (Object.hasOwn(titles, initialSection) && [...document.querySelectorAll(".nav-item[data-page]")].some(item => item.dataset.page === initialSection)
+       || initialSection === "presenters" && document.querySelector(".nav-item[data-page=administration]"))) {
+    navigate(initialSection);
+  } else {
+    render();
+  }
+
 })();
 

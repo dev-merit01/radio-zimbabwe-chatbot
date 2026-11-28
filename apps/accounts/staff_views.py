@@ -14,12 +14,14 @@ from django.views.decorators.http import require_http_methods
 
 from apps.charts.publishing import publish_edition
 from apps.dashboard.views import chart_today_for_show
-from apps.voting.models import ChartShow, ReviewAudit, SuspectedSpamVote, WeeklyChart
+from apps.voting.models import ReviewAudit, SuspectedSpamVote, WeeklyChart
 from apps.voting.pipeline import lock_station
 from .models import BroadcastStation, StaffAccess
 from .staff_forms import StaffAccountForm
 from .staff_policy import (
     PRIVILEGES,
+    shows_for,
+    can_delegate_scope,
     Role,
     access_for,
     grantable_roles,
@@ -57,7 +59,8 @@ def staff_accounts(request):
     visible = [
         row
         for row in accounts.order_by("user__username")
-        if actor.is_superuser or all(permitted(actor, key) for key in row.privileges)
+        if can_delegate_scope(actor, row)
+        and (actor.is_superuser or all(permitted(actor, key) for key in row.privileges))
     ]
     target = None
     if "edit" in request.GET:
@@ -68,7 +71,8 @@ def staff_accounts(request):
             raise Http404
         target = StaffAccess.objects.select_for_update().get(pk=target.pk)
         if not actor.is_superuser and (
-            target.role not in roles
+            not can_delegate_scope(actor, target)
+            or target.role not in roles
             or target.stations.exclude(pk__in=scope).exists()
             or any(not permitted(actor, key) for key in target.privileges)
         ):
@@ -98,6 +102,16 @@ def staff_accounts(request):
         "accounts/staff_accounts.html",
         {
             "form": form,
+            "server_workspace": True,
+            "creating_accounts": True,
+            "show_form": bool(
+                target or "role" in request.GET or request.method == "POST"
+            ),
+            "scope_stations": scope,
+            "can_manage": True,
+            "show_options": list(
+                form.available_shows.values("pk", "name", "station", "is_archived")
+            ),
             "roles": [(r, Role(r).label) for r in roles],
             "role": role,
             "role_name": Role(role).label,
@@ -134,9 +148,7 @@ def staff_home(request):
     if not user.is_superuser and (not grant or grant.role == Role.PRESENTER):
         raise PermissionDenied
     stations = stations_for(user)
-    shows = ChartShow.objects.filter(station__in=stations.values("slug")).exclude(
-        kind="legacy"
-    )
+    shows = shows_for(user, stations)
     show = None
     if "show" in request.GET:
         key = request.GET["show"]
@@ -144,6 +156,8 @@ def staff_home(request):
             raise Http404
         show = get_object_or_404(shows, pk=int(key))
     context = {
+        "server_workspace": True,
+        "role_description": grant.role_description if grant else "",
         "role_name": "Super admin" if user.is_superuser else grant.get_role_display(),
         "can_manage": bool(grantable_roles(user)),
         "show": show,
@@ -165,6 +179,7 @@ def staff_home(request):
             station=show.station, chart_show=show, is_finalized=True
         )
         if "archive" in request.GET:
+            require_privilege(user, "archives")
             key = request.GET["archive"]
             if not key.isdecimal() or len(key) > 18:
                 raise Http404
@@ -187,7 +202,9 @@ def staff_home(request):
             require_privilege(user, "export")
             return chart_csv(rows)
         context.update(
-            rows=rows, archives=charts, station_name=stations.get(pk=show.station).name
+            rows=rows,
+            archives=charts if permitted(user, "archives") else (),
+            station_name=stations.get(pk=show.station).name,
         )
         if permitted(user, "review"):
             context["flags"] = SuspectedSpamVote.objects.filter(
@@ -206,7 +223,11 @@ def show_action(request, show):
             StaffAccess.objects.select_for_update(), user=request.user
         )
         request.user.staff_access = grant
-        if not stations_for(request.user).filter(pk=show.station).exists():
+        if (
+            not shows_for(request.user, stations_for(request.user))
+            .filter(pk=show.pk)
+            .exists()
+        ):
             raise PermissionDenied
     require_privilege(request.user, action)
     lock_station(show.station)

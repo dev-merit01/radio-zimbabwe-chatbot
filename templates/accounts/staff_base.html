@@ -1,5 +1,5 @@
-{% load static %}<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>{% block title %}Staff workspace{% endblock %} · AirVote</title>
-<link rel="stylesheet" href="{% static 'workspace/staff.css' %}"></head>
-<body><header class="mast"><a href="/">AirVote</a><div>{{ request.user.username }} <form method="post" action="{% url 'accounts:logout' %}">{% csrf_token %}<button>Sign out</button></form></div></header>
-<main>{% for message in messages %}<p class="notice" role="status">{{ message }}</p>{% endfor %}{% block content %}{% endblock %}</main></body></html>
+{% extends "dashboard/workspace.html" %}{% load static %}
+{% block extra_head %}<link rel="stylesheet" href="{% static 'workspace/accounts.css' %}?v=20261128"><script defer src="{% static 'workspace/accounts.js' %}?v=20261128"></script>{% endblock %}
+{% block main_content %}<div class="accounts-workspace">
+{% for message in messages %}<p class="notice" role="status">{{ message }}</p>{% endfor %}
+{% block content %}{% endblock %}</div>{% endblock %}

@@ -127,3 +127,6 @@ class StaffAccess(models.Model):
     stations = models.ManyToManyField(BroadcastStation, blank=True)
     network_access = models.BooleanField(default=False)
     privileges = models.JSONField(default=list)
+    role_description = models.CharField(max_length=200, blank=True)
+    selected_shows_only = models.BooleanField(default=False)
+    shows = models.ManyToManyField("voting.ChartShow", blank=True)

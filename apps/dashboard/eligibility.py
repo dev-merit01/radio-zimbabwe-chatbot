@@ -24,7 +24,10 @@ from .workspace import api_access
 
 
 def _permitted(request):
-    return request.user.is_superuser or bool(request_presenter_show(request))
+    from apps.accounts.staff_policy import access_for, permitted
+    return (request.user.is_superuser or
+            bool(request_presenter_show(request)) and
+            (not access_for(request.user) or permitted(request.user, "eligible")))
 
 
 def _show(request, show_id):
@@ -149,7 +152,7 @@ def _serialize(edition, details=False):
 @require_GET
 @api_access()
 def list_editions(request):
-    if not _permitted(request):
+    if not request.user.is_superuser and not request_presenter_show(request):
         return JsonResponse({"error": "Presenter assignment required."}, status=403)
     show = _show(request, request.GET.get("show_id") and
                  int(request.GET["show_id"]) if

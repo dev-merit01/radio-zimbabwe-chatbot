@@ -5,6 +5,8 @@ from .models import BroadcastStation, StaffAccess
 
 Role = StaffAccess.Role
 PRIVILEGES = {
+    "archives": "View published chart archives",
+    "eligible": "Prepare and publish eligible song lists",
     "export": "Export chart reports",
     "review": "Review flagged votes",
     "publish": "Publish final charts",
@@ -13,10 +15,10 @@ PRIVILEGES = {
     "staff": "Manage station manager accounts",
 }
 DEFAULTS = {
-    Role.PRESENTER: (),
-    Role.MANAGER: ("export", "review"),
-    Role.DIRECTOR: ("export",),
-    Role.ADMIN: tuple(PRIVILEGES),
+    Role.PRESENTER: ("eligible", "export", "archives"),
+    Role.MANAGER: ("export", "review", "archives"),
+    Role.DIRECTOR: ("export", "archives"),
+    Role.ADMIN: tuple(key for key in PRIVILEGES if key != "eligible"),
 }
 
 
@@ -26,9 +28,7 @@ def access_for(user):
 
 def permitted(user, privilege):
     grant = access_for(user)
-    return user.is_superuser or bool(
-        grant and grant.role != Role.PRESENTER and privilege in grant.privileges
-    )
+    return user.is_superuser or bool(grant and privilege in grant.privileges)
 
 
 def stations_for(user):
@@ -72,3 +72,30 @@ def grantable_roles(user):
 def require_privilege(user, name):
     if not permitted(user, name):
         raise PermissionDenied
+
+
+def shows_for(user, stations):
+    from apps.voting.models import ChartShow
+
+    shows = ChartShow.objects.filter(station__in=stations.values("slug")).exclude(
+        kind="legacy"
+    )
+    grant = access_for(user)
+    if not user.is_superuser and grant and grant.selected_shows_only:
+        return shows.filter(pk__in=grant.shows.values("pk"))
+    return shows
+
+
+def can_delegate_scope(actor, target):
+    grant = access_for(actor)
+    if actor.is_superuser or not grant or not grant.selected_shows_only:
+        return True
+    allowed = grant.shows.values("pk")
+    if target.role == Role.PRESENTER:
+        assignment = getattr(target.user, "presenter_assignment", None)
+        return bool(
+            assignment and grant.shows.filter(pk=assignment.chart_show_id).exists()
+        )
+    return (
+        target.selected_shows_only and not target.shows.exclude(pk__in=allowed).exists()
+    )

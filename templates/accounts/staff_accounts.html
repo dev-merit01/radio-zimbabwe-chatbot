@@ -1,13 +1,40 @@
 {% extends "accounts/staff_base.html" %}
-{% block title %}Staff accounts{% endblock %}
 {% block content %}
-<a href="/">← Workspace</a><h1>Staff accounts</h1>
-<div class="layout"><section><h2>{% if target %}Edit {{ target.user.username }}{% else %}Create an account{% endif %}</h2>
-{% if not target %}<form method="get" class="role-picker"><label for="role">Account role</label><select name="role" id="role">{% for value,name in roles %}<option value="{{ value }}" {% if role == value %}selected{% endif %}>{{ name }}</option>{% endfor %}</select><button>Choose role</button></form>{% endif %}
-<form method="post">{% csrf_token %}<h3>{{ role_name }}</h3>
-{% if role == "director" %}<p>Access includes every active station and its future chart shows.</p>{% elif role == "manager" %}<p>Select one station. This manager can see all its chart shows.</p>{% elif role == "presenter" %}<p>This presenter signs in directly to the assigned programme.</p>{% endif %}
-{{ form.as_p }}
-<button class="primary">{% if target %}Save account{% else %}Create {{ role_name|lower }} account{% endif %}</button></form>
-{% if target %}<a href="{% url 'accounts:staff_accounts' %}">Back to account creation</a>{% endif %}</section>
-<section><h2>Managed accounts</h2>{% for row in accounts %}<a class="item" href="?edit={{ row.pk }}"><strong>{{ row.user.username }}</strong><span>{{ row.get_role_display }}{% if not row.user.is_active %} · Disabled{% endif %}</span></a>{% empty %}<p>No managed accounts yet.</p>{% endfor %}</section></div>
+<h1>Create accounts</h1>
+<h2>Account type</h2>
+<nav class="role-grid" aria-label="Account type">{% for key,label in roles %}
+<a href="?role={{ key }}" {% if show_form and key == role %}aria-current="page"{% endif %}><strong>{{ label }}</strong><span>{% if key == "presenter" %}One chart show{% elif key == "manager" %}One radio station{% elif key == "director" %}All active stations{% else %}Assigned stations or the network{% endif %}</span></a>
+{% endfor %}</nav>
+{% if show_form %}
+<form method="post" class="account-editor" id="account-editor" data-role="{{ role }}">{% csrf_token %}
+<h2>{% if target %}Edit {{ target.user.username }}{% else %}Create {{ role_name|lower }} account{% endif %}</h2>
+{{ form.non_field_errors }}
+<fieldset><legend>Account details</legend><div class="form-grid">
+<label>Username {{ form.username }}{{ form.username.errors }}</label>
+<label>Password {{ form.password }}{% if target %}<small>Leave blank to keep the current password.</small>{% endif %}{{ form.password.errors }}</label>
+<label class="wide">Role description {{ form.role_description }}{{ form.role_description.errors }}</label></div></fieldset>
+<fieldset><legend>Stations and chart shows</legend>
+{% if form.network_access %}<label>{{ form.network_access }} {{ form.network_access.label }}</label>{% endif %}
+{% if role == "director" %}<p>All active stations, including stations added later.</p>{% endif %}
+{% if form.stations %}<div data-station-picker><strong>{% if role == "manager" %}Select one radio station{% else %}Select radio stations{% endif %}</strong>{{ form.stations }}{{ form.stations.errors }}</div>{% endif %}
+{% if role == "presenter" %}
+<label>Radio station <select id="presenter-station"><option value="">Choose station</option>{% for station in scope_stations %}<option value="{{ station.pk }}">{{ station.name }}</option>{% endfor %}</select></label>
+<label>Chart show {{ form.programme }}{{ form.programme.errors }}</label>
+{% else %}
+<strong>Chart show access</strong>
+<label><input type="radio" name="selected_shows_only" value="false" {% if not form.selected_shows_only.value %}checked{% endif %} {% if form.requires_specific_shows %}disabled{% endif %}>All shows at the selected stations, including future shows</label>
+<label><input id="specific-shows" type="radio" name="selected_shows_only" value="true" {% if form.selected_shows_only.value %}checked{% endif %}>Choose individual chart shows</label>{{ form.selected_shows_only.errors }}
+
+<div data-show-picker>{{ form.shows.errors }}{{ form.shows }}</div>
+{% endif %}</fieldset>
+<fieldset><legend>Privileges</legend><p>Every account can view live results for its assigned shows. Select any additional privileges.</p>
+<button type="button" class="button secondary" id="read-only-account">Set read-only access</button><div class="privilege-list">{{ form.privileges }}{{ form.privileges.errors }}</div></fieldset>
+<div class="account-actions"><label>{{ form.active }} Account enabled</label><button class="button primary">{% if target %}Save changes{% else %}Create account{% endif %}</button></div>
+</form>
+{{ show_options|json_script:"account-show-options" }}
+{% endif %}
+<section class="account-directory"><h2>Manage accounts</h2>{% for row in accounts %}
+<a href="?edit={{ row.pk }}"><strong>{{ row.user.username }}</strong><span>{{ row.get_role_display }}{% if not row.user.is_active %} · Disabled{% endif %}</span></a>
+{% empty %}<p>Accounts created here will appear in this list.</p>{% endfor %}
+{% if request.user.is_superuser %}<a href="/?section=presenters">Existing presenter assignments</a>{% endif %}</section>
 {% endblock %}

@@ -145,8 +145,8 @@ class StaffAccessTests(TestCase):
     def test_defaults_and_privilege_changes_apply_to_open_sessions(self):
         self.client.force_login(self.admin)
         for role, expected in (
-            ("manager", {"review", "export"}),
-            ("director", {"export"}),
+            ("manager", {"review", "export", "archives"}),
+            ("director", {"export", "archives"}),
         ):
             page = self.client.get(self.accounts + "?role=" + role)
             self.assertEqual(set(page.context["form"]["privileges"].value()), expected)
@@ -172,4 +172,65 @@ class StaffAccessTests(TestCase):
             self.assertEqual(self.client.post(path, {}).status_code, 403)
         self.assertNotContains(
             self.client.get(self.home + f"?show={self.other.pk}"), "multiplier"
+        )
+
+    def test_show_selection_is_checked_on_read_write_and_delegation(self):
+        other_show = ChartShow.objects.get(station=self.station.pk, code="GP20")
+        user = self.create(
+            "manager",
+            ["shows", "presenters"],
+            selected_shows_only="true",
+            shows=[self.show.pk],
+            role_description="Weekend producer",
+        )
+        self.assertContains(self.client.get(self.home), "Weekend producer")
+        self.assertNotContains(self.client.get(self.home), other_show.name)
+        url = self.home + f"?show={other_show.pk}"
+        self.assertEqual(self.client.get(url).status_code, 404)
+        self.assertEqual(
+            self.client.post(url, {"action": "shows", "daily_limit": 10}).status_code,
+            404,
+        )
+        data = {
+            "username": "outside",
+            "password": "Test-account-38924!",
+            "programme": other_show.pk,
+            "active": "on",
+        }
+        self.client.post(self.accounts + "?role=presenter", data)
+        self.assertFalse(get_user_model().objects.filter(username="outside").exists())
+        self.assertTrue(user.staff_access.selected_shows_only)
+
+    def test_readonly_presenter_and_director(self):
+        self.create("presenter", programme=self.show.pk)
+        self.assertEqual(
+            self.client.post(
+                "/api/workspace/eligibility/create", {}, content_type="application/json"
+            ).status_code,
+            403,
+        )
+        self.assertEqual(self.client.get("/api/workspace/export").status_code, 403)
+        self.assertEqual(self.client.get("/api/chart/archives").status_code, 403)
+        self.create("director")
+        url = self.home + f"?show={self.other.pk}"
+        self.assertContains(self.client.get(url), "Live chart")
+        for action in ("publish", "shows", "review"):
+            self.assertEqual(self.client.post(url, {"action": action}).status_code, 403)
+
+    def test_reject_shows_from_unselected_station_and_empty_selection(self):
+        self.client.force_login(self.admin)
+        data = {
+            "username": "wrong-scope",
+            "password": "Test-account-38924!",
+            "stations": [self.station.pk],
+            "selected_shows_only": "true",
+            "active": "on",
+        }
+        for selected in ([], [self.other.pk]):
+            response = self.client.post(
+                self.accounts + "?role=manager", {**data, "shows": selected}
+            )
+            self.assertTrue(response.context["form"].errors.get("shows"))
+        self.assertFalse(
+            get_user_model().objects.filter(username="wrong-scope").exists()
         )
