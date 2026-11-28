@@ -1,11 +1,11 @@
 from django import forms
 from django.contrib.auth import get_user_model
-from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from django.db import transaction
 
 from apps.voting.models import ChartShow, ReviewAudit
 from .models import AccountProfile, BroadcastStation, PresenterAssignment, StaffAccess
+from .passwords import STAFF_PASSWORD_MIN_LENGTH, validate_staff_password
 from .staff_policy import DEFAULTS, PRIVILEGES, Role, permitted, shows_for, access_for
 
 
@@ -23,7 +23,7 @@ class StaffAccountForm(forms.Form):
         widget=forms.CheckboxSelectMultiple,
     )
     password = forms.CharField(
-        min_length=12,
+        min_length=STAFF_PASSWORD_MIN_LENGTH,
         max_length=128,
         strip=False,
         widget=forms.PasswordInput(attrs={"autocomplete": "new-password"}),
@@ -145,7 +145,7 @@ class StaffAccountForm(forms.Form):
                 self.add_error("username", exc)
         if data.get("password"):
             try:
-                validate_password(data["password"], candidate)
+                validate_staff_password(data["password"], candidate)
             except ValidationError as exc:
                 self.add_error("password", exc)
         return data

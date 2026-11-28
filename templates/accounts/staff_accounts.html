@@ -11,7 +11,7 @@
 {% if form.errors %}<div class="account-errors" role="alert" tabindex="-1" id="account-errors"><strong>Check the highlighted account details.</strong>{{ form.non_field_errors }}</div>{% endif %}
 <fieldset><legend>Account details</legend><div class="form-grid">
 <label>Username {{ form.username }}{{ form.username.errors }}</label>
-<label>Password {{ form.password }}{% if target %}<small>Leave blank to keep the current password.</small>{% endif %}{{ form.password.errors }}</label>
+<label>Password {{ form.password }}<small>At least {{ form.password.field.min_length }} characters.{% if target %} Leave blank to keep the current password.{% endif %}</small>{{ form.password.errors }}</label>
 <label class="wide">Role description {{ form.role_description }}{{ form.role_description.errors }}</label></div></fieldset>
 <fieldset><legend>Stations and chart shows</legend>
 {% if form.network_access %}<label>{{ form.network_access }} {{ form.network_access.label }}</label>{% endif %}

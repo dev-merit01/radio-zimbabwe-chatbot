@@ -39,6 +39,20 @@ class StaffAccessTests(TestCase):
         self.assertEqual(str(user.pk), self.client.session.get("_auth_user_id"))
         return user
 
+    def test_staff_password_minimum_in_form_creation_and_login(self):
+        self.client.force_login(self.admin)
+        for role in ("director", "manager", "presenter", "admin"):
+            with self.subTest(role=role):
+                page = self.client.get(self.accounts + "?role=" + role)
+                self.assertIn('minlength="5"', str(page.context["form"]["password"]))
+        url = self.accounts + "?role=director"
+        for password in ("Z9!q", "12345"):
+            with self.subTest(password=password):
+                page = self.client.post(url, {"username": "new_director", "password": password})
+                self.assertIn("password", page.context["form"].errors)
+                self.assertFalse(get_user_model().objects.filter(username="new_director").exists())
+        self.create("director", password="Z9!qv")
+
     def test_station_manager_scope_through_direct_links_and_exports(self):
         self.create("manager", ["export"])
         page = self.client.get(self.home)
