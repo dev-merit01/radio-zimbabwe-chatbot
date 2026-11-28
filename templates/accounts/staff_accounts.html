@@ -8,7 +8,7 @@
 {% if show_form %}
 <form method="post" class="account-editor" id="account-editor" data-role="{{ role }}">{% csrf_token %}
 <h2>{% if target %}Edit {{ target.user.username }}{% else %}Create {{ role_name|lower }} account{% endif %}</h2>
-{{ form.non_field_errors }}
+{% if form.errors %}<div class="account-errors" role="alert" tabindex="-1" id="account-errors"><strong>Check the highlighted account details.</strong>{{ form.non_field_errors }}</div>{% endif %}
 <fieldset><legend>Account details</legend><div class="form-grid">
 <label>Username {{ form.username }}{{ form.username.errors }}</label>
 <label>Password {{ form.password }}{% if target %}<small>Leave blank to keep the current password.</small>{% endif %}{{ form.password.errors }}</label>
@@ -25,10 +25,10 @@
 <label><input type="radio" name="selected_shows_only" value="false" {% if not form.selected_shows_only.value %}checked{% endif %} {% if form.requires_specific_shows %}disabled{% endif %}>All shows at the selected stations, including future shows</label>
 <label><input id="specific-shows" type="radio" name="selected_shows_only" value="true" {% if form.selected_shows_only.value %}checked{% endif %}>Choose individual chart shows</label>{{ form.selected_shows_only.errors }}
 
-<div data-show-picker>{{ form.shows.errors }}{{ form.shows }}</div>
+<div data-show-picker>{{ form.shows.errors }}<p id="show-picker-help" hidden></p>{{ form.shows }}</div>
 {% endif %}</fieldset>
 <fieldset><legend>Privileges</legend><p>Every account can view live results for its assigned shows. Select any additional privileges.</p>
-<button type="button" class="button secondary" id="read-only-account">Set read-only access</button><div class="privilege-list">{{ form.privileges }}{{ form.privileges.errors }}</div></fieldset>
+<button type="button" class="button secondary" id="read-only-account">Set read-only access</button><span class="preset-status" aria-live="polite" id="preset-status"></span><div class="privilege-list">{{ form.privileges }}{{ form.privileges.errors }}</div></fieldset>
 <div class="account-actions"><label>{{ form.active }} Account enabled</label><button class="button primary">{% if target %}Save changes{% else %}Create account{% endif %}</button></div>
 </form>
 {{ show_options|json_script:"account-show-options" }}

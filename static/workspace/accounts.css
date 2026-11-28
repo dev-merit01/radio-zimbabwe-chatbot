@@ -23,3 +23,15 @@
 .accounts-workspace .layout {grid-template-columns:repeat(auto-fit,minmax(min(100%,310px),1fr));margin-top:18px}
 .accounts-workspace .layout section {overflow-wrap:anywhere}
 @media(max-width:600px){.role-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.account-actions .button{width:100%}}
+
+.account-editor .account-errors {
+  padding: 12px 15px;
+  margin-bottom: 16px;
+  border: 1px solid currentColor;
+  border-radius: 8px;
+  color: var(--danger, #b33838);
+}
+.account-editor [aria-invalid="true"] { border-color: var(--danger, #b33838); }
+.account-editor .preset-status { display: inline-block; margin-inline: 8px; font-size: .875rem; }
+.privilege-list { margin-top: 10px; }
+.role-grid a[aria-current="page"] strong::after { content: " ✓"; }

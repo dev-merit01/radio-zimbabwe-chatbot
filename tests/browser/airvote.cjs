@@ -23,7 +23,7 @@ const assert = require('node:assert/strict');
       await page.locator('#connection').getByText('Connected', {exact: true}).waitFor();
     }
     async function navigate(name) {
-      if (["activity", "connections"].includes(name)) {
+      if (["activity", "connections", "intelligence"].includes(name)) {
         await page.locator('nav [data-page="administration"]').click();
         await page.locator('#page-content[aria-busy="false"]').waitFor();
         await page.locator(`#page-content [data-page="${name}"]`).click();

@@ -59,6 +59,13 @@ const assert = require("node:assert/strict");
     "dark",
   );
   await page.screenshot({ path: "/tmp/airvote-dark-overview.png", fullPage: true });
+  const destinations = page.locator('#sidebar nav .nav-item');
+  const icons = await destinations.evaluateAll(items => items.map(item => {
+    const ref = item.querySelector('svg use')?.getAttribute('href');
+    return ref && document.getElementById(ref.slice(1)) ? ref : null;
+  }));
+  assert.ok(icons.every(Boolean), "Each sidebar destination has a defined icon.");
+  assert.equal(new Set(icons).size, icons.length, "Sidebar icons are distinct.");
   // The same appearance preference follows staff onto the profile screen.
   await page.goto(new URL("/accounts/profile/", page.url()).href);
   assert.equal(await page.locator("html").getAttribute("data-theme"), "dark");
