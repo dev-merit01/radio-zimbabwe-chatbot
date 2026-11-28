@@ -2,10 +2,16 @@
 (() => {
   const form = document.getElementById("account-editor");
   if (!form) return;
+  const errors = document.getElementById("account-errors");
+  if (errors) errors.focus();
+  const presetStatus = document.getElementById("preset-status");
+  const privileges = form.querySelectorAll('input[name="privileges"]');
+  for (const input of privileges) input.addEventListener("change", () => { presetStatus.textContent = ""; });
   document.getElementById("read-only-account").addEventListener("click", () => {
-    for (const input of form.querySelectorAll('input[name="privileges"]')) {
+    for (const input of privileges) {
       input.checked = input.value === "archives";
     }
+    presetStatus.textContent = "Read-only privileges selected.";
   });
   const shows = JSON.parse(document.getElementById("account-show-options").textContent);
   const byId = new Map(shows.map(show => [String(show.pk), show]));
@@ -36,12 +42,19 @@
     const stationPicker = form.querySelector("[data-station-picker]");
     if (stationPicker) stationPicker.hidden = !!allStations;
     picker.hidden = !specific.checked;
+    let availableCount = 0;
     for (const input of picker.querySelectorAll('input[name="shows"]')) {
       const available = allStations || selected.has(byId.get(input.value)?.station);
+      if (available) availableCount++;
       input.closest("label").parentElement.hidden = !available;
       input.disabled = !available || !specific.checked;
       if (!available) input.checked = false;
     }
+    const help = document.getElementById("show-picker-help");
+    help.hidden = availableCount > 0;
+    help.textContent = selected.size || allStations
+      ? "No chart shows are available for this selection."
+      : "Select a radio station to see its chart shows.";
   };
   form.addEventListener("change", update);
   update();

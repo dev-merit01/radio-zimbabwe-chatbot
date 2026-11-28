@@ -114,7 +114,7 @@ def assign_presenter(request):
             profile__station=station,
         ).first()
         if user and hasattr(user, "staff_access"):
-            raise ValueError("Manage role-based assignments in Staff accounts.")
+            raise ValueError("Manage role-based assignments in Create accounts.")
         if not user:
             return JsonResponse({"error": "Station account not found."}, status=404)
         existing = PresenterAssignment.objects.filter(user=user).first()

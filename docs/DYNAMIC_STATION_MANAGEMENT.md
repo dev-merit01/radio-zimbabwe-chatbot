@@ -7,8 +7,7 @@ Django station enum or rebuilding the Windows desktop app.
 
 ## Central administrator onboarding
 
-1. Sign in with the superadministrator login and choose **Manage stations**
-   in the sidebar or under **Admin control → Network configuration**.
+1. Sign in with the superadministrator login and open **Admin control → Manage stations**.
 2. Click **Add station**, enter a display name, and optionally its Bird
    WhatsApp receiving number and HTTPS logo. AirVote generates a permanent,
    unique internal station ID. A newly created station is always **disabled**.
@@ -16,7 +15,7 @@ Django station enum or rebuilding the Windows desktop app.
    starts with a historical view only; add as many programmes as required.
    Each programme has a unique station-local, editable vote code, Top
    10/20/40/50 size, scheduled/manual/annual voting period and daily limits.
-4. In **Presenter accounts**, create or assign presenter logins to their
+4. In **Create accounts → Presenter**, create or assign presenter logins to their
    correct station and individual chart show. The central administrator
    remains unrestricted.
 5. In **Eligible songs**, the presenter selects verified songs and publishes

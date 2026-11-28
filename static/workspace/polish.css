@@ -285,3 +285,31 @@ html[data-theme="dark"] :is(.airvote-workspace, .studio-auth, .profile-page)
     scrollbar-width: thin;
   }
 }
+
+.airvote-workspace .admin-tools {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.admin-tools button {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  align-content: start;
+  gap: 5px 10px;
+  min-width: 0;
+  text-align: left;
+  padding: 16px 18px;
+  font: inherit;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  cursor: pointer;
+}
+.admin-tools button:hover { border-color: #4783db; }
+.admin-tools small { grid-column: 1; color: var(--muted); line-height: 1.45; }
+.admin-tools span { grid-column: 2; grid-row: 1; }
+.sidebar .nav-item { text-decoration: none; }
+.sidebar .signout { display: grid; place-items: center; min-width: 36px; min-height: 36px; border-radius: 8px; cursor: pointer; }
+.sidebar .signout:hover { background: var(--line); }

@@ -94,7 +94,7 @@ const assert = require('node:assert/strict');
   await page.getByRole('button', {name:'Show chart',exact:true}).click();
   await page.getByRole('heading', {name:'Year-to-date Top 50',exact:true}).waitFor();
   await page.locator('nav [data-page="administration"]').click();
-  await page.locator('nav [data-page="stations"]').click();
+  await page.locator('#page-content [data-page="stations"]').click();
   await page.locator('.network-grid').waitFor();
   assert.equal(await page.locator('.network-station-card').count(), 7);
   await page.getByRole('button', {name:'+ Add station', exact:true}).click();

@@ -1,5 +1,5 @@
 {% extends "dashboard/workspace.html" %}{% load static %}
-{% block extra_head %}<link rel="stylesheet" href="{% static 'workspace/accounts.css' %}?v=20261128"><script defer src="{% static 'workspace/accounts.js' %}?v=20261128"></script>{% endblock %}
+{% block extra_head %}<link rel="stylesheet" href="{% static 'workspace/accounts.css' %}?v=admin-nav-20261128"><script defer src="{% static 'workspace/accounts.js' %}?v=admin-nav-20261128"></script>{% endblock %}
 {% block main_content %}<div class="accounts-workspace">
 {% for message in messages %}<p class="notice" role="status">{{ message }}</p>{% endfor %}
 {% block content %}{% endblock %}</div>{% endblock %}

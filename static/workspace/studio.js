@@ -42,6 +42,7 @@
     online = false,
     permissions = {},
     timer;
+  const adminSections = ["stations", "intelligence", "activity", "connections"];
   const titles = {
     overview: "Voting overview",
     shows: "Chart shows",
@@ -824,20 +825,27 @@
       } else if (page === "administration") {
         const d = await read("workspace/administration");
         const selected = d.stations.find(s => s.id === overview.station);
-        html = `<div class="admin-metrics">${[
+        const controls = [
+          ["stations", "Manage stations", "Station details, companies and WhatsApp routing"],
+          ["intelligence", "AI matching intelligence", "Song matching and station voting rules"],
+          ["connections", "Connections & queues", "Provider status and background jobs"],
+          ["activity", "Activity history", "Recorded changes and publications"],
+        ];
+        html = `<nav class="admin-tools" aria-label="Administration tools">${controls.map(([key, label, description]) =>
+          `<button type="button" data-page="${key}"><strong>${label}</strong><small>${description}</small><span aria-hidden="true">→</span></button>`
+        ).join("")}</nav><div class="admin-metrics">${[
           ["Listener votes", num(d.summary.votes), "All stations · all time"],
           ["Awaiting review", num(d.summary.pending_songs), "Songs across the network"],
           ["Access requests", num(d.summary.pending_accounts), "Accounts awaiting activation"],
           ["Active accounts", num(d.summary.active_accounts), "Approved station team members"],
         ].map(([label,value,note]) => `<div class="admin-metric"><span>${label}</span><strong>${value}</strong><small>${note}</small></div>`).join("")}</div>
         <div class="admin-grid"><div class="admin-main">
-        ${panel("Network configuration", '<p>Expand AirVote to any number of radio stations, then configure shows and presenter access independently.</p>', btn("Manage stations", "network-manage"))}
         ${panel("Station directory", `<div class="station-directory">${d.stations.map(station => `<article class="station-tile ${station.id === overview.station ? "selected" : ""}"><div class="station-tile-heading"><span class="station-monogram">${esc(station.name.split(" ").map(w=>w[0]).join("").slice(0,2))}</span><div><h3>${esc(station.name)}</h3><small>${station.id === overview.station ? "Current workspace" : "Independent station workspace"}</small></div></div><div class="station-tile-stats"><span><strong>${num(station.votes)}</strong> received votes</span><span><strong>${num(station.pending)}</strong> to review</span><span><strong>${num(station.spam)}</strong> spam flags</span></div>${station.id === overview.station ? '<span class="access-badge">Selected</span>' : btn("Open station", "admin-station", station.id)}</article>`).join("")}</div>`)}
         ${panel("Accounts & access", `<div class="admin-section-intro"><p>Approve access for the station shown. Account management includes station assignments, password resets and deactivation.</p></div>` + table(["Team member", "Assigned station", "Access", "Action"], d.accounts.map(u => `<tr><td><strong>${esc(u.name || u.username)}</strong><br><small>@${esc(u.username)}</small></td><td>${esc(u.station)}</td><td><span class="access-badge ${u.active ? "" : "pending"}">${u.active ? "Active" : "Awaiting activation"}</span></td><td>${u.active ? '<a class="account-link" href="/admin/auth/user/' + u.id + '/change/">Manage account →</a>' : btn("Approve access", "approve-account", u.id)}</td></tr>`)), '<a class="button secondary" href="/admin/auth/user/">Manage accounts</a>')}
         </div><aside class="admin-aside">
         <section class="admin-station-focus"><span class="studio-kicker">CURRENT WORKSPACE</span><h2>${esc(selected?.name)}</h2><p>These controls apply to this station.</p></section>
-        ${panel("Voting & publication", `<div class="admin-action-list"><button data-page="review"><strong>Review music <span>→</span></strong><small>Edit, verify, reject or merge songs.</small></button><button data-action="publish"><strong>Publish selected chart <span>→</span></strong><small>Publish a permanent Top 20 or Top 50.</small></button><button data-page="shows"><strong>Manage chart shows <span>→</span></strong><small>Choose the year-end chart show before publishing.</small></button><button data-page="shows"><strong>Review suspected spam <span>→</span></strong><small>Flagged votes across the selected station: ${num(selected?.spam || 0)}.</small></button><button data-action="station-multiplier"><strong>Station vote multiplier <span>→</span></strong><small>Configure weighted points for the selected station (×1–×10).</small></button><button data-page="archives"><strong>Chart archives <span>→</span></strong><small>Revisit and export saved editions.</small></button></div>`)}
-        ${panel("Station operations", `<div class="admin-action-list"><button data-action="station-password"><strong>Station password <span>→</span></strong><small>Manage access when switching stations.</small></button><button data-page="connections"><strong>Connections & queues <span>→</span></strong><small>Check providers and retry failed jobs.</small></button><button data-page="intelligence"><strong>AI Matching Intelligence <span>→</span></strong><small>Adjust AI settings and review verification diagnostics.</small></button><button data-page="activity"><strong>Activity history <span>→</span></strong><small>Review recorded administrative actions.</small></button></div>`)}
+        ${panel("Station controls", `<div class="admin-action-list"><button data-page="review"><strong>Review music <span>→</span></strong><small>Edit, verify, reject or merge songs.</small></button><button data-action="publish"><strong>Publish selected chart <span>→</span></strong><small>Save the final positions for the selected edition.</small></button><button data-page="shows"><strong>Manage chart shows <span>→</span></strong><small>Choose the year-end chart show before publishing.</small></button><button data-page="shows"><strong>Review suspected spam <span>→</span></strong><small>Flagged votes across the selected station: ${num(selected?.spam || 0)}.</small></button><button data-action="station-multiplier"><strong>Station vote multiplier <span>→</span></strong><small>Configure weighted points for the selected station (×1–×10).</small></button><button data-page="archives"><strong>Chart archives <span>→</span></strong><small>Revisit and export saved editions.</small></button><button data-action="station-password"><strong>Station password <span>→</span></strong><small>Manage access when switching stations.</small></button></div>`)}
+
         </aside></div>`;
       } else if (page === "intelligence") {
         const d = await read("workspace/intelligence");
@@ -934,7 +942,7 @@
         );
       }
       if (current !== generation) return;
-      if (permissions.is_admin && ["activity", "connections", "intelligence"].includes(page)) {
+      if (permissions.is_admin && adminSections.includes(page)) {
         html = '<div class="workspace-tools"><button class="button secondary" data-page="administration">← Admin control</button></div>' + html;
       }
       if (["overview", "incoming", "archives"].includes(page) && !showsData.is_presenter) {
@@ -1052,7 +1060,7 @@
     pagination = 1;
     query = "";
     generation++;
-    $("page-eyebrow").hidden = page === "intelligence";
+    $("page-eyebrow").hidden = page !== "overview";
     $("page-title").textContent = titles[page];
     $("page-description").textContent = {
       overview:
@@ -1073,7 +1081,7 @@
     document
       .querySelectorAll("[data-page]")
       .forEach((b) => {
-        const active = b.dataset.page === page || (b.classList.contains("nav-item") && b.dataset.page === "administration" && ["activity", "connections"].includes(page));
+        const active = b.dataset.page === page || (b.classList.contains("nav-item") && b.dataset.page === "administration" && adminSections.includes(page));
         b.classList.toggle("active", active);
         if (b.classList.contains("nav-item")) {
           if (active) b.setAttribute("aria-current", "page");
@@ -1593,10 +1601,6 @@
       }
       return;
     }
-    if (action === "network-manage") {
-      navigate("stations");
-      return;
-    }
     if (action === "network-company-new") {
       modal("Register broadcasting company",
         '<div class="network-station-form">' +
@@ -1984,7 +1988,7 @@
   const initialSection = new URLSearchParams(location.search).get("section");
   if (!document.body.hasAttribute("data-server-workspace") && initialSection &&
       (Object.hasOwn(titles, initialSection) && [...document.querySelectorAll(".nav-item[data-page]")].some(item => item.dataset.page === initialSection)
-       || initialSection === "presenters" && document.querySelector(".nav-item[data-page=administration]"))) {
+       || (adminSections.includes(initialSection) || initialSection === "presenters") && document.querySelector(".nav-item[data-page=administration]"))) {
     navigate(initialSection);
   } else {
     render();
