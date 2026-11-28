@@ -163,7 +163,7 @@ class StaffAccessTests(TestCase):
         self.client.force_login(self.admin)
         for role, expected in (
             ("manager", {"review", "export", "archives"}),
-            ("director", {"export", "archives"}),
+            ("director", {"incoming", "export", "archives"}),
         ):
             page = self.client.get(self.accounts + "?role=" + role)
             self.assertEqual(set(page.context["form"]["privileges"].value()), expected)

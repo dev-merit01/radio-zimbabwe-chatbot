@@ -340,6 +340,9 @@ class RawVote(models.Model):
     """
 
     user = models.ForeignKey(User, on_delete=models.CASCADE)
+    receipt = models.OneToOneField(
+        "InboundEvent", null=True, blank=True, on_delete=models.SET_NULL, related_name="recorded_vote",
+    )
     # Immutable attribution independent of legacy provider/user channel.
     source = models.CharField(
         max_length=16, default="manual", db_index=True,

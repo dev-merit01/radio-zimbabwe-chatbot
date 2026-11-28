@@ -1,13 +1,20 @@
-{% extends "accounts/staff_base.html" %}
+{% extends "accounts/staff_base.html" %}{% load static %}
+{% block extra_head %}{{ block.super }}<link rel="stylesheet" href="{% static 'workspace/director.css' %}?v=1"><script defer src="{% static 'workspace/director.js' %}?v=1"></script>{% endblock %}
 {% block content %}
-{% if show %}<a href="{% url 'accounts:staff_home' %}">← Stations and chart shows</a><p>{{ station_name }}</p><h1>{{ show.name }}</h1>
-<div class="layout"><section><h2>{% if edition %}Published chart · {{ edition.week_end }}{% else %}Live chart{% endif %}</h2><table><thead><tr><th>Rank</th><th>Song</th><th>Votes</th></tr></thead><tbody>{% for row in rows %}<tr><td>{{ row.rank }}</td><td><strong>{{ row.title }}</strong><br>{{ row.artists }}</td><td>{{ row.count }}</td></tr>{% empty %}<tr><td colspan="3">No ranked songs for this period.</td></tr>{% endfor %}</tbody></table>
-{% if 'export' in rights %}<a href="?show={{ show.pk }}{% if edition %}&amp;archive={{ edition.pk }}{% endif %}&amp;export=1">Download CSV</a>{% endif %}</section>
-{% if 'archives' in rights %}<section><h2>Chart archive</h2>{% if edition %}<a href="?show={{ show.pk }}">View live chart</a>{% endif %}{% for chart in archives %}<a class="item" href="?show={{ show.pk }}&amp;archive={{ chart.pk }}">{{ chart.week_end }} <span>{{ chart.total_votes }} votes</span></a>{% empty %}<p>No published editions yet.</p>{% endfor %}</section>{% endif %}</div>
-{% if not show.is_archived %}<div class="layout">
-{% if 'shows' in rights %}<section><h2>Programme settings</h2><form method="post">{% csrf_token %}<input type="hidden" name="action" value="shows"><label>Presenter name<input name="presenter" maxlength="120" value="{{ show.presenter_name }}"></label><label>Daily vote limit<input type="number" required min="1" max="100" name="daily_limit" value="{{ show.daily_limit }}"></label><button>Save programme settings</button></form></section>{% endif %}
-{% if 'publish' in rights %}<section><h2>Publish final chart</h2><p>Publishing saves a permanent edition.</p><form method="post">{% csrf_token %}<input type="hidden" name="action" value="publish"><label>Edition date<input required type="date" name="date"></label><button>Publish final chart</button></form></section>{% endif %}
-{% if 'review' in rights %}<section><h2>Flagged votes</h2>{% for flag in flags %}<form method="post">{% csrf_token %}<input type="hidden" name="action" value="review"><input type="hidden" name="flag" value="{{ flag.pk }}"><strong>{{ flag.vote_text }}</strong><p>{{ flag.reason }}</p><button name="decision" value="release">Release</button> <button name="decision" value="dismiss">Dismiss</button></form>{% empty %}<p>No votes awaiting review.</p>{% endfor %}</section>{% endif %}</div>{% endif %}
-{% else %}<p>{{ role_name }}</p><h1>Stations and chart shows</h1>{% if role_description %}<p>{{ role_description }}</p>{% endif %}
-<div class="layout">{% for station,shows in directory %}<section><h2>{{ station }}</h2>{% for item in shows %}<a class="item" href="?show={{ item.pk }}"><strong>{{ item.name }}{% if item.is_archived %} · Archived{% endif %}</strong><span>{{ item.received }} submissions</span></a>{% empty %}<p>No chart shows.</p>{% endfor %}</section>{% empty %}<p>No active stations are available for this account.</p>{% endfor %}</div>{% endif %}
-{% endblock %}
+<div class="report-shell">
+<header class="report-heading">
+<div><h1>{% if role_name == 'Director' %}Director overview{% else %}Station overview{% endif %}</h1>
+{% if role_description %}<p>{{ role_description }}</p>{% endif %}</div><span class="report-clock">Zimbabwe time · CAT</span></header>
+<form method="get" class="report-filters" id="report-filters">
+<div class="report-select"><label for="report-station">Station</label><select id="report-station" name="station"><option value="">All assigned stations</option>{% for item in station_options %}<option value="{{ item.pk }}" {% if selected_station.pk == item.pk %}selected{% endif %}>{{ item.name }}</option>{% endfor %}</select></div>
+<div class="report-select"><label for="report-show">Chart show</label><select id="report-show" name="show"><option value="">All chart shows</option>{% for item in programmes %}<option value="{{ item.pk }}" {% if show.pk == item.pk %}selected{% endif %}>{{ item.name }}</option>{% endfor %}</select></div>
+<div class="report-select"><label for="report-period">Reporting period</label><select id="report-period" name="period"><option value="today">Today</option><option value="week" {% if period == "week" %}selected{% endif %}>Last 7 days</option></select></div>
+<label class="archive-toggle"><input type="checkbox" name="archived" value="1" {% if archived %}checked{% endif %}>Include archived</label>
+<input type="hidden" name="tab" value="{{ tab }}">{% if counted_only %}<input type="hidden" name="counted" value="1">{% endif %}
+<button class="button secondary" id="apply-report">Apply</button></form>
+<nav class="report-tabs" aria-label="Dashboard views">
+<a {% if tab == 'overview' %}aria-current="page"{% endif %} href="{% querystring tab='overview' counted=None archive=None page=None %}">Overview</a>
+{% if 'incoming' in rights %}<a {% if tab == 'incoming' %}aria-current="page"{% endif %} href="{% querystring tab='incoming' archive=None page=None %}">Incoming votes</a>{% endif %}
+{% if show %}<a {% if tab == 'chart' %}aria-current="page"{% endif %} href="{% querystring tab='chart' counted=None archive=None page=None %}">Live chart</a>{% endif %}</nav>
+{% include "accounts/staff_report_body.html" %}
+</div>{% endblock %}

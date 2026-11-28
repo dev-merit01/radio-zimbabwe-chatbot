@@ -77,7 +77,7 @@ def ingest(item):
                 event.reply = service.handle_incoming_text(
                     event.vote_text or event.text,
                     vote_date=timezone.localdate(event.received_at),
-                    chart_show=show, submitted_code=event.submitted_code,
+                    chart_show=show, submitted_code=event.submitted_code, receipt=event,
                 )
             event.save(update_fields=["reply"])
         from django.conf import settings

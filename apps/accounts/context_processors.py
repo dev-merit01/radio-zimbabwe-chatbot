@@ -86,6 +86,10 @@ def get_active_station_display(request) -> str:
     return station_label(station)
 
 
+def local_station_logo(station):
+    return static(_STATION_LOGOS.get(station, "images/airvote/app-icon.png"))
+
+
 def station_branding(request):
     """Context processor for station branding in templates."""
     try:
@@ -99,7 +103,7 @@ def station_branding(request):
         station_logo = _STATION_LOGOS.get(
             station, "images/airvote/app-icon.png"
         )
-        fallback_url = static(station_logo)
+        fallback_url = local_station_logo(station)
         display_url = (
             (station_row or {}).get("logo_url")
             or _STATION_LOGO_IMAGES.get(station, fallback_url)

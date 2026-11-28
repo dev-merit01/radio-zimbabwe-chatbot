@@ -6,7 +6,6 @@ from django.contrib import messages
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.db import IntegrityError, transaction
-from django.db.models import Count
 from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -18,6 +17,7 @@ from apps.voting.models import ReviewAudit, SuspectedSpamVote, WeeklyChart
 from apps.voting.pipeline import lock_station
 from .models import BroadcastStation, StaffAccess
 from .staff_forms import StaffAccountForm
+from .staff_reporting import dashboard_context
 from .staff_policy import (
     PRIVILEGES,
     shows_for,
@@ -150,7 +150,7 @@ def staff_home(request):
     stations = stations_for(user)
     shows = shows_for(user, stations)
     show = None
-    if "show" in request.GET:
+    if request.GET.get("show"):
         key = request.GET["show"]
         if not key.isdecimal() or len(key) > 18:
             raise Http404
@@ -163,18 +163,14 @@ def staff_home(request):
         "show": show,
         "rights": [key for key in PRIVILEGES if permitted(user, key)],
     }
-    if show is None:
-        if request.method != "GET":
+    if request.method == "POST":
+        if show is None:
             raise Http404
-        grouped = {}
-        for item in shows.annotate(received=Count("raw_votes")).order_by("name"):
-            grouped.setdefault(item.station, []).append(item)
-        context["directory"] = [
-            (station.name, grouped.get(station.slug, [])) for station in stations
-        ]
-    else:
-        if request.method == "POST":
-            return show_action(request, show)
+        return show_action(request, show)
+    if request.GET.get("export") or request.GET.get("archive"):
+        if not show:
+            raise Http404
+    if show and (request.GET.get("tab") != "incoming" or request.GET.get("export") or "archive" in request.GET):
         charts = WeeklyChart.objects.filter(
             station=show.station, chart_show=show, is_finalized=True
         )
@@ -195,9 +191,9 @@ def staff_home(request):
             ]
             context["edition"] = edition
         else:
-            rows = json.loads(
-                chart_today_for_show(show, show.chart_size, user).content
-            )["top100"]
+            chart = json.loads(chart_today_for_show(show, show.chart_size, user).content)
+            rows = chart["top100"]
+            context.update(chart_start=chart["week_start"], chart_end=chart["week_end"])
         if request.GET.get("export"):
             require_privilege(user, "export")
             return chart_csv(rows)
@@ -210,7 +206,14 @@ def staff_home(request):
             context["flags"] = SuspectedSpamVote.objects.filter(
                 station=show.station, chart_show=show, state="pending"
             ).order_by("received_at")[:100]
-    return render(request, "accounts/staff_home.html", context)
+    context.update(dashboard_context(request, stations, shows, show, "incoming" in context["rights"]))
+    if "edition" in context:
+        context["tab"] = "chart"
+    template = ("accounts/staff_report_body.html" if request.headers.get("X-AirVote-Fragment") == "report"
+                else "accounts/staff_home.html")
+    response = render(request, template, context)
+    response["Cache-Control"] = "private, no-store"
+    return response
 
 
 @transaction.atomic
