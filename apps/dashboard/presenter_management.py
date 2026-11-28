@@ -2,7 +2,6 @@
 import json
 
 from django.contrib.auth import get_user_model
-from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.http import JsonResponse
@@ -10,6 +9,7 @@ from django.views.decorators.http import require_GET, require_POST
 
 from apps.accounts.context_processors import get_active_station
 from apps.accounts.models import AccountProfile, PresenterAssignment
+from apps.accounts.passwords import STAFF_PASSWORD_MIN_LENGTH, validate_staff_password
 from apps.charts.routing import station_show
 from apps.voting.models import ReviewAudit
 from apps.voting.pipeline import lock_station
@@ -57,12 +57,12 @@ def create_presenter(request):
     )
     if not isinstance(username, str) or not 3 <= len(username.strip()) <= 150:
         raise ValueError("Presenter username must contain 3–150 characters.")
-    if not isinstance(password, str) or not 12 <= len(password) <= 128:
-        raise ValueError("Choose a strong password of at least 12 characters.")
+    if not isinstance(password, str) or not STAFF_PASSWORD_MIN_LENGTH <= len(password) <= 128:
+        raise ValueError(f"Choose a password of {STAFF_PASSWORD_MIN_LENGTH} to 128 characters.")
     if type(show_id) is not int:
         raise ValueError("Select a chart show.")
     try:
-        validate_password(password)
+        validate_staff_password(password)
     except ValidationError as error:
         raise ValueError(" ".join(error.messages)) from error
     station = get_active_station(request)
