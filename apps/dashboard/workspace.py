@@ -11,6 +11,7 @@ from django.http import JsonResponse, HttpResponse
 from django.utils import timezone
 from django.views.decorators.http import require_POST
 from apps.accounts.context_processors import get_active_station
+from apps.accounts.staff_policy import access_for, permitted
 from apps.accounts.permissions import request_presenter_show
 from apps.charts.routing import get_selected_show, station_show, station_requires_codes
 from apps.charts.periods import campaign_local_dates
@@ -121,6 +122,7 @@ def overview(request):
             "can_review": request.user.is_superuser,
             "can_add": request.user.is_superuser,
             "can_publish": request.user.is_superuser,
+            "can_export": not access_for(request.user) or permitted(request.user, "export"),
             "received": votes.count(), "verified_votes": sum(totals.values()),
             **({
                 "verified_score": score_for_votes(sum(totals.values()), multiplier),
@@ -161,6 +163,7 @@ def overview(request):
             "can_review": request.user.is_superuser,
             "can_add": request.user.is_superuser,
             "can_publish": request.user.is_superuser,
+            "can_export": not access_for(request.user) or permitted(request.user, "export"),
             "received": votes.count(),
             "verified_votes": accepted.aggregate(n=Sum("count"))["n"] or 0,
             **({
@@ -516,6 +519,8 @@ def publish(request):
 
 @api_access()
 def export_chart(request):
+    if access_for(request.user) and not permitted(request.user, "export"):
+        return JsonResponse({"error": "Export privilege required."}, status=403)
     from .views import chart_today, chart_detail
 
     archive = request.GET.get("archive")

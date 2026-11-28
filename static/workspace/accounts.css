@@ -1,0 +1,25 @@
+.accounts-workspace {max-width:76rem;margin-inline:auto;color:var(--ink);min-width:0}
+.accounts-workspace h1 {font-size:clamp(1.8rem,4vw,2.6rem);letter-spacing:-.035em;margin:0 0 1.25rem}
+.accounts-workspace h2 {font-size:1.18rem;margin:0 0 .8rem}
+.accounts-workspace p,.accounts-workspace small {color:var(--muted);line-height:1.5}
+.role-grid,.accounts-workspace .layout {display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(min(100%,200px),1fr));margin:0 0 1.25rem}
+.role-grid a,.account-editor,.account-directory,.accounts-workspace .layout section {background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:clamp(14px,2vw,24px);min-width:0}
+.role-grid a,.account-directory a,.accounts-workspace .item {display:grid;gap:4px;text-decoration:none;color:var(--ink)}
+.role-grid span,.account-directory span,.accounts-workspace .item span {font-size:.85rem;color:var(--muted)}
+.role-grid a[aria-current],.role-grid a:hover {border-color:#4783db;box-shadow:inset 0 0 0 1px #4783db}
+.account-editor {margin-bottom:18px}
+.account-editor fieldset {margin:0 0 16px;padding:14px 0 0;border:none;border-top:1px solid var(--line);min-width:0}
+.account-editor legend {padding-right:10px;font-weight:700}
+.account-editor .form-grid {display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr))}
+.account-editor .wide {grid-column:1/-1}
+.account-editor label,.accounts-workspace .layout label {display:block;margin:5px 0;font-size:.92rem}
+.account-editor input:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]),.account-editor select,.accounts-workspace .layout input:not([type="hidden"]) {display:block;width:100%;box-sizing:border-box;background:var(--paper);color:var(--ink);font:inherit;border:1px solid var(--line);border-radius:7px;padding:10px;margin-top:5px}
+.account-editor :is(input[type="checkbox"],input[type="radio"]) {accent-color:#205abb;width:17px;height:17px;vertical-align:middle;margin-right:6px}
+.account-editor :is(#id_stations,#id_shows,#id_privileges) {display:grid;gap:3px 14px;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr))}
+.account-editor label:has(input:is([type="checkbox"],[type="radio"])) {padding:5px 0}
+.account-editor [hidden] {display:none!important}
+.account-editor .errorlist {color:var(--danger,#bd3636)}
+.account-actions,.account-directory a,.accounts-workspace .item {display:flex;align-items:center;justify-content:space-between;gap:10px;border-top:1px solid var(--line);padding:12px 0;flex-wrap:wrap}
+.accounts-workspace .layout {grid-template-columns:repeat(auto-fit,minmax(min(100%,310px),1fr));margin-top:18px}
+.accounts-workspace .layout section {overflow-wrap:anywhere}
+@media(max-width:600px){.role-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.account-actions .button{width:100%}}

@@ -207,11 +207,10 @@ const assert = require('node:assert/strict');
     'Eligible songs must not overflow on a narrow presenter screen.');
   await page.screenshot({path:'/tmp/airvote-eligible-presenter-ui.png',fullPage:true});
   await page.setViewportSize({width:1440,height:1000});
-  await page.locator('nav [data-page="presenters"]').click();
-  await page.locator('.presenter-page').waitFor();
-  await page.getByRole('button', {name:'Create presenter account', exact:true}).click();
-  await page.locator('#modal-content [name="chart_show_id"]').waitFor();
-  await page.getByRole('button', {name:'Cancel', exact:true}).click();
+  await page.getByRole('link', {name:'Create accounts', exact:true}).click();
+  await page.getByRole('navigation', {name:'Account type'}).getByRole('link', {name:/Presenter/}).click();
+  await page.locator('#account-editor input[name=username]').waitFor();
+  assert.equal(await page.locator('#account-editor input[name=privileges]').count(), 3);
   await page.locator('nav [data-page="archives"]').click();
   // Archive year searches update when a valid 4-digit year is entered.
   const archiveYear = page.locator('#archive-year-search');

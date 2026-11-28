@@ -9,6 +9,7 @@ from apps.voting.models import CleanedSongTally, CleanedSong, WeeklyChart
 from apps.accounts.context_processors import get_active_station
 from apps.charts.routing import get_selected_show
 from apps.charts.periods import campaign_local_dates
+from apps.accounts.staff_policy import access_for, permitted
 from apps.accounts.permissions import request_presenter_show
 from apps.charts.show_rankings import counts_for_show, ranked_songs
 from apps.charts.multiplier import station_multiplier, score_for_votes
@@ -231,6 +232,8 @@ def chart_today(request):
 @login_required
 def chart_archives(request):
     """API endpoint returning list of all archived weekly charts."""
+    if access_for(request.user) and not permitted(request.user, "archives"):
+        return JsonResponse({"error": "Archive access required."}, status=403)
     try:
         year = int(request.GET.get("year", get_current_week_dates()[1].isocalendar().year))
         if not 1900 <= year <= 9999:
@@ -291,6 +294,8 @@ def chart_archives(request):
 @login_required
 def chart_detail(request, chart_id):
     """API endpoint returning a specific archived chart's entries."""
+    if access_for(request.user) and not permitted(request.user, "archives"):
+        return JsonResponse({"error": "Archive access required."}, status=403)
     try:
         chart = WeeklyChart.objects.get(
             id=chart_id, station=get_active_station(request), is_finalized=True
@@ -464,5 +469,6 @@ def dashboard(request):
         "dashboard/workspace.html",
         {
             "page_title": "AirVote Voting Studio",
+            "hide_archives": bool(access_for(request.user) and not permitted(request.user, "archives")),
         },
     )

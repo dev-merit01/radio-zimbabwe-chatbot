@@ -6,11 +6,22 @@ from django.db import transaction
 
 from apps.voting.models import ChartShow, ReviewAudit
 from .models import AccountProfile, BroadcastStation, PresenterAssignment, StaffAccess
-from .staff_policy import DEFAULTS, PRIVILEGES, Role, permitted
+from .staff_policy import DEFAULTS, PRIVILEGES, Role, permitted, shows_for, access_for
 
 
 class StaffAccountForm(forms.Form):
     username = forms.CharField(min_length=3, max_length=150)
+    role_description = forms.CharField(
+        max_length=200, required=False, label="Role description"
+    )
+    selected_shows_only = forms.BooleanField(
+        required=False, label="Choose individual shows"
+    )
+    shows = forms.ModelMultipleChoiceField(
+        queryset=ChartShow.objects.none(),
+        required=False,
+        widget=forms.CheckboxSelectMultiple,
+    )
     password = forms.CharField(
         min_length=12,
         max_length=128,
@@ -37,32 +48,50 @@ class StaffAccountForm(forms.Form):
             del self.fields["network_access"]
         else:
             self.fields["stations"].required = False
+        self.available_shows = shows_for(actor, scope).order_by("station", "name")
         if role == Role.PRESENTER:
-            del self.fields["stations"], self.fields["privileges"]
-            self.fields["programme"].queryset = ChartShow.objects.filter(
-                station__in=scope.values("slug"),
-                is_archived=False,
-                kind__in=("weekly", "year_end"),
+            del (
+                self.fields["stations"],
+                self.fields["shows"],
+                self.fields["selected_shows_only"],
+            )
+            self.fields["programme"].queryset = self.available_shows.filter(
+                is_archived=False
             )
         else:
             del self.fields["programme"]
+            self.fields["shows"].queryset = self.available_shows
             if role == Role.DIRECTOR:
                 del self.fields["stations"]
-            choices = [
-                (key, label)
-                for key, label in PRIVILEGES.items()
-                if permitted(actor, key) and (key != "staff" or role == Role.ADMIN)
-            ]
-            self.fields["privileges"].choices = choices
-            self.initial["privileges"] = [
-                key for key, _ in choices if key in DEFAULTS[role]
-            ]
+        choices = [
+            (key, label)
+            for key, label in PRIVILEGES.items()
+            if permitted(actor, key)
+            and (
+                key in ("eligible", "export", "archives")
+                if role == Role.PRESENTER
+                else key != "eligible"
+            )
+            and (key != "staff" or role == Role.ADMIN)
+        ]
+        self.fields["privileges"].choices = choices
+        self.initial["privileges"] = [
+            key for key, _ in choices if key in DEFAULTS[role]
+        ]
+        actor_grant = access_for(actor)
+        self.requires_specific_shows = bool(
+            not actor.is_superuser and actor_grant and actor_grant.selected_shows_only
+        )
+        self.initial["selected_shows_only"] = self.requires_specific_shows
         if target:
             self.fields["password"].required = False
             self.fields[
                 "password"
             ].help_text = "Leave blank to keep the current password."
             self.initial.update(
+                role_description=target.role_description,
+                selected_shows_only=target.selected_shows_only,
+                shows=list(target.shows.values_list("pk", flat=True)),
                 network_access=target.network_access,
                 username=target.user.username,
                 active=target.user.is_active,
@@ -91,6 +120,23 @@ class StaffAccountForm(forms.Form):
             and not data.get("stations")
         ):
             self.add_error("stations", "Select stations or grant network access.")
+        if self.role != Role.PRESENTER:
+            chosen = data.get("shows")
+            specific = data.get("selected_shows_only")
+            if self.requires_specific_shows and not specific:
+                self.add_error(
+                    "selected_shows_only", "Choose shows within your own assignment."
+                )
+            if specific:
+                if not chosen:
+                    self.add_error("shows", "Select at least one chart show.")
+                elif self.role != Role.DIRECTOR and not data.get("network_access"):
+                    if chosen.exclude(
+                        station__in=[s.pk for s in data.get("stations", [])]
+                    ).exists():
+                        self.add_error(
+                            "shows", "Choose shows from the selected stations."
+                        )
         candidate = get_user_model()(username=username)
         if username:
             try:
@@ -117,6 +163,8 @@ class StaffAccountForm(forms.Form):
             defaults={
                 "role": self.role,
                 "privileges": data.get("privileges", []),
+                "role_description": data.get("role_description", ""),
+                "selected_shows_only": bool(data.get("selected_shows_only")),
                 "network_access": data.get("network_access", False),
             },
         )
@@ -129,6 +177,7 @@ class StaffAccountForm(forms.Form):
         else:
             stations = [station.slug for station in data.get("stations", [])]
         grant.stations.set(stations)
+        grant.shows.set(data.get("shows", []) if grant.selected_shows_only else [])
         profile, _ = AccountProfile.objects.get_or_create(user=user)
         if stations:
             profile.station = stations[0]
@@ -141,6 +190,10 @@ class StaffAccountForm(forms.Form):
                 "user_id": user.pk,
                 "role": self.role,
                 "stations": stations,
+                "network_access": grant.network_access,
+                "selected_shows": list(grant.shows.values_list("pk", flat=True))
+                if grant.selected_shows_only
+                else None,
                 "privileges": grant.privileges,
                 "active": user.is_active,
             },
